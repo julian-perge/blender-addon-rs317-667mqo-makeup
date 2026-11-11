@@ -1,10 +1,16 @@
+import os
 from pathlib import Path
 
 import pytest
 from js5_builder import build_cache, rewrite_cache
 
 from rsps_toolkit.formats.appearance import assemble_body, default_equipment
+from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.cache_profile import CacheProfile, MissingResourceError
+from rsps_toolkit.formats.enum_definition import decode_enum
+from rsps_toolkit.formats.item_definition import decode_item
+from rsps_toolkit.formats.js5 import Js5Store
+from rsps_toolkit.formats.kit_definition import decode_kit
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/appearance"
 
@@ -91,3 +97,41 @@ def test_a_changed_cache_is_parsed_again(cache):
     assert 9101 not in profile.kits
     rewrite_cache(cache, lambda parts: parts["kits"].update({9101: parts["kits"][101]}))
     assert profile.kits[9101].model_ids == profile.kits[101].model_ids
+
+
+SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
+HAS_SNAPSHOT_430 = "RSPS_SNAPSHOT_430_CACHE" in os.environ and SNAPSHOT_430.is_dir()
+needs_snapshot_430 = pytest.mark.skipif(
+    not HAS_SNAPSHOT_430, reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder"
+)
+
+
+@needs_snapshot_430
+def test_the_snapshot_430_cache_builds_the_default_male_body():
+    # reference.json records 264 vertices and 476 faces for the male default look, from the revision 149 client.
+    profile = CacheProfile(SNAPSHOT_430)
+    preset = AppearancePreset(
+        client_revision=149,
+        snapshot_id=430,
+        female=False,
+        equipment=tuple(default_equipment(profile.kits)),
+        colours=(0,) * 5,
+    )
+    body = profile.assemble(preset)
+    assert (len(body.faces), len(body.vertices)) == (476, 264)
+
+
+@needs_snapshot_430
+@pytest.mark.parametrize(
+    ("group", "decoder", "count"),
+    [(3, decode_kit, 151), (8, decode_enum, 1725), (10, decode_item, 21392)],
+    ids=["kits", "enums", "items"],
+)
+def test_every_snapshot_430_definition_of_a_config_group_decodes(group, decoder, count):
+    # The counts are the raw config files in an export of snapshot 430 that the RuneLite cache library wrote, under its
+    # configs/identkit, configs/enum and configs/item folders (counted on 2026-11-11). A decoder raises on an unknown
+    # opcode or on bytes after the closing opcode.
+    files = Js5Store(SNAPSHOT_430).files(2, group)
+    assert len(files) == count
+    for definition_id, data in files.items():
+        decoder(definition_id, data)
