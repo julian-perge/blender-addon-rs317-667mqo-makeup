@@ -18,7 +18,8 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Verify: `uv run pytest tests/unit/test_kit_definition.py`.
   - Deps: T1. Files: `formats/kit_definition.py`, its test.
 
-- [ ] **T3 Item decoder** (M)
+- [x] **T3 Item decoder** (M)
+  - Result: `decode_item` returns `ItemDefinition(worn: WornItem, wear_positions)`. It reads every RuneLite `ItemLoader` opcode (commit bb0fa42b3, which is the same as 8f2aca1 for these files). All fixture items (35, 1149, 2653, 3140, 4087, 970, 973, 1201, 1333, 1353) equal their `ItemDefinitions.json` rows. Item 35 offset 6 is read. Unknown opcodes and leftover bytes raise an error. A one-off check decoded all 21392 items of cache 430 and all 34766 of cache 2757 without error. On name, the six models and the wear positions, both match the script's own decoder. Change from the plan: noted ids are left out, because the script's `main()` reads only the name, the models and `wearPos1` to `wearPos3`. T8 must not expect noted ids. The glossary has no "wear position" term. The docstring maps it to "equipment slot". T13 can add it. Test result: unit suite 1321 passed. prek passed. The review findings were applied.
   - `formats/item_definition.py` decodes a raw item to `WornItem`, including offsets, recolours and retextures. It returns the superset the script needs (`wearPos`, noted ids) so T8 can share it. Opcode table follows RuneLite `ItemLoader` at the commit named in the script.
   - Accept: items 35, 1149, 2653, 3140, 4087 and the held items 1201, 1333, 1353 equal their `ItemDefinitions.json` rows; the offset 6 of item 35 is read; unknown opcodes raise.
   - Verify: `uv run pytest tests/unit/test_item_definition.py`.
