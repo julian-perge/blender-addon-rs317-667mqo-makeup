@@ -1,0 +1,23 @@
+{
+  "vertex_x": [-28, -36, -28, -12, -18, -48, -36, -28, -12, -4, -36, -48, -32, -16, -15, -4, -44, -28, -25, -36, -32, 28, 36, 28, 12, 28, 36, 48, 18, 4, 12, 16, 32, 48, 36, 44, 36, 4, 15, 25, 28, 32],
+  "vertex_y": [-92, -156, -156, -92, -72, -80, -156, -156, -92, -69, -56, -80, -152, -92, -67, -69, -80, -88, -65, -56, -59, -156, -156, -92, -92, -156, -156, -80, -72, -69, -92, -92, -152, -80, -56, -80, -56, -69, -67, -65, -88, -59],
+  "vertex_z": [4, -8, -8, -8, 8, -8, -12, -12, -12, -4, -8, -12, -12, -12, -8, -12, -12, -4, -4, -12, -12, -8, -8, 4, -8, -12, -12, -8, 8, -4, -12, -12, -12, -12, -8, -12, -12, -12, -8, -4, -4, -12],
+  "face_a": [0, 0, 0, 0, 0, 1, 1, 1, 2, 3, 3, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 8, 11, 12, 12, 13, 13, 19, 19, 19, 16, 16, 21, 21, 21, 21, 22, 22, 22, 23, 23, 24, 24, 24, 25, 25, 25, 26, 26, 27, 27, 32, 33, 33, 30, 30, 31, 31, 31, 32, 35, 35, 35, 30],
+  "face_b": [1, 2, 3, 4, 5, 5, 6, 7, 7, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 15, 16, 16, 17, 17, 18, 20, 16, 11, 20, 18, 22, 23, 24, 25, 25, 26, 27, 27, 28, 28, 29, 30, 30, 31, 32, 32, 33, 33, 34, 35, 35, 36, 37, 38, 38, 39, 40, 40, 40, 39, 41, 29],
+  "face_c": [2, 3, 4, 5, 1, 6, 7, 2, 3, 8, 9, 4, 5, 11, 6, 12, 7, 13, 8, 14, 15, 9, 12, 17, 13, 18, 14, 16, 11, 10, 18, 17, 23, 24, 25, 22, 26, 27, 23, 28, 24, 29, 30, 25, 31, 32, 26, 33, 27, 34, 28, 33, 36, 34, 38, 31, 39, 40, 32, 35, 39, 41, 36, 37],
+  "face_colours": [10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 220, 220, 220, 220, 10351, 10351, 10351, 220, 220, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 10351, 220, 220, 220, 220, 220, 220, 10351, 10351],
+  "face_render_types": null,
+  "face_render_priorities": null,
+  "model_priority": 8,
+  "face_alphas": null,
+  "face_skins": null,
+  "vertex_skins": [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15],
+  "face_textures": null,
+  "face_texture_coords": null,
+  "texture_p": null,
+  "texture_m": null,
+  "texture_n": null,
+  "texture_render_types": null,
+  "face_texture_u": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+  "face_texture_v": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+}

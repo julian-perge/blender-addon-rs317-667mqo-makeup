@@ -1,0 +1,209 @@
+{
+  "format": "rsps-animation-request",
+  "model_ids": [
+    151,
+    176,
+    181,
+    230,
+    249,
+    254,
+    292,
+    5409,
+    7978
+  ],
+  "recipes": {
+    "default-male-whip": {
+      "parts": [
+        {
+          "key": "slot-3",
+          "model_ids": [
+            5409
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        },
+        {
+          "key": "slot-4",
+          "model_ids": [
+            292
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        },
+        {
+          "key": "slot-6",
+          "model_ids": [
+            151
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        },
+        {
+          "key": "slot-7",
+          "model_ids": [
+            254
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        },
+        {
+          "key": "slot-8",
+          "model_ids": [
+            230
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        },
+        {
+          "key": "slot-9",
+          "model_ids": [
+            176
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        },
+        {
+          "key": "slot-10",
+          "model_ids": [
+            181
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        },
+        {
+          "key": "slot-11",
+          "model_ids": [
+            249
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        }
+      ],
+      "recolours": [
+        [
+          6798,
+          6798
+        ],
+        [
+          55232,
+          6554
+        ],
+        [
+          8741,
+          8741
+        ],
+        [
+          9104,
+          9104
+        ],
+        [
+          25238,
+          25238
+        ],
+        [
+          4626,
+          4626
+        ],
+        [
+          4550,
+          4550
+        ]
+      ],
+      "sequence_ids": [
+        1658
+      ]
+    },
+    "magic-tree": {
+      "parts": [
+        {
+          "key": "tree",
+          "model_ids": [
+            7978
+          ],
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "recolours": [],
+          "retextures": []
+        }
+      ],
+      "recolours": [],
+      "sequence_ids": []
+    }
+  },
+  "sequence_ids": [
+    1658
+  ],
+  "source": {
+    "cache_hashes": {
+      "main_file_cache.dat2": "66367256285a73161c504015ff6f2f0a1674990c55cad7df64925cb9751a9b72",
+      "main_file_cache.idx0": "5fcd520cf20195ee42806c878b20ea85d49de296b221cfe6ace128938479813a",
+      "main_file_cache.idx1": "fd1e8d6d3c6c300f1e82a43d2aeeda3c3e26b3cf8b962a89ad29e789f0d286d9",
+      "main_file_cache.idx2": "0769534263ec53f129dff07959429975f15d68553fec7ce2d8f0dbc0c0891a91",
+      "main_file_cache.idx7": "b970f7954eff7d2c88d7b5257693d350d1a535b7823c3904884f395b5c69d7e5",
+      "main_file_cache.idx8": "38eceef32b3256504179318df34036fbf36a5e492096fbfbe0e58bee97c59e37",
+      "main_file_cache.idx9": "6cac2d0ef2dcad24d6616949c0018142c646286839a14ee6860c374efccab981"
+    },
+    "cache_revision": 1,
+    "openrs2_archive_id": 241
+  },
+  "texture_ids": [
+    8,
+    34
+  ],
+  "texture_resources": {
+    "34": {
+      "height": 128,
+      "sha256": "4ecc313c8c3a2b3eda460551500cb4419f4ca424b411a08e28c0e4659c600258",
+      "width": 128
+    },
+    "8": {
+      "height": 128,
+      "sha256": "fd57c87a55bb53203e45211a669da0ab3c2fa785a3d557ac9b69e52f5b571deb",
+      "width": 128
+    }
+  },
+  "version": 1
+}

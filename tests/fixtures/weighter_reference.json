@@ -1,0 +1,183 @@
+{
+ "_source": "src/rsps_toolkit/blender/weighter.py at commit 547a2aa, the original add-on weighter",
+ "buttons": [
+  {
+   "button": "Skull",
+   "operator": "epic.skull",
+   "part": "Skull",
+   "weight": 0.01
+  },
+  {
+   "button": "N. Upper",
+   "operator": "epic.neck_upper",
+   "part": "Neck Upper",
+   "weight": 0.03
+  },
+  {
+   "button": "N. Lower",
+   "operator": "epic.neck_lower",
+   "part": "Neck Lower",
+   "weight": 0.02
+  },
+  {
+   "button": "Torso",
+   "operator": "epic.torso",
+   "part": "Torso",
+   "weight": 0.08
+  },
+  {
+   "button": "S. Joint",
+   "operator": "epic.shoulder_joint",
+   "part": "Shoulder Joint",
+   "weight": 0.25
+  },
+  {
+   "button": "S. End",
+   "operator": "epic.shoulder_end",
+   "part": "Shoulder End",
+   "weight": 0.26
+  },
+  {
+   "button": "Upper Arm",
+   "operator": "epic.upper_arm",
+   "part": "Upper Arm",
+   "weight": 0.23
+  },
+  {
+   "button": "Forearm",
+   "operator": "epic.forearm",
+   "part": "Forearm",
+   "weight": 0.22
+  },
+  {
+   "button": "Gloves",
+   "operator": "epic.gloves",
+   "part": "Gloves",
+   "weight": 0.28
+  },
+  {
+   "button": "Spine",
+   "operator": "epic.spine",
+   "part": "Spine",
+   "weight": 0.29
+  },
+  {
+   "button": "Crotch",
+   "operator": "epic.crotch",
+   "part": "Crotch",
+   "weight": 0.41
+  },
+  {
+   "button": "UL. Joint",
+   "operator": "epic.upper_leg_joint",
+   "part": "Upper Leg Joint",
+   "weight": 0.4
+  },
+  {
+   "button": "Upper Leg",
+   "operator": "epic.upper_leg",
+   "part": "Upper Leg",
+   "weight": 0.43
+  },
+  {
+   "button": "K. Upper",
+   "operator": "epic.knee_upper",
+   "part": "Knee Upper",
+   "weight": 0.35
+  },
+  {
+   "button": "K. Mid",
+   "operator": "epic.knee_middle",
+   "part": "Knee Middle",
+   "weight": 0.36
+  },
+  {
+   "button": "K. Lower",
+   "operator": "epic.knee_lower",
+   "part": "Knee Lower",
+   "weight": 0.37
+  },
+  {
+   "button": "Lower Leg",
+   "operator": "epic.lower_leg",
+   "part": "Lower Leg",
+   "weight": 0.38
+  },
+  {
+   "button": "B. Upper",
+   "operator": "epic.upper_boots",
+   "part": "Upper Boots",
+   "weight": 0.38
+  },
+  {
+   "button": "B. Mid",
+   "operator": "epic.mid_boots",
+   "part": "Mid Boots",
+   "weight": 0.47
+  },
+  {
+   "button": "Boots",
+   "operator": "epic.boots",
+   "part": "Boots",
+   "weight": 0.46
+  },
+  {
+   "button": "Sword",
+   "operator": "epic.sword",
+   "part": "Sword",
+   "weight": 0.5
+  },
+  {
+   "button": "Shield",
+   "operator": "epic.shield",
+   "part": "Shield",
+   "weight": 0.28
+  },
+  {
+   "button": "Necklace",
+   "operator": "epic.necklace",
+   "part": "Necklace",
+   "weight": 0.08
+  }
+ ],
+ "mirror_weights": {
+  "0.22": "0.19",
+  "0.23": "0.17",
+  "0.25": "0.21",
+  "0.26": "0.20",
+  "0.28": "0.27",
+  "0.35": "0.34",
+  "0.36": "0.33",
+  "0.37": "0.31",
+  "0.38": "0.32",
+  "0.40": "0.42",
+  "0.43": "0.44",
+  "0.46": "0.45",
+  "0.47": "0.48"
+ },
+ "panel_order": [
+  "epic.skull",
+  "epic.neck_upper",
+  "epic.neck_lower",
+  "epic.torso",
+  "epic.shoulder_joint",
+  "epic.shoulder_end",
+  "epic.upper_arm",
+  "epic.forearm",
+  "epic.gloves",
+  "epic.spine",
+  "epic.crotch",
+  "epic.upper_leg_joint",
+  "epic.upper_leg",
+  "epic.knee_upper",
+  "epic.knee_middle",
+  "epic.knee_lower",
+  "epic.lower_leg",
+  "epic.upper_boots",
+  "epic.mid_boots",
+  "epic.boots",
+  "epic.sword",
+  "epic.shield",
+  "epic.necklace"
+ ]
+}

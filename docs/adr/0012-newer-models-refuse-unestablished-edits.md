@@ -1,0 +1,8 @@
+# Models in the new format refuse edits whose effect in the client is not established
+
+[ADR 0001](0001-preserve-model-encodings-with-standalone-python.md) keeps every decoded field of an imported model and refuses exports after edits that could invalidate them. The cache-430 static support work (plan 02, Tasks 2 to 4) applied that to models in the new `FF FF` format:
+
+- A shading change in Blender on a new-format model is refused, because what changing a render type does in the client is not established, so the render type is never rewritten from shading (decided with the owner).
+- The texture tools keep every imported texture record (no pruning), append new vertex-naming records as kind 0, allow up to 255 records, and refuse to edit a face that uses a kind 1 to 3 record. Deleting vertices and the weighter's mirror are refused for new-format models that have source fields. These rules come from plan 02, Task 3, approved with the plan; how the client treats such edits is unverified.
+- Every imported mesh gets an `rs_model_imported` marker with its encoding, old format included, so Preserve Source can tell a stripped new-format mesh from an old-format one. Preserve Source refuses scenes saved before the marker existed, with reimport advice, and the legacy export actions still work on them (agreed with the owner).
+- Moving any vertex of a new-format mesh makes Preserve Source refuse, following plan 02, Task 2's signature policy. The owner deferred the finer correspondence check plan 02 asks for ([issue 08](../../.scratch/osrs-focus/issues/08-preserve-source-refuses-any-moved-vertex.md)).

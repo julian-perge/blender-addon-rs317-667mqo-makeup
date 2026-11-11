@@ -1,10 +1,24 @@
-# blender-addon-rs317-667mqo-makeup
-RSPS TOOLKIT is a powerful Blender addon designed for RuneScape Private Server (RSPS) developers.
-It streamlines model creation, weighting, PMN texturing, priority/TSKIN painting,
-Aether material tinting, and seamless export/import for 317/OSRS and 667 formats. Perfect for turning Blender meshes int
+# RSPS Toolkit for Old School RuneScape
 
+A Blender 5.2 extension for importing, editing and exporting OSRS models and
+creating reusable animation presentations. Future development targets OSRS
+caches. Revision 317/667 support is retained as historical compatibility.
 
+Start with [the OSRS cache workflow](docs/osrs-cache-workflow.md) for current verification and limitations,
+[the animation workflow](docs/animation-workflow.md) for the completed 2013
+animation feature, and [player customization research](docs/research/osrs-player-customization.md)
+for the proposed later character GUI. The OSRS cache workflow also has the import,
+Preserve Source export and verification commands for cache 430 (revision 149) static models.
 
+OpenRS2 archive 430 (OSRS build 149, July 2017) is the new compatibility evaluation
+cache. A successful dumper run does not establish full Blender model or animation
+support: the current animation bundle contract verifies the February 2013 cache
+only. The OSRS cache workflow has the measured cache-430 results.
+
+## Historical user guide
+
+The guide below records the original add-on workflow. Its older Blender/version
+claims do not replace the current Blender 5.2 extension instructions above.
 
 <html>
 <body>
@@ -19,15 +33,15 @@ Feature | What It Does | Why You'll Love It
 Model Weighter | VSKIN vertex weighting with body-part presets & mirroring | Quick skeletal setups—no more manual bone painting!
 Priority Painter | RSPRI face priorities (0-255) for render depth | Perfect overlays for transparent effects like capes.
 TSKIN Painter | RSTSKIN texture groups for multi-layer sorting | Seamless texture stacking with material-matched colors.
-PMN Texturing | Procedural UVs with PMN projections & looping animations | Auto-sync UVs to textures;.
+Texture Tool | Textures with texture triangles, fitted to UV edits | Preview-only scrolling animation.
 Aether Materials | RGB/HSV tinting, UV-sampling, & alpha control | Dynamic recolors + randomization for endless variations.
 Exporter | .dat exports with auto-type detection & drop variants | One-click normal + _drop.dat files for inventory bliss.
-Importers | 317/OSRS & 667 .dat loading with full reconstruction | Brings legacy models to life, textures included (via texture_dump).
+Importers | 317/OSRS & 667 .dat loading with full reconstruction | Brings legacy models to life, textures included.
 Visualizations | Overlays for weights, priorities, TSKINs, & UV arrows | Real-time feedback—see changes as you tweak.
 RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic RuneScape vibes.
 
 <div style="height: 100%; width: 1px; right: 0px; flex-shrink: 0;"></div></div></div>
-<p dir="auto" style="white-space: pre-wrap;">The toolkit lives in the 3D Viewport's N-Panel under the <strong>RSPS ADDON</strong> tab. Pro tip: Drop your textures into a <span>texture_dump</span> folder next to your .blend file (or addon dir) for instant loading—name 'em like <span>PMN_1.png</span> for PMN magic.</p>
+<p dir="auto" style="white-space: pre-wrap;">The toolkit lives in the 3D Viewport's N-Panel under the <strong>RSPS ADDON</strong> tab. Set the add-on preferences' texture folder to a folder of <span>&lt;id&gt;.png</span> textures.</p>
 <h2 dir="auto">System Specs</h2>
 <ul dir="auto">
 <li><strong>Blender</strong>: 4.5.0+ (battle-tested on 4.5.2).</li>
@@ -37,30 +51,15 @@ RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic R
 </ul>
 <h2 dir="auto">Installation: Get Up &amp; Running in Minutes</h2>
 <ol dir="auto">
-<li><strong>Grab the Goods</strong>:
+<li><strong>Build the extension</strong> (Blender 5.2 or later):
 <ul dir="auto">
-<li>Unzip the download or snag the folder with all .py files (<span>__init__.py</span>, <span>dat_exporter.py</span>, <span>weighter.py</span>, etc.).</li>
+<li><span>mkdir -p dist</span></li>
+<li><span>blender --command extension build --source-dir src/rsps_toolkit --output-dir dist</span></li>
 </ul>
 </li>
-<li><strong>Hunt Down Addons Folder</strong>:
+<li><strong>Install it</strong>:
 <ul dir="auto">
-<li><strong>Windows</strong>: <span>C:\Users\[YourUsername]\AppData\Roaming\Blender Foundation\Blender\4.5\scripts\addons</span></li>
-<li><strong>macOS</strong>: <span>~/Library/Application Support/Blender/4.5/scripts/addons</span></li>
-<li><strong>Linux</strong>: <span>~/.config/blender/4.5/scripts/addons</span></li>
-<li><em>Swap <span>4.5</span> for your Blender version.</em></li>
-</ul>
-</li>
-<li><strong>Drop It In</strong>:
-<ul dir="auto">
-<li>Paste the full folder (e.g., <span>rsps_toolkit</span>) into <span>addons</span>. Keep files nested—no flattening!</li>
-</ul>
-</li>
-<li><strong>Activate</strong>:
-<ul dir="auto">
-<li>Fire up Blender 4.5+.</li>
-<li>Hit <strong>Edit &gt; Preferences &gt; Add-ons</strong>.</li>
-<li>Search "RSPS TOOLKIT" and tick the box.</li>
-<li>Restart if Blender acts shy.</li>
+<li>Drag <span>dist/rsps_toolkit-7.7.0.zip</span> into Blender, or use <strong>Edit &gt; Preferences &gt; Get Extensions &gt; Install from Disk</strong>.</li>
 </ul>
 </li>
 <li><strong>Test Drive</strong>:
@@ -74,11 +73,12 @@ RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic R
 <ul dir="auto">
 <li>Addon ghosting? Double-check Blender version (Help &gt; About). Fresh reinstall FTW.</li>
 <li>Console gremlins? Window &gt; Toggle System Console (Windows) for debug deets.</li>
-<li>Textures AWOL? Brew a <span>texture_dump</span> folder by your .blend, toss in PNGs/JPGs (e.g., <span>PMN_1.png</span>).</li>
+<li>Textures AWOL? Set the texture folder in the add-on preferences to a folder of <span>&lt;texture id&gt;.png</span> files. Missing textures show magenta.</li>
+<li>Colours look darker or lighter than in game? The add-on preferences' Brightness picks the client setting imports show face colours at, 0.9 (darkest) to 0.6 (brightest, as item icons), default 0.8. It changes only new imports, never what export writes.</li>
 </ul>
 <h2 dir="auto">Workflow: From Sketch to Server-Ready</h2>
 <ol dir="auto">
-<li><strong>Import Base</strong> (Opt.): File &gt; Import &gt; Pick 317/OSRS or 667 Model to suck in a .dat.</li>
+<li><strong>Import Base</strong> (Opt.): File &gt; Import &gt; RS Model (.dat) for old-format models (317 and Old School), or 667 Model (.dat) for 667 models.</li>
 <li><strong>Weight It Up</strong>: Tab to Edit Mode, lasso vertices, slap on Weighter presets.</li>
 <li><strong>Texture &amp; Tag</strong>: Layer PMN textures, paint priorities/TSKINs on faces.</li>
 <li><strong>Color Pop</strong>: Aether panel for tints, alphas, and that fresh glow.</li>
@@ -87,28 +87,26 @@ RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic R
 </ol>
 <p dir="auto" style="white-space: pre-wrap;">Ready to roll? Let's break it down section by section.</p>
 <h2 dir="auto">1. Model Weighter: Bone Up Your Rigs</h2>
-<p dir="auto" style="white-space: pre-wrap;"><strong>Why?</strong> Slaps VSKIN weights (layers 1-3) on vertices for buttery RS animations. Stored as vertex groups (Blender 0-1, exports 0-100).</p>
+<p dir="auto" style="white-space: pre-wrap;"><strong>Why?</strong> Gives vertices body-part labels (vertex skins, 0-255) that RS animations move. Stored as vertex groups VSKIN1: to VSKIN3: at label / 100, spilling past 1.0 into the next group; the weighter writes and reads whole labels.</p>
 <p dir="auto" style="white-space: pre-wrap;"><strong>Step-by-Step</strong>:</p>
 <ul dir="auto">
 <li>Grab a mesh &gt; Tab to <strong>Edit Mode</strong>.</li>
 <li><strong>RSPS ADDON &gt; Epic Model Weighter</strong>:
 <ul dir="auto">
-<li><strong>Layer Up</strong>: "Create V1/V2/V3" for VSKIN groups.</li>
-<li><strong>Preset Power</strong>: Lasso verts (e.g., noggin), hit buttons like "Skull" (1.000 weight).
+<li><strong>Preset Power</strong>: Lasso verts (e.g., noggin), hit buttons like "Skull (1)"; the number is the label.
 <ul dir="auto">
 <li><em>Hits</em>: Head/Neck, Torso/Arms, Gloves, Legs/Boots, Extras (Sword/Shield/Necklace).</li>
 </ul>
 </li>
-<li><strong>DIY Dose</strong>: Dial "Custom Weight" (0-1) &gt; "Assign Custom".</li>
+<li><strong>DIY Dose</strong>: Set "Label" (0-255) &gt; "Assign Custom".</li>
 </ul>
 </li>
-<li><strong>Full Monty Mirror</strong>: Select half-model (+X) &gt; "Create &amp; Apply Mirror" (<em>Destructive—save a copy!</em>).</li>
-<li><strong>Peek Mode</strong>: "Show Weight Values" overlays digits; flip layers via slider.</li>
+<li><strong>Full Monty Mirror</strong>: Label the half-model (+X) &gt; "Finalise &amp; Mirror Model" (<em>Destructive, save a copy!</em>). The new -X half gets the left-side labels.</li>
+<li><strong>Peek Mode</strong>: "Show Labels" writes each vertex's label beside it. "Clear All Labels" removes the labels and leaves other vertex groups.</li>
 </ul>
 <p dir="auto" style="white-space: pre-wrap;"><strong>Pro Moves</strong>:</p>
 <ul dir="auto">
-<li>Auto-splits totals &gt;1 across layers (e.g., 1.5 = 1.0 V1 + 0.5 V2).</li>
-<li>Half-model first, mirror second—exporter sniffs types (e.g., HEAD via {1,2,3} weights).</li>
+<li>Half-model first, mirror second. The exporter guesses the kind of equipment from the labels (e.g., HEAD from labels 1, 2 and 3).</li>
 </ul>
 <h2 dir="auto">2. Priority Painter: Depth Masterclass</h2>
 <p dir="auto" style="white-space: pre-wrap;"><strong>Why?</strong> Vertex-color RSPRI (0-255) for face draw order—high values front-and-center.</p>
@@ -149,34 +147,20 @@ RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic R
 <li>0=base, 1=overlay—exporter packs 'em if present.</li>
 <li>Same debug button for color vibes.</li>
 </ul>
-<h2 dir="auto">4. PMN Texturing: UV Wizardry Unleashed</h2>
-<p dir="auto" style="white-space: pre-wrap;"><strong>Why?</strong> Crafts RS-procedural textures via PMN (Projection/Mapping/Normal) with auto-UVs and timeline loops.</p>
+<h2 dir="auto">4. Texture Tool: Texture Triangles</h2>
+<p dir="auto" style="white-space: pre-wrap;"><strong>Why?</strong> Gives faces a texture and a texture triangle (P, M, N), which is what the game uses to lay the texture over them. The UVs only preview the triangle.</p>
 <p dir="auto" style="white-space: pre-wrap;"><strong>Step-by-Step</strong>:</p>
 <ul dir="auto">
-<li>Mesh &gt; <strong>Edit Mode</strong> &gt; <strong>PMN Texturing</strong>:
+<li>Set the texture folder (<span>&lt;id&gt;.png</span> files) in the add-on preferences.</li>
+<li>Mesh &gt; <strong>Edit Mode</strong> &gt; <strong>Texture Tool</strong>:
 <ul dir="auto">
-<li><strong>Pick Pic</strong>: Dropdown from <span>texture_dump</span> (e.g., PMN_*.png).</li>
-<li><strong>Slap It On</strong>: Faces &gt; "Apply Texture &amp; Create UVs" (solo) or "Multi Texturing" (per-mat).
-<ul dir="auto">
-<li>Nodes go REPEAT—boom, materials minted.</li>
+<li><strong>Pick</strong>: choose a texture ID from the list.</li>
+<li><strong>Apply</strong>: select faces, look at them the way the texture should sit, and click "Apply Texture &amp; Create UVs". P, M and N become the selected vertices nearest the top-left, top-right and bottom-left of the selection in the view. Each Apply adds its own texture triangle; a model can have 64.</li>
+<li><strong>Adjust</strong>: edit the UVs, then click "Fit Texture Triangle to UVs". Export ignores UV edits that were not fitted.</li>
+<li><strong>Animate</strong>: "Animate Vertically" scrolls the texture in Blender only; export ignores it. "Stop Animation" removes it.</li>
 </ul>
 </li>
-<li><strong>Tweak Time</strong>:
-<ul dir="auto">
-<li>"Start Auto Sync" for live PMN updates on UV fiddles.</li>
-<li>Edit Mode &gt; "Manual Sync (Current Selection)".</li>
-<li><strong>Transforms</strong>: Offset/Scale U/V &gt; "Capture Current".</li>
-<li><strong>Animate</strong>: "↕ Animate Vertically" for driver-fueled loops; "Stop" to halt.</li>
-</ul>
-</li>
-</ul>
-</li>
-<li><strong>Viz It</strong>: "Show PMN Visualization" arrows trace UV flow.</li>
-</ul>
-<p dir="auto" style="white-space: pre-wrap;"><strong>Pro Moves</strong>:</p>
-<ul dir="auto">
-<li>PMN vectors per-mat; 667 importer handles fancy projections.</li>
-<li><span>texture_dump</span>: PMN_1.png = ID 1—easy peasy.</li>
+<li><strong>Show Texture Triangles</strong>: draws the selected faces' triangles with P, M and N labelled and a green arrow along u.</li>
 </ul>
 <h2 dir="auto">5. Aether Materials: Hue &amp; Cry</h2>
 <p dir="auto" style="white-space: pre-wrap;"><strong>Why?</strong> RGB/HSV recolors, texture-sampling, &amp; alpha finesse for vibrant variants.</p>
@@ -224,9 +208,8 @@ RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic R
 </li>
 <li><strong>Import</strong> (File &gt; Import):
 <ul dir="auto">
-<li>"317/OSRS": Basics (UVs/weights).</li>
-<li>"667": Full monty (complex tex/PMN).</li>
-<li><span>texture_dump</span> required; layers auto-spawn.</li>
+<li>"RS Model (.dat)": old-format models, several files at once; layers, UVs and textures from the preferences folder.</li>
+<li>"667 Model (.dat)": new-format 667 models (legacy importer).</li>
 </ul>
 </li>
 </ul>

@@ -1,0 +1,15 @@
+.DS_Store
+.recall/
+.superpowers/
+*.zip
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+.blender-test-profile/
+.idea/
+.mcp.json
+keys-*.json
+
+.env

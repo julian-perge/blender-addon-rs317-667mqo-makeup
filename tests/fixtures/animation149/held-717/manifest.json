@@ -1,0 +1,96 @@
+{
+  "sequence": 717,
+  "source_cache_dat2_sha256": "3c48913fa884d2d33f03af71cf4be05e6915263f939c545e1fefa6953bc7fedd",
+  "sequence_sha256": "79a5ad4697a9ea3b9c76b31f370272e3a520e723ecfbc8df8eb200b635b9fb0d",
+  "durations": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    8,
+    6
+  ],
+  "frames": [
+    {
+      "group": 232,
+      "file": 96,
+      "map": 0,
+      "sha256": "420fbd2e9d4290d75a90ee47504e1c790000853f2f842c1d0073c0ddfbe98aea"
+    },
+    {
+      "group": 232,
+      "file": 100,
+      "map": 0,
+      "sha256": "89dda02b3c5ce11684febc27f59c557c0681c8e9446fc9c4467ebecbcb390db6"
+    },
+    {
+      "group": 232,
+      "file": 101,
+      "map": 0,
+      "sha256": "a9886d5699bd2e2cf17e0acffa71429a5844ead6485d8e8cb0cfc36a65301d8b"
+    },
+    {
+      "group": 232,
+      "file": 102,
+      "map": 0,
+      "sha256": "ca612c229722cee62a0027604eace2491cdf929e12898eb45ee657336d511c9a"
+    },
+    {
+      "group": 232,
+      "file": 103,
+      "map": 0,
+      "sha256": "5b2953452cb65096154acaf307977cdcd64556f41f1e5c8800379bcd01d9e944"
+    },
+    {
+      "group": 232,
+      "file": 104,
+      "map": 0,
+      "sha256": "5cdc1bfae024d4fc6f6189d1bd79eb1f72962b2c7bb80aa33e7b755078ad9ef1"
+    },
+    {
+      "group": 232,
+      "file": 105,
+      "map": 0,
+      "sha256": "d6c0fd88df0ea7b0582a9dd4e51245357e27ba1b4043dd41c117369bee64d9f7"
+    },
+    {
+      "group": 232,
+      "file": 106,
+      "map": 0,
+      "sha256": "dd6dd598b32aa5a2583a2b018937bb0a13db7c031ed04340247175ecb71f213d"
+    },
+    {
+      "group": 232,
+      "file": 107,
+      "map": 0,
+      "sha256": "c1c1494c7c0cb2ac5ad4d493db455ac0d871a24e12184cc7f73ec089b41a24a4"
+    },
+    {
+      "group": 232,
+      "file": 97,
+      "map": 0,
+      "sha256": "8a97ad78024a8065129e45501b56085e5b80464dc0f74bb700bcf8e95fa0183f"
+    },
+    {
+      "group": 232,
+      "file": 98,
+      "map": 0,
+      "sha256": "31af6b3a0a55ccbedb82723bdf5c5c271ca5d25caf4d6258033c4b4181fc30c8"
+    },
+    {
+      "group": 232,
+      "file": 99,
+      "map": 0,
+      "sha256": "79bec3fbe07f37a74a7412ed7506b9e76278f7724d5414c0475d46564005db5d"
+    }
+  ],
+  "maps": {
+    "0": "14d29060c05d50bf7d615db1fb8970c5718fc3d21bb0f38b7c33aacd16292b56"
+  }
+}

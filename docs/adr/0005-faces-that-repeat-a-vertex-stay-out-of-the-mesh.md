@@ -1,0 +1,5 @@
+# Faces that repeat a vertex stay out of the Blender mesh
+
+1,753 of the 27,612 models in the 2013 Old School dump have zero-area faces that repeat a vertex (14,385 in all; model 6658 has 7). Blender freezes entering Edit Mode on a mesh holding them (observed, with the original importer too), and `mesh.validate()` would delete them. The owner decided on 2026-11-05 that import keeps them out of the Blender mesh and stores them on it, and export puts them back at their original positions, so the round trip stays exact. With them set aside, model 6658 opens in Edit Mode and still round-trips exactly.
+
+`formats/set_aside.py` takes them out and puts them back, and `model_to_object` stores them as JSON in the mesh property `rs_set_aside_faces`. They name vertices by index, and each also records its vertices' positions: export leaves out, with a warning, any whose vertices are no longer at those positions, and reverses them with the other faces for a mirroring transform. The weighter's mirror drops them and says so. The 667 importer is the exception ([issue 23](../../.scratch/osrs-focus/issues/23-667-new-format-models.md)).

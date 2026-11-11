@@ -1,0 +1,24 @@
+schema_version = "1.0.0"
+
+id = "rsps_toolkit"
+version = "7.7.0"
+name = "RSPS Toolkit"
+tagline = "Import, edit and export Old School RuneScape models"
+maintainer = "Julian Perge"
+type = "add-on"
+
+blender_version_min = "5.2.0"
+
+license = ["SPDX:MIT"]
+
+[permissions]
+files = "Import and export RuneScape model and texture files"
+
+# Setting this list replaces Blender's defaults, so it repeats the Blender 5.2 defaults.
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "/*.zip",
+  "*.blend[1-9]",
+]

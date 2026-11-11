@@ -1,0 +1,10 @@
+java.lang.ArrayIndexOutOfBoundsException: Index 1152 out of bounds for length 1152
+	at net.runelite.cache.item.Graphics3D.method2842(Graphics3D.java:1476)
+	at net.runelite.cache.item.Graphics3D.rasterFlat(Graphics3D.java:1331)
+	at net.runelite.cache.item.Model.rasterFace(Model.java:499)
+	at net.runelite.cache.item.Model.draw(Model.java:424)
+	at net.runelite.cache.item.Model.projectAndDraw(Model.java:208)
+	at net.runelite.cache.item.ItemSpriteFactory.createSpritePixels(ItemSpriteFactory.java:141)
+	at net.runelite.cache.item.ItemSpriteFactory.createSprite(ItemSpriteFactory.java:46)
+	at Osrs149IconReference.record(Osrs149IconReference.java:89)
+	at Osrs149IconReference.main(Osrs149IconReference.java:109)

@@ -1,0 +1,12 @@
+# Texture triangles are what export writes, and the UV layer previews them
+
+The owner decided this in the architecture review (candidate 4, 2026-11-05) and settled its steps on 2026-11-06. The original PMN tool gave faces a shared `PMN_<file>` material per texture and stored P/M/N positions on it, which the original exporter ignored: it built one texture triangle per `PMN_` material from the first face's UVs, snapping where UV (0,0), (1,0) and (0,1) fall on that face's plane to the nearest vertices.
+
+- Texture triangles stay the source of truth, and the UV layer is a preview rebuilt from them by `texture_uvs`, with v flipped to 1 - v. Export ignores UV edits, and Fit Texture Triangle to UVs is the explicit way to turn them into triangles. The animated texture drivers are a Blender preview that export ignores.
+- The texture tool's Apply adds a triangle for its faces, taking P, M and N as the vertices nearest the projection's top-left, top-right and bottom-left corners.
+- Export deletes triangles no face uses and warns with the number of textured faces whose UVs differ from what their triangle gives.
+- Upgrade RS Materials gives each `PMN_` material the triangle the original exporter wrote, from its first face whose UVs give one. The owner decided on 2026-11-06 that the faces before that one share the material's triangle, where the original exporter wrote them untextured, and that a material none of whose faces allows a triangle gets no game values, so export names it until its faces get usable UVs. A material past the 64-triangle limit also gets none, which follows that decision without being decided separately.
+- When a material already has game values from another object but none of its faces on this object allows a triangle, those faces are written untextured, in the colour the original exporter computed from the material's Base Color with its wrong HSV conversion (`formats.colour.original_exporter_colour`; the owner's choice, 2026-11-06).
+- The weighter's mirror renumbers the triangles that keep all their vertices and removes those that used a deleted vertex; their faces map from their own corners. The new -X faces use the +X triangles unmirrored, and a mirrored copy of each triangle is a later improvement.
+
+Accepted gaps: the original exporter fitted on the mesh with modifiers applied, and Upgrade RS Materials fits on the mesh itself; the original exporter never reused an identical triangle across two materials, which `add` does; undo after the upgrade or the mirror is untested.

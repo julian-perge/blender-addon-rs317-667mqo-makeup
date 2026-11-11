@@ -1,0 +1,56 @@
+#:schema https://www.schemastore.org/prek.json
+
+minimum_prek_version = "0.5.0"
+default_install_hook_types = ["pre-commit", "pre-push"]
+default_stages = ["pre-commit"]
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "check-added-large-files", args = ["--maxkb=20000"] },
+    { id = "check-case-conflict" },
+    { id = "check-merge-conflict" },
+    { id = "check-toml" },
+    # pyrefly writes its baseline without a final newline, so the fixer would rewrite it after every update.
+    { id = "end-of-file-fixer", exclude = '^pyrefly-baseline\.json$' },
+    { id = "trailing-whitespace" },
+]
+
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.17.3"
+hooks = [
+    { id = "ruff-check", args = ["--fix", "--show-fixes", "--exit-non-zero-on-fix"] },
+    { id = "ruff-format" },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+    {
+        id = "pyrefly-check",
+        name = "Pyrefly (type checking)",
+        entry = "uv run pyrefly check",
+        language = "system",
+        pass_filenames = false,
+        types = ["python"],
+    },
+    {
+        id = "pytest",
+        name = "Unit tests",
+        entry = "uv run pytest -q",
+        language = "system",
+        pass_filenames = false,
+        types = ["python"],
+    },
+    # Blender takes a few seconds to start, so the tests inside it run only before a push.
+    {
+        id = "blender-tests",
+        name = "Blender tests",
+        entry = "scripts/test-blender.sh",
+        language = "system",
+        pass_filenames = false,
+        types = ["python"],
+        stages = ["pre-push"],
+    },
+]

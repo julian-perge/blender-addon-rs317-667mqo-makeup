@@ -1,0 +1,63 @@
+{
+  "animation_name_commit": "8f2aca162a5ddd3765dd0166aea5de86522bc785",
+  "animation_name_repository": "runelite/runelite",
+  "animation_name_symbol": "SLAYER_ABYSSAL_WHIP_ATTACK",
+  "animation_name_value": 1658,
+  "cache_date": "2013-02-22",
+  "cache_hashes": {
+    "main_file_cache.dat2": "66367256285a73161c504015ff6f2f0a1674990c55cad7df64925cb9751a9b72",
+    "main_file_cache.idx0": "5fcd520cf20195ee42806c878b20ea85d49de296b221cfe6ace128938479813a",
+    "main_file_cache.idx1": "fd1e8d6d3c6c300f1e82a43d2aeeda3c3e26b3cf8b962a89ad29e789f0d286d9",
+    "main_file_cache.idx2": "0769534263ec53f129dff07959429975f15d68553fec7ce2d8f0dbc0c0891a91",
+    "main_file_cache.idx7": "b970f7954eff7d2c88d7b5257693d350d1a535b7823c3904884f395b5c69d7e5",
+    "main_file_cache.idx8": "38eceef32b3256504179318df34036fbf36a5e492096fbfbe0e58bee97c59e37",
+    "main_file_cache.idx9": "6cac2d0ef2dcad24d6616949c0018142c646286839a14ee6860c374efccab981"
+  },
+  "cache_revision": 1,
+  "client_archive_sha256": "d514344489659e0c0f0efc390c8506747d254af704d4e3a12f03a6044a4883f4",
+  "client_commit": "b0fdcde9c8bbbc75cd2ea4a3cd87461d1a62641b",
+  "client_repository": "Shadowrs/osrs-refactor-revision-1",
+  "client_sources_sha256": {
+    "Applet_Sub1.java": "86d72ab56da1a2668035a29d2a7649cc9b346ae0ade0e42d54cc346d1ad6c2b1",
+    "Class102_Sub1.java": "6f772c285cdb5fc4454806b086c4f4d0249ae0f748c8bff57a8a7a9bad376d9a",
+    "Class104_Sub18_Sub15.java": "dbc17fb6ccf34540f0fb186e5e7ec41ba27c65892971d4ff7fc3366613ad1866",
+    "Class104_Sub18_Sub16_Sub4.java": "1ff75094fac67c162ef44d93330fb331ac6fe64e1dd2f404dac7c0496be82eb8",
+    "Class104_Sub18_Sub16_Sub5.java": "3a5ee938fe6a4e8377bdb516adaa65ef0d26db33534851f2637c5cacbbb07ff8",
+    "Class104_Sub19.java": "70c047292de6df5386a49e207e05d3e20051c697c23ae5c7cb55258928077add",
+    "Class104_Sub23.java": "9fafc3c973e6d91299c3aaacd3844d5947d7c9102302ce86099db7597771b070",
+    "Class30.java": "477ff76882e23a6b48b74c3bd4c5cf50c6d8dc6605f0c03ebe3d354352025cc2",
+    "Class34.java": "446ec741e95fda5b5c06da8e4ce644235f877092b3f0d05c86c4ecbd9fea35ae",
+    "Class46.java": "416601ca9eb9c92de27bea5381dac4a0ac73384c58f5fe40624b2b02c52a61fa",
+    "Class5.java": "a9e79e769ff24e96baf2200026987c9c494e5045f5b9a51d4cc2a8681e3e2535",
+    "Class66.java": "a9cdfe6c11b9dca8bef80551b97a765cdf8f3c76e5c688b3c1487004faa537db",
+    "Class75.java": "02f689ef95aa93c331937de231b9c4da06ca44e97fd1192f194298980c8d31de",
+    "Class84.java": "f6a2e0072cafb6b940d06074e46c4949b66321cdcbac628e6207a3f057039e78",
+    "Class97.java": "9d9627f9c37fa7d3a7d507736db1f2fdeb13a59f7bc2af988a6aacad4ebdba69",
+    "Def.java": "36a2051215e404a33670488fbc6984805ec7e91c2edf58ae646ee001d4aa6237",
+    "Def2.java": "3e1cfe54dd9ec5544a4bc38e4c0091ee3704e56639a6780434ff0553375dce51",
+    "ItemDef.java": "b05f9bc5213893c0d729bce3654abd6eba58debf95a31e1638a52ccb35b59df8",
+    "Looks.java": "b7435414ee8162e33821bc52593e090efed1e585b1382ea1d24c15b2f925308c",
+    "ObjectDefinition.java": "b017cfd557c471e97b0dfe9984e32e34f62a8b9b85ce46332ed09290806419db",
+    "Widget.java": "809d0ca54eec6f43cc3ce7cf494b90c9d6f0e381185a361400e6dee30638331e",
+    "client.java": "3ec86b37df01d5dfd12accfe3b990f1726e8918208acefb870b67c52beb8f27e"
+  },
+  "dumper_jar_sha256": "2e92828b01f783d51ee556e2b85a318705929bec98592065d311ba1a6343b46d",
+  "openrs2_archive_id": 241,
+  "reference_harness_sha256": "1285c6ae1e14e853b39556198f1b574c7629d0514efaca976caa1735107075ea",
+  "reference_sha256": "f07e03a345dc1c91750a11c00e3951c2ef567eac9af25aa9c26a03e894f1f8d5",
+  "runelite_cache_version": "1.13.6",
+  "texture_pngs": {
+    "34": {
+      "height": 128,
+      "path": "textures/34.png",
+      "sha256": "4ecc313c8c3a2b3eda460551500cb4419f4ca424b411a08e28c0e4659c600258",
+      "width": 128
+    },
+    "8": {
+      "height": 128,
+      "path": "textures/8.png",
+      "sha256": "fd57c87a55bb53203e45211a669da0ab3c2fa785a3d557ac9b69e52f5b571deb",
+      "width": 128
+    }
+  }
+}

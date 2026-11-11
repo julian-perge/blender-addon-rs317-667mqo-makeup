@@ -1,0 +1,63 @@
+[project]
+name = "rsps-toolkit"
+version = "7.7.0"
+description = "Blender extension to import, edit and export Old School RuneScape models, with legacy 317 and 667 support"
+license = "MIT"
+requires-python = "==3.13.*"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "fake-bpy-module-5.2",
+  "prek>=0.5.10",
+  "pyrefly>=1.4.1",
+  "pytest",
+  "pytest-timeout>=2.4.0",
+  "ruff",
+]
+
+# Blender builds and installs the extension from src/rsps_toolkit, so uv never packages it.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests/unit"]
+
+[tool.ruff]
+line-length = 120
+src = ["src"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = [
+  "E",  # pycodestyle errors
+  "F",  # Pyflakes
+  "W",  # pycodestyle warnings
+  "I",  # isort
+  "N",  # pep8-naming
+  "UP", # pyupgrade
+]
+ignore = [
+  "E501", # line length is the formatter's job
+]
+
+[tool.ruff.lint.pep8-naming]
+# Registered Blender classes follow Blender's naming convention, such as RSPS_OT_export for an operator.
+ignore-names = ["*_OT_*", "*_PT_*", "*_MT_*", "*_UL_*"]
+
+[tool.pyrefly]
+project-includes = ["src", "tests"]
+search-path = ["src"]
+python-version = "3.13"
+# Type errors in the legacy modules are recorded here so only new errors fail the check. Shrink it with
+# `uv run pyrefly check --prune-baseline` as step 5 rewrites those modules.
+baseline = "pyrefly-baseline.json"
+
+# Blender declares operator properties as `name: bpy.props.X(...)` annotations and adds properties to
+# bpy.types.Scene at runtime, which type checkers cannot model. Those two checks are off for the Blender layer only.
+[[tool.pyrefly.sub-config]]
+matches = "src/rsps_toolkit/blender/**"
+errors = { invalid-annotation = false, missing-attribute = false }

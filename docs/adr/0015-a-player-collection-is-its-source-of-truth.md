@@ -1,0 +1,8 @@
+# A player's collection and stored settings are its source of truth
+
+A player is a collection holding its meshes, its rig and its stored appearance settings. These are the owner's choices, made from 2026-11-07 to 2026-11-09:
+
+- The collection's stored settings are the source of truth. The panel records which player it belongs to: Create, a successful Update and Load Player Settings tie it to a player, and loading a preset file unties it. Update refuses, before any change, when the panel is tied to another existing player.
+- Selecting any object of another player (body, weapon, shield, held item or rig) loads that player's stored settings into the panel and ties the panel to it (2026-11-09). Settings the panel holds that no player stores as they are stay in the panel when a player is selected: changes not yet applied with Update, a preset file's settings and a new scene's settings. A note then names both ways on, Update or Load Player Settings. A panel tied to a player since deleted or renamed counts as tied to no player, following the rule for preset files.
+- An edit fingerprint tells an edited player from an unedited one. Update never overwrites a hand-edited mesh or rig ([plan 06](../../.scratch/osrs-focus/plans/06-charactercreator-m4.md), decision 4, which allowed refusing or copying): it rebuilds an unedited player in place, and keeps an edited one and builds the update as a copy beside it. Moving, turning or scaling a whole player is not an edit, and moving one of its meshes against the rig is (2026-11-09).
+- When the fingerprint's formula changes, players saved before count as edited: the bakes refuse them, and Update builds a fresh copy beside them.
