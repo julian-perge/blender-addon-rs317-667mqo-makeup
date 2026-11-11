@@ -1,9 +1,8 @@
 # Revision 149 clip inputs and client recordings
 
 Raw (decompressed) data from OpenRS2 snapshot 430 and what the unchanged revision-149 client (`gamepack-149.jar`,
-SHA-256 `19c492cc...cbdd`) does with it. Paths below use `CACHE=<data workspace>/caches/osrs/openrs2-430/cache`,
-`DUMP=<data workspace>/exports/osrs/openrs2-430/dump/dump_index/configs`,
-`JAR=<reference work folder>/gamepack-149.jar`.
+SHA-256 `19c492cc...cbdd`) does with it. Paths below use `CACHE=<path to cache>` (the `cache/` folder of snapshot 430)
+and `JAR=<reference work folder>/gamepack-149.jar`.
 
 ## Clip folders
 
@@ -25,11 +24,11 @@ Every frame uses frame map 0. Sequences 819, 808 and 824 hold only their frame l
 they are the player's walk, stand and run is the task's labelling, not checked against the client (the server picks
 the player's sequences).
 
-Each folder holds `sequence.dat` (as the dumper wrote it), `frames/<group>_<file>.dat`, `maps/<id>.dat` and
-`manifest.json` (SHA-256 of every file and of the source `main_file_cache.dat2`), made by:
+Each folder holds `sequence.dat` (file `<id>` of cache index 2 group 12), `frames/<group>_<file>.dat`, `maps/<id>.dat`
+and `manifest.json` (SHA-256 of every file and of the source `main_file_cache.dat2`), made by:
 
 ```bash
-uv run tests/fixtures/animation149/export_clip.py --cache $CACHE --sequence $DUMP/sequence/819.dat \
+uv run tests/fixtures/animation149/export_clip.py --cache $CACHE --sequence 819 \
   --output tests/fixtures/animation149/walk
 ```
 
@@ -40,7 +39,7 @@ archives filled from the folder, then reads the lit model by reflection: `v` ver
 x, y and z, `o` face alphas. Recording refuses an existing output file:
 
 ```bash
-uv run tests/fixtures/record_pose.py --client $JAR --kits $DUMP/identkit \
+uv run tests/fixtures/record_pose.py --client $JAR --kits tests/fixtures/appearance/kits \
   --clip tests/fixtures/animation149/walk --body female
 ```
 
@@ -52,20 +51,22 @@ uv run tests/fixtures/record_pose.py --client $JAR --kits $DUMP/identkit \
 | `held-1365` | 1365 `MISC_HUMAN_WOODCUTTING_STEEL_AXE` | 1865 (item 1353, Steel axe) and 0 |
 | `held-909` | 909 `HUMAN_MAPPING` | 1485 (item 973, Charcoal) and 1482 (item 970, Papyrus) |
 
-Each folder is a clip folder as above, plus `items/<id>.dat` (raw item files from `$DUMP/../items`) for the worn Rune
-scimitar (1333) and Rune kiteshield (1201) and the held items, and `models/<id>.dat` with each item's male worn model
-(from `$DUMP/../models`). `pose-male.json` is recorded with `--held`: the harness decodes `sequence.dat` with the
-client's loader `du.j`, so `hu.l` substitutes the held items, and the equipment is the male default with the
-scimitar and kiteshield worn. `rest` is the model with no sequence (630 faces); the frames have 476, 516 and 522 faces.
+Each folder is a clip folder as above, plus `items/<id>.dat` (raw item files, the same bytes as files of cache index 2
+group 10) for the worn Rune scimitar (1333) and Rune kiteshield (1201) and the held items, and `models/<id>.dat` with
+each item's male worn model (the same bytes as file 0 of its group in cache index 7). `ItemDefinitions.json` is
+RuneLite's decoding of the folder's items. `pose-male.json` is recorded with `--held`: the harness decodes
+`sequence.dat` with the client's loader `du.j`, so `hu.l` substitutes the held items, and the equipment is the male
+default with the scimitar and kiteshield worn. `rest` is the model with no sequence (630 faces); the frames have 476,
+516 and 522 faces.
 
 ```bash
-uv run tests/fixtures/record_pose.py --client $JAR --kits $DUMP/identkit \
+uv run tests/fixtures/record_pose.py --client $JAR --kits tests/fixtures/appearance/kits \
   --clip tests/fixtures/animation149/held-1365 --body male --held --weapon 1333 --shield 1201
 ```
 
 ## Sequence decoding and timing
 
-`sequences/<id>.dat` are unchanged copies of `$DUMP/sequence/<id>.dat`: the clip sequences, and for each opcode 2 to
+`sequences/<id>.dat` are unchanged copies of file `<id>` of cache index 2 group 12: the clip sequences, and for each opcode 2 to
 13 at least one sequence that uses it. `sequences.json` is recorded by `../record_sequences.py` with the harness
 `../SequenceReference.java`. It decodes each file with the client's own loader `du.j` (which runs `jg.n`, `jg.r` and
 `jg.v`) and stores the fields multiplied by the client's own getter multipliers. Each timing case steps the client's

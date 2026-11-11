@@ -9,8 +9,8 @@ import net.runelite.cache.models.JagexColor;
  * RuneLite's JagexColor is a port of the 317 client's palette builder (see docs/research/model-formats.md),
  * so the tests use it as the expected value for our own conversion.
  *
- * Run with the osrs-cache-dumper jar, which bundles RuneLite's cache library:
- * java -cp <path to osrs-cache-dumper>/target/osrs-cache-dumper.jar tests/fixtures/ColourReference.java tests/fixtures/colours.json
+ * Run with a jar that holds RuneLite's cache library 1.13.6 (net.runelite:cache) and its dependencies:
+ * java -cp <path to RuneLite cache jar> tests/fixtures/ColourReference.java tests/fixtures/colours.json
  */
 public class ColourReference {
     public static void main(String[] args) throws Exception {

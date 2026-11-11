@@ -10,8 +10,8 @@ import net.runelite.cache.definitions.loaders.ModelLoader;
  * The tests compare our decoder against these files, so the expected values come from a second,
  * independent implementation of the model formats rather than from our own code.
  *
- * Run with the osrs-cache-dumper jar, which bundles RuneLite's cache library:
- * java -cp <path to osrs-cache-dumper>/target/osrs-cache-dumper.jar tests/fixtures/ModelReference.java tests/fixtures/models/osrs/*.dat
+ * Run with a jar that holds RuneLite's cache library 1.13.6 (net.runelite:cache) and its dependencies:
+ * java -cp <path to RuneLite cache jar> tests/fixtures/ModelReference.java tests/fixtures/models/osrs/*.dat
  */
 public class ModelReference {
     public static void main(String[] args) throws Exception {

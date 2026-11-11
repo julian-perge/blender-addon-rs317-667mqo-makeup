@@ -4,11 +4,11 @@ Recorded November 6, 2026 from the February 22, 2013 cache, OpenRS2 archive 241.
 
 ## Sources and independence
 
-`../AnimationReference.java` compiles against the unmodified [revision-1 client](https://github.com/Shadowrs/osrs-refactor-revision-1/tree/b0fdcde9c8bbbc75cd2ea4a3cd87461d1a62641b). The client's own `Looks`, model, sequence, frame and frame-map classes perform assembly, decoding and transforms. RuneLite cache 1.13.6 supplies only cache-container/file access; Gson serializes the result. No new toolkit pose code or animation dumper normalization code is used.
+`../AnimationReference.java` compiles against the unmodified [revision-1 client](https://github.com/Shadowrs/osrs-refactor-revision-1/tree/b0fdcde9c8bbbc75cd2ea4a3cd87461d1a62641b). The client's own `Looks`, model, sequence, frame and frame-map classes perform assembly, decoding and transforms. RuneLite cache 1.13.6 supplies only cache-container/file access; Gson serializes the result. No toolkit pose code and no export tool's normalization code is used.
 
 The harness can also replay the decompressed `2013/raw/` payloads directly. In that mode RuneLite does not unpack a cache. Packed-cache and raw-payload runs produced byte-identical `reference.json` files after canonical key ordering. The client source compiled with `javac --release 8`; the harness ran with Java 25.0.4. No Applet, game network connection or Blender process is launched.
 
-`source.json` records original cache hashes, client commit and critical source hashes, harness hash, reference hash and the existing shaded dumper JAR hash. It also records the two existing-dump PNG hashes/dimensions. The original cache was never opened by the reference: a temporary copy was used, and its relevant file hashes still match the original after both runs.
+`source.json` records original cache hashes, client commit and critical source hashes, harness hash, reference hash and the hash of the shaded jar that supplied RuneLite cache 1.13.6. It also records the hashes and dimensions of the two PNGs. The original cache was never opened by the reference: a temporary copy was used, and its relevant file hashes still match the original after both runs.
 
 The name-to-ID source is RuneLite's generated [AnimationID](https://github.com/runelite/runelite/blob/8f2aca162a5ddd3765dd0166aea5de86522bc785/runelite-api/src/main/java/net/runelite/api/gameval/AnimationID.java): `SLAYER_ABYSSAL_WHIP_ATTACK = 1658`, distinct from its special attack. That is a later generated name source, not a recovered 2013 server. The local 2013 sequence/frame/model content is independently checked by this fixture; no claim is made that the client itself selects an attack based on item 4151.
 
@@ -16,10 +16,10 @@ The name-to-ID source is RuneLite's generated [AnimationID](https://github.com/r
 
 - `reference.json`: all 15 poses of sequence 1658, all 364 assembled vertices and 652 face alphas per pose, rest topology/labels/colors, the eight source parts and exact correspondence back to assembled vertices, sequence/frame/map data, and both actor-clock traces.
 - `raw/<index>/<group>/<file>.dat`: 305 exact decompressed payloads actually requested by the client. Full frame group 300 is present because the original client builds the entire frame group. This is a compact dependency closure, not the full cache.
-- `textures/8.png` and `34.png`: existing dumper PNGs from the same 2013 dump. They are display resources, not an assertion of pixel-identical client rasterization or lighting.
-- `request.json`: explicit version-1 extraction request derived from the recorded default appearance, parts, recolors and source hashes. The opt-in dumper target consumes it.
+- `textures/8.png` and `34.png`: PNGs that a local export tool (not in this repo) wrote from the same 2013 cache. They are display resources, not an assertion of pixel-identical client rasterization or lighting.
+- `request.json`: explicit version-1 extraction request derived from the recorded default appearance, parts, recolors and source hashes. The local export tool that made the bundle consumed it.
 
-- `bundle-manifest.json`: version-1 producer output from `osrs-cache-dumper` commit `c9fcc12` (reader `0d27b2b`, RuneLite cache 1.13.6, Java 25). Its SHA-256 is `1ad34289b442bcf35aa2775d0e8ad934576291fe943198c10a486c66dea956cb`. A fresh temporary-cache extraction produced records and resource bytes matching the client fixture exactly. This is a wire-format fixture, not a second source of game pose expectations. Tests copy the existing raw model/PNG bytes into the manifest's declared dump paths. The toolkit loader currently accepts the producer's non-interlaced 8-bit RGBA PNG encoding and refuses other encodings explicitly.
+- `bundle-manifest.json`: version-1 output of the local export tool at commit `c9fcc12` (reader `0d27b2b`, RuneLite cache 1.13.6, Java 25). Its SHA-256 is `1ad34289b442bcf35aa2775d0e8ad934576291fe943198c10a486c66dea956cb`. A fresh temporary-cache extraction produced records and resource bytes matching the client fixture exactly. This is a wire-format fixture, not a second source of game pose expectations. Tests copy the existing raw model and PNG bytes to the paths the manifest declares. The toolkit loader currently accepts the producer's non-interlaced 8-bit RGBA PNG encoding and refuses other encodings explicitly.
 
 The default male equipment selected by `Looks.render(null, ...)` contains kits 18, 26, 36, 0, 33, 42 and 10. The whip replaces equipment slot 3 with item 4151, using worn model 5409. The parts' model IDs in equipment order are 5409, 292, 151, 254, 230, 176, 181 and 249. All original part vertices have an assembled correspondence. A coordinate shared across parts is animated through the client's assembled labels and pivot, not a separately calculated part pivot.
 
@@ -37,7 +37,7 @@ The selected clip exercises transform types 0, 1, 2 and 3. Face alphas are prese
 
 ## Reproduce from the compact fixture
 
-Run from the repository root with a built RuneLite-1.13.6 dumper JAR available. Use a fresh directory; do not overwrite the fixture with the output.
+Run from the repository root with a jar that holds RuneLite's cache library 1.13.6 and its dependencies. Use a fresh directory; do not overwrite the fixture with the output.
 
 ```bash
 set -e
@@ -46,7 +46,7 @@ curl -L --fail https://api.github.com/repos/Shadowrs/osrs-refactor-revision-1/ta
 mkdir "$animation_ref_work/client" "$animation_ref_work/classes"
 tar -xzf "$animation_ref_work/client.tar.gz" -C "$animation_ref_work/client" --strip-components=1
 javac --release 8 -d "$animation_ref_work/classes" "$animation_ref_work/client/source/"*.java
-animation_ref_jar="<data workspace>/osrs-cache-dumper/target/osrs-cache-dumper.jar"
+animation_ref_jar=<path to RuneLite cache jar>
 javac -cp "$animation_ref_work/classes:$animation_ref_jar" -d "$animation_ref_work/classes" tests/fixtures/AnimationReference.java
 java -Djava.awt.headless=true -cp "$animation_ref_work/classes:$animation_ref_jar" AnimationReference tests/fixtures/animations/2013 "$animation_ref_work/replayed" 1658
 cmp tests/fixtures/animations/2013/reference.json "$animation_ref_work/replayed/reference.json"
@@ -54,7 +54,7 @@ cmp tests/fixtures/animations/2013/reference.json "$animation_ref_work/replayed/
 
 Expected: `sequence=1658 frames=15 vertices=364 faces=652 parts=8 resources=305`, then `cmp` exits 0 with no output. Java 25 warns that release 8 is obsolete; those warnings do not mean source compilation failed.
 
-To record again from the packed cache, replace the fixture input argument with a temporary copy of `oldschool-live-en-b1-2013-02-22-00-00-00-openrs2_241`. Run the same comparison before replacing any fixture. Preserve the source hashes and primary-source provenance; never regenerate expectations from the toolkit evaluator or its future dumper normalization output.
+To record again from the packed cache, replace the fixture input argument with a temporary copy of `oldschool-live-en-b1-2013-02-22-00-00-00-openrs2_241`. Run the same comparison before replacing any fixture. Preserve the source hashes and primary-source provenance; never regenerate expectations from the toolkit evaluator or from an export tool's normalization output.
 
 ## Additional transform references
 
