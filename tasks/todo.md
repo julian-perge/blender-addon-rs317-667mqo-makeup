@@ -119,9 +119,17 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Deps: T12.
   - Result: the fixture READMEs name cache files as the source: every appearance model and item, and every `animation149` sequence, held item and held model fixture, holds the same bytes as its cache 430 file (checked with `Js5Store` on 2026-11-11). `export_clip.py --sequence` now takes a sequence id and reads index 2 group 12; for 1365 its output equals the `held-1365` fixture. `record_appearance.py` and `record_pose.py` were not changed: their `--kits` already reads `<id>.dat` raw kit files, so the commands now use `tests/fixtures/appearance/kits`. A cache folder is not accepted as `--kits`. `KitDefinitions.json` stays as expected-value input. `ColourReference.java`, `ModelReference.java` and the animation reference command ask for a jar with RuneLite's cache library 1.13.6. The recorded jar hashes and the local export tool commits stay as dated history. `record_osrs149.py --models` needs a folder of every index 7 model, which no tool in this repo writes. Left in data files: `dump_index/models/` paths in `animations/2013/bundle-manifest.json` (wire format, kept by the user's Q1 decision) and `dumper_jar_sha256` in `source.json`. prek passed.
 
-- [ ] **T15 Final verification** (S)
+- [x] **T15 Final verification** (S)
   - Walk criteria 1 to 8 with commands; `prek run --all-files`; `uv run pytest`; Blender 5.3 suite; `extension validate` and build check on 5.3 (`dist/` is not committed unless asked); real-cache tests with the env var set. Report guesses and open decisions per `docs/agents/workflow.md`. Open the PR and stop.
   - Deps: all.
+  - Result (2026-11-11, Blender 5.3.0):
+    - Criterion 1: `preferences.py` has only `cache_folder`.
+    - Criteria 2 and 3: the Blender appearance tests build the player from a mini cache; with `RSPS_SNAPSHOT_430_CACHE` set, the real-cache tests build the default male body (476 faces, 264 vertices). The check by eye in the Blender UI was not run.
+    - Criterion 4: `rg` over `src`, `scripts` and `tests` code finds only the RuneLite expected-value JSON names (`KitDefinitions.json`, `ItemDefinitions.json`, `KitStyleEnums.json`) and the bundle manifest's `dump_index/models/5409.dat` path in `test_animation_import.py` and `test_animation_bundle.py` (kept by the user's Q1 decision). Live docs: only the dated 2026-11-06 text of ADR 0003 and a link path in ADR 0017. `test_appearance.py` no longer says "dump's".
+    - Criterion 5: `importer_667.py`, `rs667`, the cache zips and the keys file are gone from the repo; `texture_dump.zip` stays. README, `ui.py`, `import_model.py` and `upgrade_materials.py` have no 317 or 667 wording.
+    - Criterion 6: prek passed. `uv run pytest`: 1329 passed, 24 skipped; with the real cache 1341 passed, 12 skipped (old-format cases of two parametrized codec tests). Blender suite: 760 passed, 3 skipped; with the real cache 763 passed.
+    - Criterion 7: `blender_version_min = "5.2.0"`. `extension validate` passed and `extension build` built `rsps_toolkit-7.7.0.zip` into a scratch folder (not `dist/`). Docs and README say "Blender 5.2 or later".
+    - Criterion 8: the kit, item and enum decoders are checked against the RuneLite JSON in `tests/fixtures/appearance/` and the `held-*` folders.
 
 ### Checkpoint: complete
 - [ ] All eight success criteria met, with command output

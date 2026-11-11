@@ -158,7 +158,7 @@ def worn(male_models, male_offset=0, recolours=()):
     return WornItem(1, "Test item", male_models, male_offset, (-1, -1, -1), 0, recolours, ())
 
 
-# Worn model ids and recolours below are read from the snapshot 430 dump's ItemDefinitions.json; the client decoder
+# Worn model ids and recolours below are read from RuneLite's ItemDefinitions.json for snapshot 430; the client decoder
 # agrees with them in test_item_catalog_matches_what_the_client_decoded.
 def test_item_catalog_reads_the_sample_items_with_unsigned_colours():
     assert ITEMS[2653].male_models == (3379, 164, 3381)
