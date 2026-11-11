@@ -16,7 +16,6 @@ from . import (
     export_model,
     import_animation,
     import_model,
-    importer_667,
     painter,
     pmn_texturing,
     preferences,
@@ -44,7 +43,6 @@ classes = (
     *import_animation.classes,
     *export_model.classes,
     *upgrade_materials.classes,
-    *importer_667.classes,
 )
 
 label_draw_handler = None
@@ -119,7 +117,6 @@ def register():
 
     # The stubs type menu draw functions as taking only a context, but Blender passes the menu and the context.
     bpy.types.TOPBAR_MT_file_import.append(import_model.menu_entry)  # pyrefly: ignore[bad-argument-type]
-    bpy.types.TOPBAR_MT_file_import.append(importer_667.menu_func_import_667)  # pyrefly: ignore[bad-argument-type]
 
 
 def unregister():
@@ -132,7 +129,6 @@ def unregister():
         tskin_text_handler
 
     bpy.types.TOPBAR_MT_file_import.remove(import_model.menu_entry)  # pyrefly: ignore[bad-argument-type]
-    bpy.types.TOPBAR_MT_file_import.remove(importer_667.menu_func_import_667)  # pyrefly: ignore[bad-argument-type]
 
     # Remove draw handlers first
     if label_draw_handler:

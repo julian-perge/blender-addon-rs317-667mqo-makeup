@@ -72,7 +72,7 @@ def _import(
     if data.endswith(NEW_FORMAT_MARKER) and profile is None:
         return (
             "this FF FF model needs a chosen format: pick Old School revision 149 (OSRS149) in the import options "
-            "if it is one; new-format 667 models use File > Import > 667 Model (.dat)"
+            "if it is one"
         )
     try:
         model = decode(data, profile=profile)

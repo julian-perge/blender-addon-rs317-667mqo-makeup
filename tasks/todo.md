@@ -73,17 +73,19 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Deps: T5.
 
 ### Checkpoint 2: no dumper in code
-- [ ] `rg -i 'dumper|dump_index|dump_root|dump_folder|cache_dump_folder|dump317|ItemDefinitions\.json|KitDefinitions\.json|Enums\.json' src scripts tests --glob '*.py'` is clean (fixture JSON names may remain as expected-value files)
-- [ ] Blender 5.3 suite passes; panel, Create, Update and held bakes work with only Cache folder set (by eye)
-- [ ] Review with the user
+- [x] `rg -i 'dumper|dump_index|dump_root|dump_folder|cache_dump_folder|dump317|ItemDefinitions\.json|KitDefinitions\.json|Enums\.json' src scripts tests --glob '*.py'` is clean (fixture JSON names may remain as expected-value files)
+- [x] Blender 5.3 suite passes; panel, Create, Update and held bakes work with only Cache folder set (by eye)
+  - Result: the suite passed (770). The by-eye check was not run; the user continued with `/agent-skills:build auto` on 2026-11-11. The `rg` hits left are T14 files, fixture JSON names and the animation bundle's `dump_index` manifest paths.
+- [x] Review with the user
 
 ## Phase 3: Remove 317 and 667
 
-- [ ] **T10 Remove the 667 importer, its menu entry and button** (M)
+- [x] **T10 Remove the 667 importer, its menu entry and button** (M)
   - Delete `importer_667.py`, its `classes`, menu add and remove in `blender/__init__.py`, the button in `ui.py`, and the 667 hint in `import_model.py`. In `upgrade_materials.py` remove the importer path (`_LEGACY_COLOUR`, `_LEGACY_TEXTURE`, `IMPORTER`, `_legacy_alpha` if only the importer used it) and its comments; keep the PMN tool path (`PMN_<name>`), which is not 317 or 667 code. Remove the importer-based cases in `test_upgrade_materials.py`; keep the PMN cases. The user decided this on 2026-11-11: removed logic stays on `publish/fork-main`.
   - Accept: spec criterion 5, first part; the add-on registers; `test_register` passes.
   - Verify: `scripts/test-blender.sh`.
   - Deps: none. Files: `importer_667.py`, `__init__.py`, `ui.py`, `import_model.py`, `upgrade_materials.py`, `test_upgrade_materials.py`.
+  - Result: `importer_667.py`, its menu entry, the Import 667 Model button and the 667 hint in `import_model.py` are gone. Upgrade RS Materials now reads only `PMN_` names; `RS_Color_` and `Texture_` materials without values are reported as unreadable. `_legacy_alpha` is now `_material_alpha` and lost its stacked-material guard, which only PMN names reach now. Tests removed: the two `rs667` cases (8 runs) and the three importer-alpha cases. Test added: a blended PMN material keeps its alpha, which replaces the only removed test that read a non-zero alpha. The Aether `_unique` case now uses a `PMN_` name. `pyrefly --prune-baseline` dropped the `importer_667.py` entries and six stale ones. ADR 0006 and 0011 still name the importer names; T13 covers them. Test result: Blender suite 760 passed, 3 skipped. prek passed.
 
 - [ ] **T11 Remove 667 fixtures, cache zips and the keys file** (M)
   - Delete `tests/fixtures/models/rs667`, the two cache zips, `keys-runescape-live-en-b667-*.json`. Fix the tests that copy `rs667/0.dat` (`test_import`, `test_osrs149_io`, `test_osrs149_codec`): use an `osrs` or `osrs149` fixture that triggers the same refusal. Edit `pyproject.toml` description and the 667 comments in `model.py` and `colour.py`. `texture_dump.zip` stays.

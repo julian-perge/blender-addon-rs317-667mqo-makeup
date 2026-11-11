@@ -1,7 +1,7 @@
-"""Upgrade RS Materials: store the game values that older add-on versions kept only in material names and nodes.
+"""Upgrade RS Materials: store the game values of the materials the PMN tool made, which stored none on them.
 
-The face colour, texture ID and alpha go on each material, as face_materials stores them for imports. Materials the
-PMN tool made also get the texture triangle the original exporter wrote for their faces (ADR 0008).
+The texture ID from the material's name and the alpha from its shader go on each material, as face_materials stores them for imports. The material's faces also
+get the texture triangle the original exporter wrote for them (ADR 0008).
 """
 
 import re
@@ -11,41 +11,28 @@ import bpy
 
 from ..formats.colour import original_exporter_colour
 from . import rs_layers, texture_triangles
-from .face_materials import FACE_COLOUR, STACKED, TEXTURE_ID, face_material, material_values, write_values
+from .face_materials import FACE_COLOUR, TEXTURE_ID, face_material, material_values, write_values
 from .preferences import brightness
 
-# Materials made before the game values were stored on them: by the original 317 importer and the 667 importer
-# (importer_667.py), which named them RS_Color_<colour> or Texture_<id>, and by the PMN tool, which named them
-# PMN_<image name>. The 667 importer also appended _Alpha_<alpha>, which the alpha read from the material repeats.
-# Blender appends .001 and so on to repeated names, and the Aether panel appends _unique to the copies it makes.
-_LEGACY_COLOUR = re.compile(r"^RS_Color_(\d+)(?:_Alpha_\d+)?$")
-_LEGACY_TEXTURE = re.compile(r"^Texture_(\d+)(?:_Alpha_\d+)?$")
-# The original exporter took the first number after PMN_ as the texture ID.
-_LEGACY_PMN = re.compile(r"^PMN_.*?(\d+)")
+# The PMN tool named its materials PMN_<image name> and stored no game values on them. The original exporter took the
+# first number after PMN_ as the texture ID. Blender appends .001 and so on to repeated names, and the Aether panel
+# appends _unique to the copies it makes.
+_PMN_NAME = re.compile(r"^PMN_.*?(\d+)")
 _COPY_SUFFIXES = re.compile(r"(?:\.\d{3}|_unique)+$")
-IMPORTER, PMN_TOOL = "importer", "PMN tool"
 
 
-def _legacy_identity(name: str) -> tuple[int | None, int | None, str] | None:
-    """The face colour or texture ID in a legacy material name, and what made it: IMPORTER or PMN_TOOL."""
-    name = _COPY_SUFFIXES.sub("", name)
-    for pattern, is_texture in ((_LEGACY_COLOUR, False), (_LEGACY_TEXTURE, True)):
-        match = pattern.match(name)
-        if match and int(match[1]) <= 0xFFFF:
-            return (None, int(match[1]), IMPORTER) if is_texture else (int(match[1]), None, IMPORTER)
-    match = _LEGACY_PMN.match(name)
+def _pmn_texture_id(name: str) -> int | None:
+    """The texture ID in a PMN tool material name, or None if the name is not one."""
+    match = _PMN_NAME.match(_COPY_SUFFIXES.sub("", name))
     if match and int(match[1]) <= 0xFFFF:
-        return None, int(match[1]), PMN_TOOL
+        return int(match[1])
     return None
 
 
-def _legacy_alpha(material: bpy.types.Material) -> int | None:
-    """The alpha the original importers set up on a material, or None if they set up none.
-
-    They switched the material to blending and set the shader's Alpha input to (255 - alpha) / 255 for every face
-    of a model with face alphas, except faces at 255. A stacked material is blended without any face alpha.
-    """
-    if STACKED in material or material.surface_render_method != "BLENDED" or material.node_tree is None:
+def _material_alpha(material: bpy.types.Material) -> int | None:
+    """The alpha of a blended material, read from its shader's Alpha input as (255 - alpha) / 255, or None if the
+    material is not blended or has no Principled shader."""
+    if material.surface_render_method != "BLENDED" or material.node_tree is None:
         return None
     shader = next((n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
     if shader is None:
@@ -54,7 +41,7 @@ def _legacy_alpha(material: bpy.types.Material) -> int | None:
 
 
 class RSPS_OT_upgrade_materials(bpy.types.Operator):
-    """Store the face colour, texture ID and alpha that older add-on versions kept only in material names"""
+    """Store the texture ID and alpha of PMN tool materials, read from their names and shaders"""
 
     bl_idname = "rsps.upgrade_materials"
     bl_label = "Upgrade RS Materials"
@@ -76,27 +63,19 @@ class _Report:
     def __init__(self) -> None:
         self.upgraded: set[str] = set()
         self.unreadable: set[str] = set()
-        self.invisible: set[str] = set()
         self.no_triangle: set[str] = set()
         self.too_many: set[str] = set()
         self.shared = 0
         self.untextured = 0
 
     def needs_attention(self) -> bool:
-        return bool(
-            self.unreadable or self.invisible or self.no_triangle or self.too_many or self.shared or self.untextured
-        )
+        return bool(self.unreadable or self.no_triangle or self.too_many or self.shared or self.untextured)
 
     def message(self) -> str:
         # Blender shows only the last report in the status bar, so everything goes into one.
         message = f"Upgraded {len(self.upgraded)} materials."
         if self.unreadable:
             message += f" Could not read game values from: {', '.join(sorted(self.unreadable))}."
-        if self.invisible:
-            message += (
-                " Set to alpha 255, which the game does not draw, because their model has face alphas and they had"
-                f" none set up; check they should be invisible: {', '.join(sorted(self.invisible))}."
-            )
         if self.no_triangle:
             message += (
                 " Left without game values, since no face's UVs give a texture triangle; give their faces usable UVs"
@@ -124,32 +103,16 @@ def _upgrade(obj: bpy.types.Object, report: _Report) -> None:
     mesh = obj.data
     assert isinstance(mesh, bpy.types.Mesh)
     materials = list(dict.fromkeys(m for m in mesh.materials if m))
-    # In a model with face alphas, an importer material without alpha set up stands for alpha 255, which the game
-    # does not draw; the user chose this reading on 2026-11-05.
-    has_alphas = any(_legacy_alpha(m) is not None for m in materials)
     pmn: list[tuple[bpy.types.Material, int]] = []
     for material in materials:
-        has_values = FACE_COLOUR in material or TEXTURE_ID in material
-        identity = _legacy_identity(material.name)
-        if identity is None:
-            if not has_values:
+        if _pmn_texture_id(material.name) is None:
+            if FACE_COLOUR not in material and TEXTURE_ID not in material:
                 report.unreadable.add(material.name)
             continue
-        colour, texture, source = identity
-        alpha = _legacy_alpha(material)
-        if source == PMN_TOOL:
-            # A PMN tool material also needs its faces' triangle, which a material shared with another object, or
-            # one upgraded before triangles were fitted, has values but lacks.
-            pmn.append((material, 0 if alpha is None else alpha))
-            continue
-        if has_values:
-            continue
-        if alpha is None:
-            alpha = 255 if has_alphas else 0
-            if alpha == 255:
-                report.invisible.add(material.name)
-        write_values(material, colour, texture, alpha)
-        report.upgraded.add(material.name)
+        # A PMN tool material also needs its faces' triangle, which a material shared with another object, or one
+        # upgraded before triangles were fitted, has values but lacks.
+        alpha = _material_alpha(material)
+        pmn.append((material, 0 if alpha is None else alpha))
     if pmn:
         _give_pmn_triangles(obj, mesh, pmn, report)
 
@@ -237,9 +200,9 @@ def _values(material: bpy.types.Material | None) -> tuple[int | None, int | None
 def _store_pmn_values(material: bpy.types.Material, alpha: int, report: _Report) -> None:
     if TEXTURE_ID in material:
         return
-    identity = _legacy_identity(material.name)
-    assert identity is not None
-    write_values(material, None, identity[1], alpha)
+    texture = _pmn_texture_id(material.name)
+    assert texture is not None
+    write_values(material, None, texture, alpha)
     report.upgraded.add(material.name)
 
 
