@@ -7,6 +7,7 @@ from pathlib import Path
 
 import bpy
 import pytest
+from js5_builder import rewrite_cache
 
 from rsps_toolkit.animation.clip import pose_vertices, read_sequence
 from rsps_toolkit.animation.label_fit import fit_frame, fitted_vertices
@@ -1122,10 +1123,13 @@ LONE_LABEL = 250
 
 def axe_with_a_lone_label(dump):
     """Give the Steel axe's model a label the armed player lacks, so a bake that holds it also adds a label bone."""
-    axe = dump / "dump_index/models/510.dat"
-    model = decode(axe.read_bytes(), profile="osrs-149")
-    model.vertex_skins = [LONE_LABEL] * len(model.vertices)
-    axe.write_bytes(encode(model))
+
+    def relabel(parts):
+        model = decode(parts["models"][510], profile="osrs-149")
+        model.vertex_skins = [LONE_LABEL] * len(model.vertices)
+        parts["models"][510] = encode(model)
+
+    rewrite_cache(dump, relabel)
 
 
 @pytest.mark.parametrize(

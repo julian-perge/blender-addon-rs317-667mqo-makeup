@@ -3,9 +3,10 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from runelite_json import load_items, load_kits
 
 from rsps_toolkit.formats import Model, decode
-from rsps_toolkit.formats.appearance import assemble_body, load_items, load_kits, load_palette
+from rsps_toolkit.formats.appearance import assemble_body, load_palette
 from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, _divide, light
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/appearance"

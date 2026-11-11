@@ -1,4 +1,3 @@
-import shutil
 from pathlib import Path
 
 import bpy
@@ -12,16 +11,8 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "appearance"
 
 
 @pytest.fixture
-def props(monkeypatch, tmp_path):
-    for folder in ("kits", "items", "enums"):
-        (tmp_path / folder).mkdir()
-    shutil.copy(FIXTURES / "KitDefinitions.json", tmp_path / "kits")
-    shutil.copy(FIXTURES / "ItemDefinitions.json", tmp_path / "items")
-    shutil.copy(FIXTURES / "KitStyleEnums.json", tmp_path / "enums/Enums.json")
-    (tmp_path / "dump_index/models").mkdir(parents=True)
-    for model in FIXTURES.glob("*.dat"):
-        shutil.copy(model, tmp_path / "dump_index/models")
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: tmp_path)
+def props(monkeypatch, dump):
+    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
     cache_profile.clear_shared_profiles()
     for cls in (*appearance_props.classes, *appearance_items.classes):
         bpy.utils.register_class(cls)
@@ -87,10 +78,10 @@ def test_taking_off_a_body_slot_restores_its_default_kit_and_other_slots_empty(p
     assert props.equipment[3] == 0
 
 
-def test_without_a_dump_folder_the_popup_says_so(props, monkeypatch):
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: None)
+def test_without_a_cache_folder_the_popup_says_so(props, monkeypatch):
+    monkeypatch.setattr(preferences, "cache_folder", lambda: None)
     ((identifier, name, _),) = popup(4)
-    assert identifier == appearance_items.NO_ITEMS and "dump folder" in name
+    assert identifier == appearance_items.NO_ITEMS and "Set the Cache folder" in name
 
 
 def test_a_torso_item_that_hides_the_arms_ticks_covers_arms_and_take_off_brings_the_arms_back(props):

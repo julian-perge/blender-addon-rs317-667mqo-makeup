@@ -1,5 +1,6 @@
 import bpy
 import pytest
+from js5_builder import rewrite_cache
 
 from rsps_toolkit.blender import appearance_props
 from rsps_toolkit.formats import cache_profile
@@ -34,18 +35,10 @@ def test_a_preset_for_another_revision_is_refused_and_changes_nothing(props):
 
 # Kit ids come from KitDefinitions.json: kit 18 is a male torso kit, kit 56 a female torso kit, and kit 64 is not a
 # male torso kit. Kit 14 is the clean-shaven jaw and kit 101 is named Leggings (see test_kit_names.py).
-def test_kit_dropdowns_read_and_write_the_equipment_slots(props, monkeypatch, tmp_path):
-    import shutil
-    from pathlib import Path
-
+def test_kit_dropdowns_read_and_write_the_equipment_slots(props, monkeypatch, dump):
     from rsps_toolkit.blender import preferences
 
-    (tmp_path / "kits").mkdir()
-    (tmp_path / "enums").mkdir()
-    fixtures = Path(__file__).parent.parent / "fixtures/appearance"
-    shutil.copy(fixtures / "KitDefinitions.json", tmp_path / "kits")
-    shutil.copy(fixtures / "KitStyleEnums.json", tmp_path / "enums/Enums.json")
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: tmp_path)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
     cache_profile.clear_shared_profiles()
     props.female = False
     choices = [name for name, _, _ in appearance_props.kit_choices(props, 2)]
@@ -81,19 +74,11 @@ def test_a_preset_with_an_unavailable_colour_choice_is_refused_not_clamped(props
 
 
 def test_a_slot_that_holds_an_item_or_the_other_bodys_kit_shows_other_and_picking_it_changes_nothing(
-    props, monkeypatch, tmp_path
+    props, monkeypatch, dump
 ):
-    import shutil
-    from pathlib import Path
-
     from rsps_toolkit.blender import preferences
 
-    fixtures = Path(__file__).parent.parent / "fixtures/appearance"
-    for folder in ("kits", "enums"):
-        (tmp_path / folder).mkdir()
-    shutil.copy(fixtures / "KitDefinitions.json", tmp_path / "kits")
-    shutil.copy(fixtures / "KitStyleEnums.json", tmp_path / "enums/Enums.json")
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: tmp_path)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
     cache_profile.clear_shared_profiles()
     props.female = False
     props.equipment = (0, 0, 0, 0, 512 + 2653, 0, 282, 292, 256, 289, 298, 266)
@@ -108,116 +93,77 @@ def test_a_slot_that_holds_an_item_or_the_other_bodys_kit_shows_other_and_pickin
 def test_the_panel_can_say_why_kits_are_missing(props, monkeypatch, tmp_path):
     from rsps_toolkit.blender import preferences
 
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: tmp_path)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: tmp_path)
     cache_profile.clear_shared_profiles()
     appearance_props.kit_choices(props, 2)
-    assert "KitDefinitions.json" in appearance_props.profile_error
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: None)
+    assert "main_file_cache.dat2" in appearance_props.profile_error
+    monkeypatch.setattr(preferences, "cache_folder", lambda: None)
     appearance_props.kit_choices(props, 2)
-    assert "dump folder" in appearance_props.profile_error
+    assert "Set the Cache folder" in appearance_props.profile_error
 
 
 @pytest.fixture
-def named_kits_folder(monkeypatch, tmp_path):
-    import shutil
-    from pathlib import Path
-
+def kits_folder(monkeypatch, dump):
     from rsps_toolkit.blender import preferences
 
-    fixtures = Path(__file__).parent.parent / "fixtures/appearance"
-    for folder in ("kits", "enums"):
-        (tmp_path / folder).mkdir()
-    shutil.copy(fixtures / "KitDefinitions.json", tmp_path / "kits")
-    shutil.copy(fixtures / "KitStyleEnums.json", tmp_path / "enums/Enums.json")
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: tmp_path)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
     cache_profile.clear_shared_profiles()
-    return tmp_path
+    return dump
 
 
-def redump(path, change):
-    """Rewrite a catalog of the dump as a re-run of the dumper would, with a modified time a second later than before,
-    so the test does not depend on the file system's clock resolution."""
-    import json
-    import os
-
-    before = path.stat().st_mtime_ns
-    rows = json.loads(path.read_text())
-    change(rows)
-    path.write_text(json.dumps(rows))
-    os.utime(path, ns=(before + 1_000_000_000, before + 1_000_000_000))
+def add_leggings(parts):
+    """Kit 9101 is a copy of kit 101, which uses the model of the Leggings style (see test_kit_names.py), under an id
+    the fixture cache lacks."""
+    parts["kits"][9101] = parts["kits"][101]
 
 
 def leg_labels(props):
     return {name: label for name, label, _ in appearance_props.kit_choices(props, 5)}
 
 
-def test_the_kit_dropdowns_see_a_kit_a_re_dump_added_by_its_style_name(props, named_kits_folder):
-    # The user chose that each catalog file whose modified time changes is parsed again at the next use (issue 29,
-    # decision 3, 2026-11-10). Kit 9101 is a copy of kit 101, which uses the model of the Leggings style (see
-    # test_kit_names.py), under an id the fixture KitDefinitions.json lacks.
-    def add_leggings(rows):
-        rows.append({**next(row for row in rows if row["id"] == 101), "id": 9101})
-
+def test_the_kit_dropdowns_see_a_kit_a_changed_cache_added_by_its_style_name(props, kits_folder):
+    # The user chose that each catalog whose files' modified times change is parsed again at the next use (issue 29,
+    # decision 3, 2026-11-10).
     props.female = False
     assert "9101" not in leg_labels(props)
-    redump(named_kits_folder / "kits/KitDefinitions.json", add_leggings)
+    rewrite_cache(kits_folder, add_leggings)
     assert leg_labels(props)["9101"] == "Leggings"
 
 
-def test_the_kit_dropdowns_see_a_style_a_re_dump_renamed(props, named_kits_folder):
-    # The user chose that each catalog file whose modified time changes is parsed again at the next use (issue 29,
+def test_the_kit_dropdowns_see_a_style_a_changed_cache_renamed(props, kits_folder):
+    # The user chose that each catalog whose files' modified times change is parsed again at the next use (issue 29,
     # decision 3, 2026-11-10). Enum 778 lists the leg style names, Leggings among them (see test_kit_names.py).
-    def rename_leggings(enums):
-        legs = next(enum for enum in enums if enum["id"] == 778)
-        legs["stringVals"] = ["Re-dumped leggings" if name == "Leggings" else name for name in legs["stringVals"]]
+    def rename_leggings(parts):
+        parts["enums"][778] = parts["enums"][778].replace(b"Leggings\0", b"Renamed leggings\0")
 
     props.female = False
     assert leg_labels(props)["101"] == "Leggings"
-    redump(named_kits_folder / "enums/Enums.json", rename_leggings)
-    assert leg_labels(props)["101"] == "Re-dumped leggings"
+    rewrite_cache(kits_folder, rename_leggings)
+    assert leg_labels(props)["101"] == "Renamed leggings"
 
 
-def test_the_kit_dropdowns_see_a_kit_a_re_dump_added_just_after_the_kits_were_read(
-    props, named_kits_folder, monkeypatch
+def test_the_kit_dropdowns_see_a_kit_a_cache_change_added_just_after_the_kits_were_read(
+    props, kits_folder, monkeypatch
 ):
-    # The user chose that each catalog file whose modified time changes is parsed again at the next use (issue 29,
-    # decision 3, 2026-11-10), so a re-dump that lands just after the kit catalog was read is seen at the next listing.
-    # Kit 9101 is a copy of kit 101, which uses the model of the Leggings style (see test_kit_names.py), under an id
-    # the fixture KitDefinitions.json lacks.
-    def add_leggings(rows):
-        rows.append({**next(row for row in rows if row["id"] == 101), "id": 9101})
+    # The user chose that each catalog whose files' modified times change is parsed again at the next use (issue 29,
+    # decision 3, 2026-11-10), so a change that lands just after the kits were read is seen at the next listing.
+    real = cache_profile.read_kits
+    changed = []
 
-    real = cache_profile.load_kits
-    redumped = []
-
-    def load_then_redump(path):
-        kits = real(path)
-        if not redumped:
-            redump(path, add_leggings)
-            redumped.append(path)
+    def read_then_change(store):
+        kits = real(store)
+        if not changed:
+            rewrite_cache(kits_folder, add_leggings)
+            changed.append(store)
         return kits
 
     props.female = False
-    # Choosing the body type reads the kit catalog, so the store is cleared to make the dropdowns' kit names the first
-    # to read it, the order in which a re-dump between reading the kits and naming them could be missed.
+    # Choosing the body type reads the kits, so the store is cleared to make the dropdowns' kit names the first to read
+    # them, the order in which a change between reading the kits and naming them could be missed.
     cache_profile.clear_shared_profiles()
-    monkeypatch.setattr(cache_profile, "load_kits", load_then_redump)
+    monkeypatch.setattr(cache_profile, "read_kits", read_then_change)
     leg_labels(props)
     assert leg_labels(props)["9101"] == "Leggings"
-
-
-@pytest.fixture
-def kits_folder(monkeypatch, tmp_path):
-    import shutil
-    from pathlib import Path
-
-    from rsps_toolkit.blender import preferences
-
-    (tmp_path / "kits").mkdir()
-    shutil.copy(Path(__file__).parent.parent / "fixtures/appearance/KitDefinitions.json", tmp_path / "kits")
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: tmp_path)
-    cache_profile.clear_shared_profiles()
-    return tmp_path
 
 
 # The client's default looks, as recorded in reference.json (client_default_equipment).
@@ -238,10 +184,10 @@ def test_an_appearance_that_holds_anything_is_left_alone(props, kits_folder):
     assert list(props.equipment) == [0] * 11 + [266]
 
 
-def test_without_a_dump_folder_the_appearance_stays_empty(props, monkeypatch):
+def test_without_a_cache_folder_the_appearance_stays_empty(props, monkeypatch):
     from rsps_toolkit.blender import preferences
 
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: None)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: None)
     props.equipment = (0,) * 12
     appearance_props.fill_default_kits(props)
     assert list(props.equipment) == [0] * 12

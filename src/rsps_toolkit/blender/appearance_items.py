@@ -30,7 +30,7 @@ def _slot_items(self, context) -> list[tuple[str, str, str]]:
 
 def _unavailable(female: bool, slot: int) -> str:
     if appearance_props.profile() is None:
-        return "Set the cache dump folder first"
+        return "Set the Cache folder in the add-on preferences first"
     body = "female" if female else "male"
     return f"No item with a {body} worn model is listed for the {SLOT_LABELS[slot].lower()} slot"
 
@@ -42,7 +42,7 @@ def worn_item_name(slot: int) -> str | None:
 
 
 def item_name(item_id: int) -> str:
-    """The item's name in the dump, or its id when the dump is not set or lacks the item."""
+    """The item's name in the cache, or its id when the cache folder is not set or the cache lacks the item."""
     cache = appearance_props.profile()
     try:
         item = None if cache is None else cache.items.get(item_id)
@@ -94,7 +94,7 @@ class RSPS_OT_clear_slot(bpy.types.Operator):
         props = context.scene.rs_appearance
         cache = appearance_props.profile()
         if cache is None:
-            self.report({"ERROR"}, "Set the cache dump folder in the add-on preferences")
+            self.report({"ERROR"}, "Set the Cache folder in the add-on preferences.")
             return {"CANCELLED"}
         props.equipment[self.slot] = default_slot_value(cache.kits, self.slot, props.female)
         for _, item_slot, kit_slot, _ in appearance_props.COVERS:

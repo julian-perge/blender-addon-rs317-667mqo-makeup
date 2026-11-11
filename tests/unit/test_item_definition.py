@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 
 import pytest
+from runelite_json import load_items
 
-from rsps_toolkit.formats.appearance import load_items
 from rsps_toolkit.formats.item_definition import decode_item
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"

@@ -61,8 +61,8 @@ _kept_items: list[list[tuple]] = []
 
 
 def profile() -> CacheProfile | None:
-    """The shared cache profile for the preferences' dump folder, the one Create, Update and bakes also use."""
-    folder = preferences.cache_dump_folder()
+    """The shared cache profile for the preferences' cache folder, the one Create, Update and bakes also use."""
+    folder = preferences.cache_folder()
     if folder is None:
         return None
     return shared_profile(folder)
@@ -79,7 +79,7 @@ def kit_choices(props: "RsAppearanceProperties", part: int) -> list[tuple[str, s
     global profile_error
     choices: list[tuple[str, str, str]] = []
     cache = profile()
-    profile_error = "" if cache is not None else "Set the cache dump folder to list kits"
+    profile_error = "" if cache is not None else "Set the Cache folder in the add-on preferences to list kits"
     if cache is not None:
         try:
             category = part + (FEMALE_CATEGORY_OFFSET if props.female else 0)
@@ -241,7 +241,7 @@ def fill_default_kits(props: "RsAppearanceProperties") -> None:
     """Give an appearance whose slots are all empty the client's default look for its body type.
 
     A new scene holds no kits, so without this Create Player has nothing to assemble until every kit is picked. The
-    slots stay empty when the dump folder is unset or has no kits.
+    slots stay empty when the cache folder is unset or has no kits.
     """
     if any(props.equipment):
         return

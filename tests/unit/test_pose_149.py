@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from runelite_json import load_items, load_kits
 
 from rsps_toolkit.animation.bundle import Frame, FrameMap
 from rsps_toolkit.animation.clip import CacheClip, pose_vertices, read_sequence
@@ -16,8 +17,6 @@ from rsps_toolkit.formats.appearance import (
     assemble_slots,
     default_equipment,
     held_equipment,
-    load_items,
-    load_kits,
     load_palette,
 )
 from rsps_toolkit.formats.js5 import Js5Store
