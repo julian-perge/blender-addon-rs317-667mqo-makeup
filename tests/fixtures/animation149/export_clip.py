@@ -4,11 +4,12 @@
 # ///
 """Exports the raw frame data of one OSRS sequence from a js5 disk cache, for the revision-149 pose reference.
 
-Reads main_file_cache.dat2 and the idx files (never writes to them). Writes decompressed file bytes: the sequence file
-as the dumper wrote it, one file per frame of the sequence, one file per frame map those frames use, and a manifest
-with SHA-256 hashes. Index 0 holds frame groups, index 1 holds frame maps.
+Reads main_file_cache.dat2 and the idx files (never writes to them). Writes decompressed file bytes: the sequence file,
+one file per frame of the sequence, one file per frame map those frames use, and a manifest with SHA-256 hashes.
+Index 0 holds frame groups, index 1 holds frame maps, and group 12 of index 2 holds the sequences (RuneLite's
+ConfigType.SEQUENCE).
 
-Usage: export_clip.py --cache <cache folder> --sequence <sequence .dat> --output <folder>
+Usage: export_clip.py --cache <cache folder> --sequence <sequence id> --output <folder>
 """
 
 import argparse
@@ -141,11 +142,11 @@ def split(data: bytes, ids: list[int]) -> dict[int, bytes]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cache", type=Path, required=True)
-    parser.add_argument("--sequence", type=Path, required=True)
+    parser.add_argument("--sequence", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     store = Store(args.cache)
-    sequence = args.sequence.read_bytes()
+    sequence = split(store.container(2, 12), reference_table(store, 2)[12])[args.sequence]
     decoded = decode_sequence(sequence)
     frames, durations = list(decoded.frames), list(decoded.durations)
     frame_files = reference_table(store, 0)
@@ -155,7 +156,7 @@ def main() -> None:
     (out / "maps").mkdir(exist_ok=True)
     (out / "sequence.dat").write_bytes(sequence)
     manifest = {
-        "sequence": int(args.sequence.stem),
+        "sequence": args.sequence,
         "source_cache_dat2_sha256": hashlib.sha256(store.data).hexdigest(),
         "sequence_sha256": hashlib.sha256(sequence).hexdigest(),
         "durations": durations,

@@ -20,8 +20,9 @@ not start the game client or connect to a game server.
   `c75985f35c891fc1dcbe9ee978032878d5e4b1c8a9b8dcf0496c498bb6b8b973`.
 - Its ModelLoader.java SHA-256:
   `83d0bb23d91cf1e91a6b4466a47b469d9df2614ad119994dc210497d09f4df73`.
-- The unmodified bundled library used for recording is the dumper JAR at
-  companion commit `2e331e13d8648cefb9b573ff127338bb3453c7d2`, SHA-256
+- The unmodified bundled library used for recording is the shaded jar of a local
+  export tool (not in this repo) at commit
+  `2e331e13d8648cefb9b573ff127338bb3453c7d2`, SHA-256
   `c71c4db7830d3828d15a96420e76cb24fe3f864f755799d5b3d618f09a15d623`.
 - Independent [revision-149 gamepack](https://github.com/runetech/osrs-gamepacks/blob/2e92962075cfbc0df227cc783c37633d5e92f297/gamepacks/osrs-149.jar)
   SHA-256: `19c492cc2dc20e9fcb0399215fc32a47cd4605b01a30d963dac7a0c863ebcbdd`.
@@ -37,14 +38,15 @@ expected values.
 ## Record models
 
 Run from the repository root with Java 25 and uv. Paths below identify the
-recorded local inputs; outputs must be new directories.
+recorded local inputs; outputs must be new directories. `--models` is a folder of every model of
+cache index 7 as `<id>.dat`, decompressed; no tool in this repo writes it.
 
 ```bash
 OSRS430_ROOT=<data workspace>
 OSRS149_CLIENT=<reference work folder>/gamepack-149.jar
 OSRS149_LIBRARY=<reference work folder>/reference-library.jar
 uv run tests/fixtures/record_osrs149.py \
-  --models "$OSRS430_ROOT/exports/osrs/openrs2-430/dump/dump_index/models" \
+  --models <folder of index 7 models> \
   --inventory .scratch/osrs-focus/evidence/cache430_field_audit.json \
   --client "$OSRS149_CLIENT" --library "$OSRS149_LIBRARY" \
   --output /private/tmp/osrs149-new-recording
