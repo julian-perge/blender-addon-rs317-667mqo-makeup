@@ -11,7 +11,8 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Verify: `uv run pytest tests/unit/test_js5.py`; script run once on `<path to cache>`, fixtures byte-equal to the cache.
   - Deps: none. Files: the script, `tests/js5_builder.py`, `test_js5.py`, new fixtures. Update `tests/fixtures/appearance/README.md` provenance (no dumper).
 
-- [ ] **T2 Kit decoder** (S)
+- [x] **T2 Kit decoder** (S)
+  - Result: `decode_kit` follows RuneLite `KitLoader` at commit bb0fa42b3. The docstring names the file and the `ConfigType.IDENTKIT(3)` check. All 151 raw kits decode equal to `KitDefinitions.json`. Unknown opcodes and leftover bytes raise an error. The user decided on 2026-11-11 that opcodes 5 and 70 to 74 (4-byte model ids) are refused, because no snapshot 430 kit uses them. A test covers opcode 41 (retextures) with hand-built bytes, citing KitLoader line 85. Test result: unit suite 1311 passed. prek passed. The review findings were applied. The "Nothing here imports bpy" sentence stays, because the other `formats/` modules use it.
   - `formats/kit_definition.py` decodes a raw kit to `Kit`, following RuneLite `KitLoader`/`IdentityKit` (name the file in a comment). Unknown opcode or leftover bytes raises.
   - Accept: all 151 raw kits decode to values equal to `KitDefinitions.json` (RuneLite output, also hash-checked by `reference.json`); comment names the group id 3 check against RuneLite `ConfigType`.
   - Verify: `uv run pytest tests/unit/test_kit_definition.py`.
