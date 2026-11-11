@@ -91,7 +91,7 @@ def test_unsupported_profiles_markers_and_truncated_inputs_are_refused(case):
     if case == "no-profile":
         profile = None
     elif case == "wrong-profile":
-        profile = "rs667"
+        profile = "osrs-170"
     elif case in ("fffd", "fffe"):
         data = data[:-2] + bytes.fromhex(case)
     elif case == "short-new":

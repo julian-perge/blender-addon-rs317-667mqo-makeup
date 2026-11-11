@@ -67,11 +67,11 @@ def test_missing_file_is_skipped_and_the_rest_imported(tmp_path: Path):
 
 @pytest.mark.timeout(10, method="thread")
 def test_new_format_file_is_skipped_and_the_rest_imported(tmp_path: Path):
-    # The FF FF footer marker is how the 667 client picks its new-format decoder (dv(byte[]) in the 667 decompile).
-    shutil.copy(MODELS / "rs667" / "0.dat", tmp_path / "rs667.dat")
+    # Without a chosen profile, a model that ends in the new-format FF FF marker is skipped.
+    shutil.copy(MODELS / "osrs149" / "10413.dat", tmp_path / "10413.dat")
     shutil.copy(MODELS / "osrs" / "33.dat", tmp_path / "33.dat")
 
-    result = run_import(tmp_path, "rs667.dat", "33.dat")
+    result = run_import(tmp_path, "10413.dat", "33.dat")
 
     assert result == {"FINISHED"}
     assert [obj.name for obj in bpy.data.objects] == ["33"]

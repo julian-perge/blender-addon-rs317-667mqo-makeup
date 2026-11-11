@@ -1,7 +1,7 @@
 [project]
 name = "rsps-toolkit"
 version = "7.7.0"
-description = "Blender extension to import, edit and export Old School RuneScape models, with legacy 317 and 667 support"
+description = "Blender extension to import, edit and export Old School RuneScape models"
 license = "MIT"
 requires-python = "==3.13.*"
 dependencies = []

@@ -77,10 +77,11 @@ def test_old_default_profile_is_unchanged(tmp_path: Path):
 
 
 @pytest.mark.timeout(10, method="thread")
-def test_667_file_with_the_osrs149_profile_is_refused_without_partial_data(tmp_path: Path):
-    shutil.copy(FIXTURES / "rs667" / "0.dat", tmp_path / "rs667.dat")
+def test_unreadable_ff_ff_file_with_the_osrs149_profile_is_refused_without_partial_data(tmp_path: Path):
+    # Without its first 100 bytes, the model's sections overlap its footer, which the decoder refuses.
+    (tmp_path / "cut.dat").write_bytes((OSRS149 / "10413.dat").read_bytes()[100:])
     before = meshes()
-    assert run_import(tmp_path, "rs667.dat", profile="OSRS149") == {"CANCELLED"}
+    assert run_import(tmp_path, "cut.dat", profile="OSRS149") == {"CANCELLED"}
     assert not bpy.data.objects and meshes() == before
 
 
