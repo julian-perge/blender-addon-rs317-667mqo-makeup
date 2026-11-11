@@ -95,16 +95,18 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Result: `tests/fixtures/models/rs667` is deleted. The 317 and 667 cache zips and the 667 keys file were untracked and gitignored; the user chose on 2026-11-11 to move them out of the repo, to `<path to caches>/legacy/`. `texture_dump.zip` stays. No test was dropped. `test_import` skips `osrs149/10413.dat`, which ends in FF FF, when no profile is chosen. `test_osrs149_io` refuses `10413.dat` without its first 100 bytes, which gives the same "sections overlap the footer" refusal as `rs667/0.dat`. `test_osrs149_codec` uses `osrs-170` as the unsupported profile. The `pyproject.toml` description and the `model.py` comment no longer name 667. `colour.py` had no 667 wording; its 317 decompile citation is provenance and stays. Left for T12: `docs/agents/testing.md` names the `rs667` fixtures. Test result: unit 1329 passed, Blender 760 passed. prek passed.
 
 ### Checkpoint 3: legacy code gone
-- [ ] Full suite passes; `rg -i 'importer_667|rs667|rs_667|667 model'` is clean outside dated history
-- [ ] Review with the user
+- [x] Full suite passes; `rg -i 'importer_667|rs667|rs_667|667 model'` is clean outside dated history
+- [x] Review with the user
+  - Result: the user continued with `/agent-skills:build auto` on 2026-11-11. The `rg` hits left were the live docs for T12, research notes, the spec and the tasks.
 
 ## Phase 4: Docs and records
 
-- [ ] **T12 Docs sweep** (M)
+- [x] **T12 Docs sweep** (M)
   - `README.md`, `AGENTS.md`, `docs/agents/testing.md` (dump, dump317 and Cache 430 dump paragraphs), `docs/osrs-cache-workflow.md`, `docs/animation-workflow.md`, `GLOSSARY.md`, `docs/agents/architecture.md`. "Blender 5.2 or later". New round-trip script name. ASCII punctuation.
   - Accept: criterion 4 for live docs; criterion 7 wording.
   - Verify: the `rg` check; `prek run --all-files`.
   - Deps: T9, T11.
+  - Result: README, AGENTS.md, `docs/agents/testing.md`, `blender.md`, `osrs-cache-workflow.md` and `animation-workflow.md` no longer name the dumper, `dump_index`, `dump317`, the definition JSON names, `round-trip-dump.py` or the 667 importer, and say "Blender 5.2 or later". The user decided on 2026-11-11 that the animation workflow's bundle section describes the bundle by its manifest and layout, says a local tool not in this repo made it, and drops the commands. `architecture.md` and `GLOSSARY.md` needed no change; GLOSSARY's 317 and 667 mentions define revisions. `docs/research/runelite-cache.md` keeps `cache_dump_folder`, because research notes stay as dated history (spec, Out of scope). Left for T13: ADRs 0001, 0003, 0005, 0006 and 0011 name the dumper or the 667 importer. Verify: prek passed.
 
 - [ ] **T13 ADR 0017, glossary, issue 24** (S)
   - New ADR `0017-...` that supersedes ADR 0003, records the four decisions (old format kept, revision 1 tested by fixtures only, textures stay PNG, Blender 5.2 is a floor), and the T8 decoder result. Mark ADR 0003 superseded. Close `.scratch/osrs-focus/issues/24-...` with a pointer. Check the `Cache` and `Texture dump` glossary entries.

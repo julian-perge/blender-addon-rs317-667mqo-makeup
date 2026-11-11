@@ -1,8 +1,8 @@
 # RSPS Toolkit for Old School RuneScape
 
-A Blender 5.2 extension for importing, editing and exporting OSRS models and
-creating reusable animation presentations. Future development targets OSRS
-caches. Revision 317/667 support is retained as historical compatibility.
+An extension for Blender 5.2 or later for importing, editing and exporting OSRS
+models and creating reusable animation presentations. The player appearance reads
+an Old School cache directly from its OpenRS2 cache folder.
 
 Start with [the OSRS cache workflow](docs/osrs-cache-workflow.md) for current verification and limitations,
 [the animation workflow](docs/animation-workflow.md) for the completed 2013
@@ -10,20 +10,20 @@ animation feature, and [player customization research](docs/research/osrs-player
 for the proposed later character GUI. The OSRS cache workflow also has the import,
 Preserve Source export and verification commands for cache 430 (revision 149) static models.
 
-OpenRS2 archive 430 (OSRS build 149, July 2017) is the new compatibility evaluation
-cache. A successful dumper run does not establish full Blender model or animation
-support: the current animation bundle contract verifies the February 2013 cache
+OpenRS2 archive 430 (OSRS build 149, July 2017) is the compatibility evaluation
+cache. Set the add-on preferences' Cache folder to its `cache/` folder for the
+player appearance. The animation bundle contract verifies the February 2013 cache
 only. The OSRS cache workflow has the measured cache-430 results.
 
 ## Historical user guide
 
 The guide below records the original add-on workflow. Its older Blender/version
-claims do not replace the current Blender 5.2 extension instructions above.
+claims do not replace the current instructions above: the extension needs Blender 5.2 or later.
 
 <html>
 <body>
 <!--StartFragment--><h1 dir="auto">RSPS TOOLKIT User Guide</h1>
-<p dir="auto" style="white-space: pre-wrap;">Welcome to <strong>RSPS TOOLKIT v7.7.0</strong>—your all-in-one Blender powerhouse for RuneScape Private Server (RSPS) model development! Tailored for Blender 4.5+, this addon transforms raw meshes into polished, game-ready .dat files with effortless automation. From skeletal weighting and procedural texturing to priority painting and color tinting, it covers the full RS workflow for 317/OSRS classics and 667-era models.</p>
+<p dir="auto" style="white-space: pre-wrap;">Welcome to <strong>RSPS TOOLKIT v7.7.0</strong>—your all-in-one Blender powerhouse for RuneScape Private Server (RSPS) model development! Tailored for Blender 5.2 or later, this addon transforms raw meshes into polished, game-ready .dat files with effortless automation. From skeletal weighting and procedural texturing to priority painting and color tinting, it covers the full RS workflow for Old School models.</p>
 <p dir="auto" style="white-space: pre-wrap;">Whether you're crafting epic player gear, quirky NPCs, or wild custom assets, RSPS TOOLKIT slashes tedious tasks by auto-generating essential data layers (VSKIN, RSPRI, RSTSKIN) and delivering stunning real-time visualizations. Dive in and level up your RSPS creations!</p>
 <h2 dir="auto">Key Features at a Glance</h2>
 
@@ -36,15 +36,15 @@ TSKIN Painter | RSTSKIN texture groups for multi-layer sorting | Seamless textur
 Texture Tool | Textures with texture triangles, fitted to UV edits | Preview-only scrolling animation.
 Aether Materials | RGB/HSV tinting, UV-sampling, & alpha control | Dynamic recolors + randomization for endless variations.
 Exporter | .dat exports with auto-type detection & drop variants | One-click normal + _drop.dat files for inventory bliss.
-Importers | 317/OSRS & 667 .dat loading with full reconstruction | Brings legacy models to life, textures included.
+Importers | Old School .dat loading with full reconstruction | Brings models to life, textures included.
 Visualizations | Overlays for weights, priorities, TSKINs, & UV arrows | Real-time feedback—see changes as you tweak.
 RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic RuneScape vibes.
 
 <div style="height: 100%; width: 1px; right: 0px; flex-shrink: 0;"></div></div></div>
-<p dir="auto" style="white-space: pre-wrap;">The toolkit lives in the 3D Viewport's N-Panel under the <strong>RSPS ADDON</strong> tab. Set the add-on preferences' texture folder to a folder of <span>&lt;id&gt;.png</span> textures.</p>
+<p dir="auto" style="white-space: pre-wrap;">The toolkit lives in the 3D Viewport's N-Panel under the <strong>RSPS ADDON</strong> tab. Set the add-on preferences' texture folder to a folder of <span>&lt;id&gt;.png</span> textures, and its Cache folder to the <span>cache/</span> folder of an OpenRS2 Old School download for the player appearance.</p>
 <h2 dir="auto">System Specs</h2>
 <ul dir="auto">
-<li><strong>Blender</strong>: 4.5.0+ (battle-tested on 4.5.2).</li>
+<li><strong>Blender</strong>: 5.2 or later (tested on 5.3).</li>
 <li><strong>OS</strong>: Windows (optimized), macOS/Linux (solid support).</li>
 <li><strong>Hardware</strong>: Any decent GPU for silky overlays (NVIDIA/AMD shine here).</li>
 <li><strong>Dependencies</strong>: Zero—pure Blender builtins (bmesh, gpu, mathutils).</li>
@@ -78,7 +78,7 @@ RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic R
 </ul>
 <h2 dir="auto">Workflow: From Sketch to Server-Ready</h2>
 <ol dir="auto">
-<li><strong>Import Base</strong> (Opt.): File &gt; Import &gt; RS Model (.dat) for old-format models (317 and Old School), or 667 Model (.dat) for 667 models.</li>
+<li><strong>Import Base</strong> (Opt.): File &gt; Import &gt; RS Model (.dat) for Old School models.</li>
 <li><strong>Weight It Up</strong>: Tab to Edit Mode, lasso vertices, slap on Weighter presets.</li>
 <li><strong>Texture &amp; Tag</strong>: Layer PMN textures, paint priorities/TSKINs on faces.</li>
 <li><strong>Color Pop</strong>: Aether panel for tints, alphas, and that fresh glow.</li>
@@ -209,7 +209,6 @@ RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic R
 <li><strong>Import</strong> (File &gt; Import):
 <ul dir="auto">
 <li>"RS Model (.dat)": old-format models, several files at once; layers, UVs and textures from the preferences folder.</li>
-<li>"667 Model (.dat)": new-format 667 models (legacy importer).</li>
 </ul>
 </li>
 </ul>

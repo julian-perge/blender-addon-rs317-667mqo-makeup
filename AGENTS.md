@@ -1,6 +1,6 @@
 # RSPS Toolkit
 
-A Blender 5.2 extension that imports, edits and exports RuneScape client models.
+An extension for Blender 5.2 or later that imports, edits and exports RuneScape client models.
 
 ## Every task
 
