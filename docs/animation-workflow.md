@@ -6,31 +6,18 @@ The reusable loader, compiler and playback interfaces also serve Blender Python.
 The first milestone uses baked shape keys and material drivers, with editable
 objects, cameras, lights and materials.
 
-## Prepare the bundle
+## The bundle
 
-Use Java 25 and the companion `osrs-cache-dumper` on `feature/317-cache`.
-Reader commit `0d27b2b` and publication commit `c9fcc12` implement the version-1
-contract; fix `2e331e1` also validates final recipe texture dependencies before
-publication. Run these Bash commands from this repository, using a cache copy:
-
-```bash
-animation_repo="$PWD"
-mkdir -p "$HOME/tmp"
-animation_work=$(mktemp -d "$HOME/tmp/$(date +%F)-game-animation.XXXXXX")
-cp -R "<data workspace>/oldschool-live-en-b1-2013-02-22-00-00-00-openrs2_241" "$animation_work/cache"
-mvn -f "<data workspace>/osrs-cache-dumper/pom.xml" package
-java -jar "<data workspace>/osrs-cache-dumper/target/osrs-cache-dumper.jar" \
-  --cache "$animation_work/cache" --out "$animation_work/dump" \
-  --animation-request "$animation_repo/tests/fixtures/animations/2013/request.json" \
-  raw-models textures animations
-```
-
-The `animations` target is opt-in. The dump root contains
-`animations/manifest.json`, `dump_index/models/<id>.dat` and `textures/<id>.png`.
-The writer validates cache identity, selected dependencies and exact resource
-hashes/dimensions before publishing. A failed request preserves the previous
-manifest. Equipment overrides without an established compatible assembly are
-explicitly unsupported; the supplied whip clip has none.
+A bundle is a folder that holds `animations/manifest.json` (format
+`rsps-animation`, version 1) and the model and texture files the manifest names,
+at paths relative to the bundle folder.
+The 2013 bundle was made from the first Old School cache (OpenRS2 archive 241,
+revision 1, 22 Feb 2013) with a local tool that is not in this repo. This repo
+cannot make a new bundle. The manifest records the SHA-256 of each cache file it
+was made from. `tests/fixtures/animations/2013/` holds the request, a copy of the
+manifest (`bundle-manifest.json`), the raw resources, the textures and the reference
+values of the 2013 bundle. It is not itself a bundle folder. Equipment overrides without an
+established compatible assembly are not supported; the supplied whip clip has none.
 
 The [contract](../.scratch/game-animation/source-contract.md) and
 [fixture provenance](../tests/fixtures/animations/README.md) record the evidence.
@@ -64,7 +51,7 @@ rsps_toolkit.register()
 ```
 
 1. Open the **RSPS ADDON** sidebar and its **Game Animation** panel.
-2. Choose **Load Animation Bundle** and select the dump root, then select the
+2. Choose **Load Animation Bundle** and select the bundle folder, then select the
    recipe and clip. **Default Male Whip / Sequence 1658** creates the attack;
    **Magic Tree / Static geometry** creates the scrolling tree material.
 3. Set **Start frame** and **Loop clip**, then choose **Create Animation Playback**
@@ -107,7 +94,7 @@ from rsps_toolkit.animation.bundle import load_bundle
 from rsps_toolkit.animation.poses import compile_asset
 from rsps_toolkit.blender.animation import create_playback
 
-bundle = load_bundle(Path("/absolute/path/to/dump"))
+bundle = load_bundle(Path("/absolute/path/to/bundle"))
 (clip,) = bundle.recipes["default-male-whip"].sequence_ids
 player_asset = compile_asset(bundle, "default-male-whip", clip)
 player = create_playback(player_asset, bpy.context.scene, start_frame=1.0, loop=True)
@@ -122,11 +109,11 @@ looping and final holds. Game coordinates `(x,y,z)` become Blender `(x,z,-y)`.
 
 ## Produce the supplied studio scene
 
-The PEP 723 script needs uv, Python 3.13 and Blender 5.2.3. Run from this repo:
+The PEP 723 script needs uv, Python 3.13 and Blender 5.2 or later. Run from this repo:
 
 ```bash
 uv run scripts/animation-showcase.py \
-  --bundle "$animation_work/dump" --output "$animation_work/showcase" \
+  --bundle <path to bundle> --output <new output folder> \
   --blender /Applications/Blender.app/Contents/MacOS/Blender
 ```
 
@@ -160,7 +147,7 @@ Change the scene camera, its orthographic scale, area-light energy/size, world
 strength or presentation object transforms for a different composition. Keep
 source mesh data and game timing intact. To render another still through Python,
 activate its scene before setting its frame and invoking Blender's render
-operator. Blender 5.2 uses `image_settings.media_type = 'VIDEO'` before selecting
+operator. Blender 5.2.3 and 5.3 use `image_settings.media_type = 'VIDEO'` before selecting
 `file_format = 'FFMPEG'`; PNG output uses media type `IMAGE`. The recipe handles
 these settings and render context explicitly.
 

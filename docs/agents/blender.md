@@ -11,16 +11,17 @@ B=/Applications/Blender.app/Contents/MacOS/Blender
 export BLENDER_USER_RESOURCES="$PWD/.blender-test-profile"
 ```
 
-## Source-based tests and dump round trips
+## Source-based tests and cache round trips
 
 Source-based runs load `src/` directly and do not require an installed extension. `--factory-startup` is allowed here; `scripts/test-blender.sh` already supplies it.
 
 ```bash
 scripts/test-blender.sh
-$B -b --factory-startup --python-exit-code 1 --python scripts/round-trip-dump.py -- <dump folder>
+$B -b --factory-startup --python-exit-code 1 --python scripts/round-trip-cache.py -- <path to cache> \
+  --export-root <new-empty-dir> --report <new-report.json> [--ids <first>-<last>]
 ```
 
-The round-trip script imports and exports every model in the dump folder.
+The round-trip script imports and exports every model of the cache with the OSRS149 profile, or only the models in the `--ids` range. Its docstring describes the report.
 
 ## Build and installed-extension checks
 

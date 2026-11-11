@@ -4,10 +4,10 @@ This is the workflow for OpenRS2 archive 430, OSRS build 149 (July 2017). It cov
 enable animation and it does not define a universal OSRS profile: the `osrs-149` profile is the one that has been
 checked, against the 33,196 models of this cache.
 
-An `FF FF` footer does not by itself identify the 667 format: cache 430's 5,398 `FF FF` models are decoded by the
-revision 149 layout in `formats/new_format.py`, checked against the pinned reference reader (Gate 0 fixtures in
-`tests/fixtures/models/osrs149/`). The default importer therefore refuses a file ending in `FF FF` until you choose
-a format; the 667 layout is read by File > Import > 667 Model (.dat) and is a separate, parked decoder.
+An `FF FF` footer marks a newer model format, but it does not say which one. Cache 430's 5,398 `FF FF` models are
+decoded by the revision 149 layout in `formats/new_format.py`, checked against the pinned reference reader (Gate 0
+fixtures in `tests/fixtures/models/osrs149/`). The default importer therefore refuses a file ending in `FF FF` until
+you choose a format.
 
 ## Import
 
@@ -58,22 +58,24 @@ after copying over any work that is still wanted.
 
 ## Versions and limits
 
-The tests and sweeps ran on Blender 5.2.3 only. The `osrs-149` profile is checked against cache 430 only. Texture
-record kinds 1 to 3 have no reference UVs, and byte-identical re-export is not claimed.
+The add-on needs Blender 5.2 or later. The sweeps below ran on Blender 5.2.3. The tests now run on Blender 5.3.
+The `osrs-149` profile is checked against cache 430 only. Texture record kinds 1 to 3 have no reference UVs, and
+byte-identical re-export is not claimed.
 
-## Verify a dump
+## Verify a cache
 
 ```bash
 B=/Applications/Blender.app/Contents/MacOS/Blender
-OSRS430_DUMP=<data workspace>/exports/osrs/openrs2-430/dump
 BLENDER_USER_RESOURCES=<fresh-profile-dir> "$B" -b --factory-startup --python-exit-code 1 \
-  --python scripts/round-trip-dump.py -- "$OSRS430_DUMP" --profile osrs-149 --preserve-source \
-  --export-root <new-export-dir> --report <new-report.json>
+  --python scripts/round-trip-cache.py -- <path to cache> \
+  --export-root <new-export-dir> --report <new-report.json> [--ids <first>-<last>]
 ```
 
-This runs the public import and export operators for every model and keeps the exported files. The independent
-check runs outside Blender: record the originals and the exports with `tests/fixtures/Osrs149Reference.java` (the
-commands are in `tests/fixtures/models/osrs149/README.md`), then
+This runs the public import and Preserve Source export operators for every model of the cache's index 7 and keeps
+the exported files. The script deletes its temporary copies of the original models, so the independent check needs
+the original models written out of the cache separately. No tool in this repo writes them. The check runs outside Blender: record the originals and
+the exports with `tests/fixtures/Osrs149Reference.java` (the commands are in
+`tests/fixtures/models/osrs149/README.md`), then
 
 ```bash
 uv run scripts/compare-osrs149-references.py --expected <original-refs> --actual <export-refs>
@@ -89,25 +91,25 @@ Measured on 2026-11-06 in fresh Blender profiles ([plan 02](../.scratch/osrs-foc
   failure, none differing, no source file changed. The Java reference recorder over the originals and the exports,
   compared with `scripts/compare-osrs149-references.py`: 0 different of 33,196. `VerifyOsrs149Roundtrip` verified
   geometry and the raw source fields of all 33,196 exports.
-- Unchanged legacy sweeps: 27,612 of 27,612 (2013 dump, 1,753 with set-aside faces) and 7,456 of 7,456
-  (`dump317`, 1,148 with set-aside faces), none failed or differing.
+- Unchanged old-format sweeps: 27,612 of 27,612 (the 2013 cache, 1,753 with set-aside faces) and 7,456 of 7,456
+  (the 317 cache, 1,148 with set-aside faces), none failed or differing.
 - Test totals at the Task 6 commit: 1,053 unit tests passed (12 skipped), 514 Blender tests passed.
 - In profile mode the sweep does not fail on missing textures, because the operators find textures through the
-  add-on preferences, not the dump's textures folder (agreed with the user in plan 02).
+  add-on preferences (agreed with the user in plan 02).
 - The texture mapping of the 13 complex-reference models was not viewed ([issue 09](../.scratch/osrs-focus/issues/09-complex-reference-texture-mapping-not-viewed.md)).
 
 The icon reference comparisons are under `tests/fixtures/models/osrs149/icons/`, the raw field
-audit is `.scratch/osrs-focus/evidence/cache430_field_audit.json`, and the dumper's outputs are in
+audit is `.scratch/osrs-focus/evidence/cache430_field_audit.json`, and the verification outputs are in
 `<data workspace>/exports/osrs/openrs2-430/verification/`.
 
 Not covered: byte-identical re-export, which the user deferred
 ([issue 08](../.scratch/osrs-focus/issues/08-preserve-source-refuses-any-moved-vertex.md)), reference UVs for texture
 record kinds 1 to 3, and the complex-reference models' texture mapping.
 
-### The dumper run
+### The full export run (2026-11-06)
 
-The cache-430 full dumper run completed all 20 normal targets using a disposable
-cache copy. All 47 Maven tests and packaging pass. Outputs include 21,392 item,
+A local Java export tool, which is not in this repo, ran all 20 of its normal targets on a disposable copy of
+cache 430. All 47 Maven tests and packaging pass. Outputs include 21,392 item,
 7,746 NPC and 30,386 object definitions; 33,196 raw models and OBJ files; 59
 textures; 1,513 terrain maps; 1,245 landscapes; 3,891 sounds; 848 MIDI files; 376
 samples; a 137-instrument SoundFont; and 21,391 inventory icons. Source hashes and
@@ -126,13 +128,13 @@ Not adopted: no runtime dependency, loader module or manifest change was made. M
 CPython 3.13.15, macOS arm64, 200 repeats; the stdlib column uses the real loader's own hooks from
 `animation/bundle.py`). Median in milliseconds, with the fastest to slowest range in brackets. Memory was not
 measured: allocation tracing would distort the timings. Absolute figures move by tens of percent between runs
-(the NpcDefinitions stdlib median was 72 ms in one run and 102 ms in another); the ranking did not change.
+(the NPC definitions stdlib median was 72 ms in one run and 102 ms in another); the ranking did not change.
 
 | Input | stdlib strict (current) | msgspec only | msgspec + precheck | orjson only | orjson + precheck |
 | --- | --- | --- | --- | --- | --- |
 | Animation manifest, 88 KiB (the only source-loading path today, `animation/bundle.py`) | 0.33 [0.33-0.98] | 0.14 [0.14-0.61] | 0.48 [0.47-1.49] | 0.08 [0.08-0.45] | 0.42 [0.41-0.75] |
-| NpcDefinitions.json, 11.7 MiB (future work only) | 102 [97-160] | 31 [27-70] | 128 [124-145] | 23 [21-33] | 123 [119-146] |
-| ItemDefinitions.json, 27.5 MiB (future work only) | 267 [255-315] | 72 [66-89] | 338 [326-369] | 63 [58-95] | 329 [317-352] |
+| NPC definitions as JSON, 11.7 MiB (future work only) | 102 [97-160] | 31 [27-70] | 128 [124-145] | 23 [21-33] | 123 [119-146] |
+| Item definitions as JSON, 27.5 MiB (future work only) | 267 [255-315] | 72 [66-89] | 338 [326-369] | 63 [58-95] | 329 [317-352] |
 
 "Only" columns skip the duplicate-key check and "precheck" columns add the stdlib strict pass that restores it,
 which is the equal-validation comparison. The script's validation table shows all four accelerator variants
