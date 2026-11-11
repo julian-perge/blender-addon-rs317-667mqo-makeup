@@ -87,11 +87,12 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Deps: none. Files: `importer_667.py`, `__init__.py`, `ui.py`, `import_model.py`, `upgrade_materials.py`, `test_upgrade_materials.py`.
   - Result: `importer_667.py`, its menu entry, the Import 667 Model button and the 667 hint in `import_model.py` are gone. Upgrade RS Materials now reads only `PMN_` names; `RS_Color_` and `Texture_` materials without values are reported as unreadable. `_legacy_alpha` is now `_material_alpha` and lost its stacked-material guard, which only PMN names reach now. Tests removed: the two `rs667` cases (8 runs) and the three importer-alpha cases. Test added: a blended PMN material keeps its alpha, which replaces the only removed test that read a non-zero alpha. The Aether `_unique` case now uses a `PMN_` name. `pyrefly --prune-baseline` dropped the `importer_667.py` entries and six stale ones. ADR 0006 and 0011 still name the importer names; T13 covers them. Test result: Blender suite 760 passed, 3 skipped. prek passed.
 
-- [ ] **T11 Remove 667 fixtures, cache zips and the keys file** (M)
+- [x] **T11 Remove 667 fixtures, cache zips and the keys file** (M)
   - Delete `tests/fixtures/models/rs667`, the two cache zips, `keys-runescape-live-en-b667-*.json`. Fix the tests that copy `rs667/0.dat` (`test_import`, `test_osrs149_io`, `test_osrs149_codec`): use an `osrs` or `osrs149` fixture that triggers the same refusal. Edit `pyproject.toml` description and the 667 comments in `model.py` and `colour.py`. `texture_dump.zip` stays.
   - Accept: criterion 5 in full; each changed test still checks the same behaviour (list any test dropped and why in the task result).
   - Verify: `uv run pytest`; `scripts/test-blender.sh`.
   - Deps: T10.
+  - Result: `tests/fixtures/models/rs667` is deleted. The 317 and 667 cache zips and the 667 keys file were untracked and gitignored; the user chose on 2026-11-11 to move them out of the repo, to `<path to caches>/legacy/`. `texture_dump.zip` stays. No test was dropped. `test_import` skips `osrs149/10413.dat`, which ends in FF FF, when no profile is chosen. `test_osrs149_io` refuses `10413.dat` without its first 100 bytes, which gives the same "sections overlap the footer" refusal as `rs667/0.dat`. `test_osrs149_codec` uses `osrs-170` as the unsupported profile. The `pyproject.toml` description and the `model.py` comment no longer name 667. `colour.py` had no 667 wording; its 317 decompile citation is provenance and stays. Left for T12: `docs/agents/testing.md` names the `rs667` fixtures. Test result: unit 1329 passed, Blender 760 passed. prek passed.
 
 ### Checkpoint 3: legacy code gone
 - [ ] Full suite passes; `rg -i 'importer_667|rs667|rs_667|667 model'` is clean outside dated history

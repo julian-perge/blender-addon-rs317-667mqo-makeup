@@ -27,8 +27,8 @@ class NewFormatData:
 
 
 # The footer allows 65535 vertices, but each old-format face index is stored as its difference from the previous
-# one in a smart value. Up to this many vertices every difference fits; the largest model in the Old School and
-# 667 caches has 4991.
+# one in a smart value. Up to this many vertices every difference fits; the largest model in the Old School caches
+# has 4991.
 MAX_VERTICES = SMART_MAX + 1
 # A face type byte holds the textured bit, the flat shading bit and the texture triangle index in its top 6 bits.
 MAX_TEXTURE_TRIANGLE_INDEX = 63
