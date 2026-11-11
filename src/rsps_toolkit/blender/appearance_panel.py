@@ -34,10 +34,9 @@ class VIEW3D_PT_rsps_appearance(bpy.types.Panel):
         props = context.scene.rs_appearance
         addon = context.preferences.addons.get(preferences.ADDON)
         if addon is not None:
-            layout.prop(addon.preferences, "cache_dump_folder")
             layout.prop(addon.preferences, "cache_folder")
         else:
-            layout.label(text="Enable the RSPS Toolkit add-on to set the dump folder", icon="ERROR")
+            layout.label(text="Enable the RSPS Toolkit add-on to set the cache folder", icon="ERROR")
         _draw_actions(layout, context)
         _draw_steps(layout.box(), props, context)
 

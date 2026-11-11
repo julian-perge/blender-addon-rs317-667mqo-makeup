@@ -1,11 +1,12 @@
 """Writes small js5 disk caches that `Js5Store` reads, so tests need no real cache."""
 
 import gzip
+import os
 import struct
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from rsps_toolkit.formats.js5 import REFERENCE_INDEX, SECTOR_SIZE
+from rsps_toolkit.formats.js5 import REFERENCE_INDEX, SECTOR_SIZE, Js5Store
 
 CONFIG_INDEX, MODEL_INDEX = 2, 7
 KIT_GROUP, ENUM_GROUP, ITEM_GROUP = 3, 8, 10
@@ -93,3 +94,29 @@ def build_cache(
     for model, data in models.items():
         stored[(MODEL_INDEX, model)] = container(data, kind=2)
     write_store(folder, stored)
+
+
+def read_cache(folder: Path) -> dict[str, dict[int, bytes]]:
+    """Read back the models, kits, items and enums of a cache that `build_cache` wrote, as its keyword arguments."""
+    store = Js5Store(folder)
+    config = store.groups(CONFIG_INDEX)
+    return {
+        "models": {model: store.container(MODEL_INDEX, model) for model in store.groups(MODEL_INDEX)},
+        **{
+            name: store.files(CONFIG_INDEX, group) if group in config else {}
+            for name, group in (("kits", KIT_GROUP), ("items", ITEM_GROUP), ("enums", ENUM_GROUP))
+        },
+    }
+
+
+def rewrite_cache(folder: Path, change: Callable[[dict[str, dict[int, bytes]]], object]) -> None:
+    """Write the cache again with `change` applied to what `read_cache` returns, as a new download of the cache would.
+    Every file's modified time becomes a second later than before, so the test does not depend on the file system's
+    clock resolution."""
+    before = {path: path.stat().st_mtime_ns for path in folder.iterdir()}
+    parts = read_cache(folder)
+    change(parts)
+    build_cache(folder, **parts)
+    for path in folder.iterdir():
+        time = before.get(path, path.stat().st_mtime_ns) + 1_000_000_000
+        os.utime(path, ns=(time, time))

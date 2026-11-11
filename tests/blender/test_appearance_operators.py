@@ -1,12 +1,12 @@
 import dataclasses
 import json
-import os
 import shutil
 from pathlib import Path
 
 import bmesh
 import bpy
 import pytest
+from js5_builder import rewrite_cache
 
 from rsps_toolkit.blender import (
     appearance_clip,
@@ -124,7 +124,7 @@ def test_preview_stores_the_source_preset(dump):
 
 def test_a_missing_model_cancels_and_creates_nothing(dump):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    (dump / "dump_index/models/230.dat").unlink()
+    rewrite_cache(dump, lambda parts: parts["models"].pop(230))
     with pytest.raises(RuntimeError, match="Model 230"):
         create(dump_folder=str(dump))
     assert not bpy.data.objects
@@ -132,7 +132,7 @@ def test_a_missing_model_cancels_and_creates_nothing(dump):
 
 def test_no_dump_folder_is_an_error(dump):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    with pytest.raises(RuntimeError, match="cache dump folder"):
+    with pytest.raises(RuntimeError, match="Set the Cache folder"):
         create()
 
 
@@ -484,7 +484,7 @@ def test_a_failed_update_keeps_the_old_player_and_preset(dump):
     (collection,) = players()
     mesh = appearance_collection.mesh_data(collection)
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
-    (dump / "dump_index/models/3379.dat").unlink()
+    rewrite_cache(dump, lambda parts: parts["models"].pop(3379))
     with pytest.raises(RuntimeError, match="Model 3379"):
         update(dump_folder=str(dump))
     assert players() == [collection]
@@ -892,69 +892,64 @@ def test_update_bakes_a_clip_with_held_items_again_with_them(armed_dump, method)
 
 
 def count_item_catalog_loads(monkeypatch):
-    """Wrap the item catalog loader so a test sees each path it parses. The user accepted tying the count to the
-    loader's name (spec of the shared catalog cache, Testing Decisions, seam 2)."""
+    """Wrap the item catalog reader so a test sees the cache folder of each parse. The user accepted tying the count to
+    the reader's name (spec of the shared catalog cache, Testing Decisions, seam 2)."""
     loads = []
-    real = cache_profile.load_items
+    real = cache_profile.read_items
 
-    def counted(path):
-        loads.append(path)
-        return real(path)
+    def counted(store):
+        loads.append(store.folder)
+        return real(store)
 
-    monkeypatch.setattr(cache_profile, "load_items", counted)
+    monkeypatch.setattr(cache_profile, "read_items", counted)
     return loads
 
 
 def test_create_twice_and_update_once_read_the_item_catalog_once(dump, monkeypatch):
-    # The user chose that Create and Update share one parsed copy of the catalogs per dump folder (issue 29,
+    # The user chose that Create and Update share one parsed copy of the catalogs per cache folder (issue 29,
     # decision 2, 2026-11-10).
     loads = count_item_catalog_loads(monkeypatch)
     show(case(None, False, [0, 0, 0, 0, 0]))
     create(dump_folder=str(dump))
     create(dump_folder=str(dump))
     assert update(dump_folder=str(dump)) == {"FINISHED"}
-    assert loads == [dump / "items/ItemDefinitions.json"]
+    assert loads == [dump]
 
 
 def test_create_reuses_the_item_catalog_the_panel_read(dump, monkeypatch):
-    # The user chose that the panel and Create share one parsed copy of the catalogs per dump folder (issue 29,
+    # The user chose that the panel and Create share one parsed copy of the catalogs per cache folder (issue 29,
     # decision 2, 2026-11-10). Item 35 is named Excalibur in the fixture ItemDefinitions.json.
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
     loads = count_item_catalog_loads(monkeypatch)
     assert appearance_items.item_name(35) == "Excalibur"
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create() == {"FINISHED"}
-    assert loads == [dump / "items/ItemDefinitions.json"]
+    assert loads == [dump]
 
 
 def test_changing_the_dump_folder_preference_uses_that_folders_item_catalog(dump, monkeypatch, tmp_path_factory):
-    # The user asked that changing the dump folder preference uses that folder's catalog, as before (spec of the
+    # The user asked that changing the cache folder preference uses that folder's catalog, as before (spec of the
     # shared catalog cache, user story 5).
     other = tmp_path_factory.mktemp("other_dump")
     shutil.copytree(dump, other, dirs_exist_ok=True)
-    rows = json.loads((other / "items/ItemDefinitions.json").read_text())
-    for row in rows:
-        if row["id"] == 35:
-            row["name"] = "Renamed sword"
-    (other / "items/ItemDefinitions.json").write_text(json.dumps(rows))
+    rewrite_cache(other, rename_item(35, "Excalibur", "Renamed sword"))
     loads = count_item_catalog_loads(monkeypatch)
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
     assert appearance_items.item_name(35) == "Excalibur"
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: other)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: other)
     assert appearance_items.item_name(35) == "Renamed sword"
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create() == {"FINISHED"}
-    assert loads == [dump / "items/ItemDefinitions.json", other / "items/ItemDefinitions.json"]
+    assert loads == [dump, other]
 
 
-def test_a_missing_item_catalog_names_the_dumper_target_at_every_create(dump):
-    # The user asked that a missing catalog gives the same message as before (spec of the shared catalog cache, user
-    # story 6). Before the spec, at commit 06f9a4c, cache_profile.py said "Missing <path>. Run the dumper's `items`
-    # target." for a missing ItemDefinitions.json.
-    (dump / "items/ItemDefinitions.json").unlink()
+def test_a_missing_item_group_names_the_preference_at_every_create(dump):
+    # The user asked that a missing catalog gives the same message at every Create (spec of the shared catalog cache,
+    # user story 6). spec/remove-dumper-and-legacy-revisions.md made the message name the Cache folder preference.
+    rewrite_cache(dump, lambda parts: parts["items"].clear())
     show(case(None, False, [0, 0, 0, 0, 0]))
     for _ in range(2):
-        with pytest.raises(RuntimeError, match=r"items/ItemDefinitions\.json\. Run the dumper's `items` target"):
+        with pytest.raises(RuntimeError, match=r"no group 10 .*Set the Cache folder in the add-on preferences"):
             create(dump_folder=str(dump))
     assert not players()
 
@@ -970,35 +965,27 @@ def test_a_held_item_bake_reuses_the_item_catalog_create_read(armed_dump, monkey
     bake = appearance_clip.bake_clip if method == "shape keys" else appearance_clip.bake_clip_to_rig
     bake(collection, FIXTURES.parent / "animation149/held-1365", action=True, dump_folder=str(armed_dump))
     assert "Player Steel axe" in [obj.name for obj in appearance_collection.parts(collection)]
-    assert loads == [armed_dump / "items/ItemDefinitions.json"]
+    assert loads == [armed_dump]
 
 
-def redump(path, change):
-    """Rewrite a catalog of the dump as a re-run of the dumper would, with a modified time a second later than before,
-    so the test does not depend on the file system's clock resolution."""
-    before = path.stat().st_mtime_ns
-    rows = json.loads(path.read_text())
-    change(rows)
-    path.write_text(json.dumps(rows))
-    os.utime(path, ns=(before + 1_000_000_000, before + 1_000_000_000))
+def rename_item(item_id, old, new):
+    """A cache change that renames an item, by replacing the zero-ended name text in its definition."""
 
-
-def rename_item(item_id, name):
-    def change(rows):
-        next(row for row in rows if row["id"] == item_id)["name"] = name
+    def change(parts):
+        parts["items"][item_id] = parts["items"][item_id].replace(old.encode() + b"\0", new.encode() + b"\0")
 
     return change
 
 
-def test_the_item_search_after_create_sees_a_re_dumped_item_name(dump, monkeypatch):
-    # The user chose that a catalog file whose modified time changes is parsed again at the next use (issue 29,
+def test_the_item_search_after_create_sees_a_renamed_item(dump, monkeypatch):
+    # The user chose that a catalog whose files' modified times change is parsed again at the next use (issue 29,
     # decision 3, 2026-11-10). Item 35 is named Excalibur in the fixture ItemDefinitions.json.
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create() == {"FINISHED"}
     assert appearance_items.item_name(35) == "Excalibur"
-    redump(dump / "items/ItemDefinitions.json", rename_item(35, "Re-dumped sword"))
-    assert appearance_items.item_name(35) == "Re-dumped sword"
+    rewrite_cache(dump, rename_item(35, "Excalibur", "Renamed sword"))
+    assert appearance_items.item_name(35) == "Renamed sword"
 
 
 def search_labels(slot):
@@ -1008,25 +995,25 @@ def search_labels(slot):
     return {identifier: label for identifier, label, _ in choices}
 
 
-def test_the_item_search_popup_after_create_lists_a_re_dumped_item_name(dump, monkeypatch):
-    # The user chose that a catalog file whose modified time changes is parsed again at the next use (issue 29,
+def test_the_item_search_popup_after_create_lists_a_renamed_item(dump, monkeypatch):
+    # The user chose that a catalog whose files' modified times change is parsed again at the next use (issue 29,
     # decision 3, 2026-11-10). Item 2653 is the Zamorak platebody, a male body item, in the fixture
     # ItemDefinitions.json.
-    monkeypatch.setattr(preferences, "cache_dump_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create() == {"FINISHED"}
     assert "Zamorak platebody" in search_labels(4)["2653"]
-    redump(dump / "items/ItemDefinitions.json", rename_item(2653, "Re-dumped platebody"))
+    rewrite_cache(dump, rename_item(2653, "Zamorak platebody", "Renamed platebody"))
     label = search_labels(4)["2653"]
-    assert "Re-dumped platebody" in label and "Zamorak platebody" not in label
+    assert "Renamed platebody" in label and "Zamorak platebody" not in label
 
 
-def test_create_after_create_sees_an_item_a_re_dump_added_and_reads_the_catalog_once_more(dump, monkeypatch):
-    # The user chose that a catalog file whose modified time changes is parsed again at the next use, and that an
+def test_create_after_create_sees_an_item_a_changed_cache_added_and_reads_the_catalog_once_more(dump, monkeypatch):
+    # The user chose that a catalog whose files' modified times change is parsed again at the next use, and that an
     # unchanged one is shared (issue 29, decisions 2 and 3, 2026-11-10). Item 9035 is a copy of Excalibur (item 35)
     # under an id the fixture ItemDefinitions.json lacks.
-    def add_sword(rows):
-        rows.append({**next(row for row in rows if row["id"] == 35), "id": 9035, "name": "Re-dumped sword"})
+    def add_sword(parts):
+        parts["items"][9035] = parts["items"][35]
 
     loads = count_item_catalog_loads(monkeypatch)
     show(case(None, False, [0, 0, 0, 0, 0]))
@@ -1034,19 +1021,19 @@ def test_create_after_create_sees_an_item_a_re_dump_added_and_reads_the_catalog_
     equipment = list(case("excalibur", False, [0, 0, 0, 0, 0])["equipment"])
     equipment[3] = 512 + 9035
     bpy.context.scene.rs_appearance.equipment = equipment  # pyrefly: ignore[missing-attribute]
-    redump(dump / "items/ItemDefinitions.json", add_sword)
+    rewrite_cache(dump, add_sword)
     assert create(dump_folder=str(dump)) == {"FINISHED"}
     assert create(dump_folder=str(dump)) == {"FINISHED"}
-    assert loads == [dump / "items/ItemDefinitions.json"] * 2
+    assert loads == [dump] * 2
 
 
-def test_create_after_create_sees_a_kit_a_re_dump_removed(dump):
-    # The user chose that each catalog file whose modified time changes is parsed again at the next use (issue 29,
-    # decision 3, 2026-11-10), so Create refuses a look whose kit the re-dump removed instead of building it from the
+def test_create_after_create_sees_a_kit_a_changed_cache_removed(dump):
+    # The user chose that each catalog whose files' modified times change is parsed again at the next use (issue 29,
+    # decision 3, 2026-11-10), so Create refuses a look whose kit the changed cache lacks instead of building it from the
     # old catalog. The default male look wears torso kit 18 (equipment 274 in reference.json).
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create(dump_folder=str(dump)) == {"FINISHED"}
-    redump(dump / "kits/KitDefinitions.json", lambda rows: rows.remove(next(row for row in rows if row["id"] == 18)))
+    rewrite_cache(dump, lambda parts: parts["kits"].pop(18))
     with pytest.raises(RuntimeError):
         create(dump_folder=str(dump))
     assert len(players()) == 1

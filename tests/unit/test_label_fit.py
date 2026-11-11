@@ -3,11 +3,12 @@ import math
 from pathlib import Path
 
 import pytest
+from runelite_json import load_kits
 
 from rsps_toolkit.animation.clip import pose_vertices
 from rsps_toolkit.animation.label_fit import LabelTransform, fit_frame, fit_label, fitted_vertices
 from rsps_toolkit.formats import Model, decode
-from rsps_toolkit.formats.appearance import assemble_body, default_equipment, load_kits, load_palette
+from rsps_toolkit.formats.appearance import assemble_body, default_equipment, load_palette
 
 APPEARANCE = Path(__file__).parents[1] / "fixtures/appearance"
 CLIPS = Path(__file__).parents[1] / "fixtures/animation149"

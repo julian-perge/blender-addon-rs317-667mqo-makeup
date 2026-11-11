@@ -1,38 +1,45 @@
 """Fixtures shared by the player appearance tests."""
 
-import json
-import shutil
 from pathlib import Path
 
 import bpy
 import pytest
+from js5_builder import build_cache
 
 APPEARANCE = Path(__file__).parent.parent / "fixtures" / "appearance"
 CLIPS = Path(__file__).parent.parent / "fixtures" / "animation149"
 
 
+def raw_files(folder: Path) -> dict[int, bytes]:
+    return {int(path.stem): path.read_bytes() for path in folder.glob("*.dat")}
+
+
+def appearance_cache() -> dict[str, dict[int, bytes]]:
+    """The appearance fixtures as the models, kits, items and enums of a cache."""
+    return {
+        "models": raw_files(APPEARANCE),
+        "kits": raw_files(APPEARANCE / "kits"),
+        "items": raw_files(APPEARANCE / "items"),
+        "enums": raw_files(APPEARANCE / "enums"),
+    }
+
+
 @pytest.fixture
 def dump(tmp_path):
-    for folder in ("kits", "items", "dump_index/models"):
-        (tmp_path / folder).mkdir(parents=True)
-    shutil.copy(APPEARANCE / "KitDefinitions.json", tmp_path / "kits")
-    shutil.copy(APPEARANCE / "ItemDefinitions.json", tmp_path / "items")
-    for model in APPEARANCE.glob("*.dat"):
-        shutil.copy(model, tmp_path / "dump_index/models")
+    build_cache(tmp_path, **appearance_cache())
     return tmp_path
 
 
 @pytest.fixture
-def armed_dump(dump):
-    """The dump plus the items of the held-item clip fixtures: the Rune scimitar (1333) and Rune kiteshield (1201)
+def armed_dump(tmp_path):
+    """The cache plus the items of the held-item clip fixtures: the Rune scimitar (1333) and Rune kiteshield (1201)
     worn when they were recorded, and the Steel axe, Charcoal and Papyrus the clips hold."""
-    rows = {row["id"]: row for row in json.loads((dump / "items/ItemDefinitions.json").read_text())}
+    parts = appearance_cache()
     for folder in sorted(CLIPS.glob("held-*")):
-        rows.update({row["id"]: row for row in json.loads((folder / "ItemDefinitions.json").read_text())})
-        for model in (folder / "models").glob("*.dat"):
-            shutil.copy(model, dump / "dump_index/models")
-    (dump / "items/ItemDefinitions.json").write_text(json.dumps(list(rows.values())))
-    return dump
+        parts["items"] |= raw_files(folder / "items")
+        parts["models"] |= raw_files(folder / "models")
+    build_cache(tmp_path, **parts)
+    return tmp_path
 
 
 @pytest.fixture

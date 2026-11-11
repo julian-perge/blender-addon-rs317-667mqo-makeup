@@ -19,17 +19,12 @@ class RsToolkitPreferences(bpy.types.AddonPreferences):
         description="Folder of <texture id>.png files, such as the unzipped texture_dump.zip",
         subtype="DIR_PATH",
     )
-    cache_dump_folder: bpy.props.StringProperty(  # pyrefly: ignore[bad-assignment]
-        name="Cache dump folder",
-        description="The dumper's output for OpenRS2 snapshot 430, holding items/, kits/ and dump_index/models/",
-        subtype="DIR_PATH",
-        update=lambda self, context: _fill_scenes(),
-    )
     cache_folder: bpy.props.StringProperty(  # pyrefly: ignore[bad-assignment]
         name="Cache folder",
         description="The js5 cache of OpenRS2 snapshot 430 (its cache/ folder, holding main_file_cache.dat2), which "
-        "game clips are read from",
+        "player kits, items, models and game clips are read from",
         subtype="DIR_PATH",
+        update=lambda self, context: _fill_scenes(),
     )
     brightness: bpy.props.EnumProperty(  # pyrefly: ignore[bad-assignment]
         name="Brightness",
@@ -46,7 +41,6 @@ class RsToolkitPreferences(bpy.types.AddonPreferences):
 
     def draw(self, context):
         self.layout.prop(self, "texture_folder")
-        self.layout.prop(self, "cache_dump_folder")
         self.layout.prop(self, "cache_folder")
         self.layout.prop(self, "brightness")
         fallback = _user_texture_folder(create=False)
@@ -60,14 +54,6 @@ def brightness() -> float:
     if addon is None:
         return DEFAULT_BRIGHTNESS
     return float(addon.preferences.brightness)
-
-
-def cache_dump_folder() -> Path | None:
-    """Return the cache dump folder from the preferences, or None when the add-on is not enabled or it is unset."""
-    addon = bpy.context.preferences.addons.get(ADDON)
-    if addon is None or not addon.preferences.cache_dump_folder:
-        return None
-    return folder_in_setting(addon.preferences.cache_dump_folder)
 
 
 def cache_folder() -> Path | None:

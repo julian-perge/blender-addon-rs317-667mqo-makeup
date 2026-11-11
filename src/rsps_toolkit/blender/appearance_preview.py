@@ -164,9 +164,9 @@ def fail(operator: bpy.types.Operator, context: bpy.types.Context, error: Except
 
 
 def dump_folder(setting: str) -> Path:
-    folder = preferences.folder_in_setting(setting) if setting else preferences.cache_dump_folder()
+    folder = preferences.folder_in_setting(setting) if setting else preferences.cache_folder()
     if folder is None:
-        raise ValueError("Set the cache dump folder in the add-on preferences")
+        raise ValueError("Set the Cache folder in the add-on preferences.")
     return folder
 
 

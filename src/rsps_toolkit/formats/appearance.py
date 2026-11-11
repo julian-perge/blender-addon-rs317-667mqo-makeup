@@ -60,41 +60,6 @@ class Palette:
     secondary_choices: tuple[tuple[int, ...], ...]
 
 
-def load_kits(path: Path) -> dict[int, Kit]:
-    """Read the dumper's `kits/KitDefinitions.json`. Its colours are signed shorts and become 16-bit values here."""
-    kits: dict[int, Kit] = {}
-    for row in json.loads(path.read_text()):
-        kit = Kit(
-            id=row["id"],
-            body_part=row["bodyPartId"],
-            model_ids=tuple(row["models"]),
-            chathead_models=tuple(row["chatheadModels"]),
-            non_selectable=row["nonSelectable"],
-            recolours=_pairs(row.get("recolorToFind"), row.get("recolorToReplace")),
-            retextures=_pairs(row.get("retextureToFind"), row.get("retextureToReplace")),
-        )
-        kits[kit.id] = kit
-    return kits
-
-
-def load_items(path: Path) -> dict[int, WornItem]:
-    """Read the worn-model fields of the dumper's `items/ItemDefinitions.json`."""
-    items: dict[int, WornItem] = {}
-    for row in json.loads(path.read_text()):
-        item = WornItem(
-            id=row["id"],
-            name=row["name"],
-            male_models=(row["maleModel0"], row["maleModel1"], row["maleModel2"]),
-            male_offset=row["maleOffset"],
-            female_models=(row["femaleModel0"], row["femaleModel1"], row["femaleModel2"]),
-            female_offset=row["femaleOffset"],
-            recolours=_pairs(row.get("colorFind"), row.get("colorReplace")),
-            retextures=_pairs(row.get("textureFind"), row.get("textureReplace")),
-        )
-        items[item.id] = item
-    return items
-
-
 def items_for_slot(
     items: Mapping[int, WornItem], female: bool, slot_of: Mapping[int, int], slot: int
 ) -> list[WornItem]:
@@ -116,10 +81,6 @@ def load_palette(path: Path) -> Palette:
         secondary_sources=tuple(tables["secondary_sources"]["unsigned_short"]),
         secondary_choices=tuple(tuple(row) for row in tables["secondary_choices"]["unsigned_short"]),
     )
-
-
-def _pairs(find: Sequence[int] | None, replace: Sequence[int] | None) -> tuple[tuple[int, int], ...]:
-    return tuple((a & 0xFFFF, b & 0xFFFF) for a, b in zip(find or (), replace or (), strict=True))
 
 
 def default_equipment(kits: Mapping[int, Kit], *, female: bool = False) -> list[int]:

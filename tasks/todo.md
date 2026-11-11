@@ -33,13 +33,14 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Deps: T1. Files: `formats/enum_definition.py`, `kit_names.py`, two tests.
 
 ### Checkpoint 1: decoders match RuneLite
-- [ ] `uv run pytest` and `prek run --all-files` pass
-- [ ] Every new expected value traces to RuneLite JSON or a named client line
-- [ ] Review with the user before the cut-over
+- [x] `uv run pytest` and `prek run --all-files` pass
+- [x] Every new expected value traces to RuneLite JSON or a named client line
+- [x] Review with the user before the cut-over (the user started the cut-over on 2026-11-11)
 
 ## Phase 2: Cut-over
 
-- [ ] **T5 CacheProfile and the preference read the cache** (L, cannot be split without a dual-mode profile)
+- [x] **T5 CacheProfile and the preference read the cache** (L, cannot be split without a dual-mode profile)
+  - Result: `CacheProfile(cache_folder)` reads kits, items and the style enums from config groups 3, 10 and 8, and reads models with `container(7, id)`. Every catalog parse makes a new `Js5Store`, so the old reference tables are dropped. A catalog is parsed again when the modified time of `dat2`, `idx2` or `idx255` changes (`idx255` was added after review). Errors name the missing thing and say "Set the Cache folder in the add-on preferences." A definition that is cut short stays an `IndexError`, so it is not reported as a missing file. `cache_dump_folder` is gone, and `cache_folder` now runs the fill-scenes update. Change from the plan: the JSON readers `load_kits` and `load_items` moved to `tests/runelite_json.py` instead of being deleted, because eight unit tests use the RuneLite JSON as inputs and expected values. The Blender `dump` and `armed_dump` fixtures build a mini cache. The issue-29 tests now rewrite that cache with `js5_builder.rewrite_cache`, and they rename items and styles by replacing their zero-ended name bytes. The missing-items test now expects the Cache folder message. Real cache: the default male body has 476 faces and 264 vertices. Kits parse in 0.02 s and items in 0.14 s. Test result: unit suite 1329 passed (1335 with the cache set), Blender suite 770 passed (773 with the cache set). prek passed. Left for T6 and T12: `appearance_collection` descriptions that say "cache dump", and `docs/agents/testing.md` and `blender.md`.
   - `CacheProfile` takes a cache folder, builds a `Js5Store`, decodes kits (group 3), items (group 10), enums (group 8), and reads models from index 7. Mtime keying uses `dat2` and `idx2` and drops `Js5Store._tables` on change. Delete `cache_dump_folder`, `MissingResourceError` hints that name the dumper, and the JSON loaders in `appearance.py`. Callers (`appearance_props`, `appearance_preview`, `appearance_items`, `appearance_panel`, `preferences`) use `cache_folder`. Errors read `Set the Cache folder in the add-on preferences.` The `dump` and `armed_dump` fixtures build the mini cache.
   - Accept: spec criteria 1 to 3. Default male body still 476 faces, 264 vertices. A changed cache file is parsed again (issue 29 tests keep their behaviour). A missing model names the model id and the preference.
   - Verify: `uv run pytest`; `BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh`.

@@ -1,9 +1,10 @@
 from pathlib import Path
 
 import pytest
+from runelite_json import load_kits
 
 from rsps_toolkit.formats import Model, decode
-from rsps_toolkit.formats.appearance import assemble_body, default_equipment, load_kits, load_palette
+from rsps_toolkit.formats.appearance import assemble_body, default_equipment, load_palette
 from rsps_toolkit.formats.appearance_rig import BONE_LENGTH, derive_rig
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/appearance"

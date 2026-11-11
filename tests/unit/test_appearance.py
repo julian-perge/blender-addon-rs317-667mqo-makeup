@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from runelite_json import load_items, load_kits
 
 from rsps_toolkit.formats import Model, decode
 from rsps_toolkit.formats.appearance import (
@@ -12,8 +13,6 @@ from rsps_toolkit.formats.appearance import (
     item_model,
     items_for_slot,
     kit_model,
-    load_items,
-    load_kits,
     load_palette,
     merge,
 )

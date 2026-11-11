@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from rsps_toolkit.formats.appearance import load_kits
+from runelite_json import load_kits
+
 from rsps_toolkit.formats.enum_definition import decode_enum
 from rsps_toolkit.formats.kit_names import load_kit_names
 
