@@ -50,9 +50,9 @@ def registered(clean):
         bpy.utils.unregister_class(cls)
 
 
-def player(dump, pose=POSE):
+def player(cache, pose=POSE):
     preset = AppearancePreset(149, 430, pose["female"], tuple(pose["equipment"]), tuple(pose["colours"]))
-    body, shading = appearance_preview.assemble_lit(preset, dump)
+    body, shading = appearance_preview.assemble_lit(preset, cache)
     return appearance_collection.build_collection(body, shading, preset, "Player")
 
 
@@ -62,8 +62,8 @@ def key_blocks(collection):
     return shape_keys.key_blocks
 
 
-def test_each_walk_frame_becomes_a_shape_key_equal_to_the_clients_pose(dump):
-    collection = player(dump)
+def test_each_walk_frame_becomes_a_shape_key_equal_to_the_clients_pose(cache):
+    collection = player(cache)
     assert appearance_clip.bake_clip(collection, CLIP) == 8
     keys = key_blocks(collection)
     assert [k.name for k in keys] == ["Basis"] + [f"clip_{i}" for i in range(8)]
@@ -80,8 +80,8 @@ def move_whole(collection):
     bpy.context.view_layer.update()  # pyrefly: ignore[missing-attribute]
 
 
-def test_shape_keys_bake_onto_a_player_moved_as_a_whole_with_the_clients_pose(dump):
-    collection = player(dump)
+def test_shape_keys_bake_onto_a_player_moved_as_a_whole_with_the_clients_pose(cache):
+    collection = player(cache)
     move_whole(collection)
     assert appearance_clip.bake_clip(collection, CLIP) == 8
     first = POSE["frames"][0]
@@ -102,9 +102,9 @@ def shown_keys(collection, count):
     return shown
 
 
-def test_each_blender_frame_shows_the_frame_the_client_shows_on_that_tick(dump):
+def test_each_blender_frame_shows_the_frame_the_client_shows_on_that_tick(cache):
     # The walk is a pose sequence, so the client shows frame 0 one tick longer and the cycle is 49 ticks long.
-    collection = player(dump)
+    collection = player(cache)
     appearance_clip.bake_clip(collection, CLIP)
     shown = shown_keys(collection, 8)
     client = TIMING[819, "pose"]
@@ -113,9 +113,9 @@ def test_each_blender_frame_shows_the_frame_the_client_shows_on_that_tick(dump):
 
 
 @pytest.mark.parametrize("kind", ["male", "female"])
-def test_the_idle_bake_equals_the_clients_pose_and_timing(dump, kind):
+def test_the_idle_bake_equals_the_clients_pose_and_timing(cache, kind):
     pose = json.loads((CLIPS / f"idle/pose-{kind}.json").read_text())
-    collection = player(dump, pose)
+    collection = player(cache, pose)
     assert appearance_clip.bake_clip(collection, CLIPS / "idle") == 12
     keys = key_blocks(collection)
     for index, expected in enumerate(pose["frames"]):
@@ -126,60 +126,60 @@ def test_the_idle_bake_equals_the_clients_pose_and_timing(dump, kind):
     assert len(shown) == 253
 
 
-def test_an_action_bake_follows_the_loop_offset_until_the_client_stops_it(dump):
+def test_an_action_bake_follows_the_loop_offset_until_the_client_stops_it(cache):
     # Sequence 1499 steps back 4 frames after its last one, 98 times, and then stops (its loop limit is 99).
     pose = json.loads((CLIPS / "loop/pose-male.json").read_text())
-    collection = player(dump, pose)
+    collection = player(cache, pose)
     assert appearance_clip.bake_clip(collection, CLIPS / "loop", action=True) == 26
     client = TIMING[1499, "action"]
     assert shown_keys(collection, 26) == client[: client.index(-1)]
 
 
-def test_the_operator_bakes_an_action_when_asked(dump):
-    collection = player(dump, json.loads((CLIPS / "loop/pose-male.json").read_text()))
+def test_the_operator_bakes_an_action_when_asked(cache):
+    collection = player(cache, json.loads((CLIPS / "loop/pose-male.json").read_text()))
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(collection)  # pyrefly: ignore[missing-attribute]
     assert bpy.ops.rsps.bake_clip(directory=str(CLIPS / "loop"), play_as="ACTION") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
     client = TIMING[1499, "action"]
     assert bpy.context.scene.frame_end == client.index(-1)  # pyrefly: ignore[missing-attribute]
 
 
-def test_baking_again_replaces_the_keys(dump):
-    collection = player(dump)
+def test_baking_again_replaces_the_keys(cache):
+    collection = player(cache)
     appearance_clip.bake_clip(collection, CLIP)
     appearance_clip.bake_clip(collection, CLIP)
     keys = key_blocks(collection)
     assert len(keys) == 9
 
 
-def test_the_rest_mesh_is_unchanged_so_the_player_does_not_count_as_edited(dump):
-    collection = player(dump)
+def test_the_rest_mesh_is_unchanged_so_the_player_does_not_count_as_edited(cache):
+    collection = player(cache)
     appearance_clip.bake_clip(collection, CLIP)
     assert not appearance_collection.is_edited(collection)
 
 
-def test_an_edited_player_is_refused(dump):
-    collection = player(dump)
+def test_an_edited_player_is_refused(cache):
+    collection = player(cache)
     appearance_collection.mesh_data(collection).vertices[0].co.x += 3
     with pytest.raises(ValueError, match="has edits"):
         appearance_clip.bake_clip(collection, CLIP)
 
 
-def test_the_operator_bakes_the_active_player(dump):
-    collection = player(dump)
+def test_the_operator_bakes_the_active_player(cache):
+    collection = player(cache)
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(collection)  # pyrefly: ignore[missing-attribute]
     assert bpy.ops.rsps.bake_clip(directory=str(CLIP)) == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
     assert len(key_blocks(collection)) == 9
 
 
-def test_the_operator_names_a_folder_without_clip_files(dump, tmp_path):
-    collection = player(dump)
+def test_the_operator_names_a_folder_without_clip_files(cache, tmp_path):
+    collection = player(cache)
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(collection)  # pyrefly: ignore[missing-attribute]
     with pytest.raises(RuntimeError, match="sequence.dat"):
         bpy.ops.rsps.bake_clip(directory=str(tmp_path))  # pyrefly: ignore[missing-attribute]
 
 
-def test_baking_sets_game_speed_playback(dump):
-    collection = player(dump)
+def test_baking_sets_game_speed_playback(cache):
+    collection = player(cache)
     bpy.context.scene.render.fps_base = 1.001  # pyrefly: ignore[missing-attribute]
     appearance_clip.bake_clip(collection, CLIP)
     assert bpy.context.scene.render.fps == 50  # pyrefly: ignore[missing-attribute]
@@ -193,15 +193,15 @@ def in_two_groups(collection):
     return obj
 
 
-def test_a_vertex_in_two_groups_is_named(dump):
-    collection = player(dump)
+def test_a_vertex_in_two_groups_is_named(cache):
+    collection = player(cache)
     in_two_groups(collection)
     with pytest.raises(ValueError, match="Vertex 0 is in 2 vertex groups"):
         appearance_pose.pose_player(collection, CLIP)
 
 
-def test_the_operator_refuses_a_vertex_in_two_groups_as_an_edit_and_adds_no_keys(dump):
-    collection = player(dump)
+def test_the_operator_refuses_a_vertex_in_two_groups_as_an_edit_and_adds_no_keys(cache):
+    collection = player(cache)
     obj = in_two_groups(collection)
     bpy.context.view_layer.objects.active = obj  # pyrefly: ignore[missing-attribute]
     with pytest.raises(RuntimeError, match="Player has edits, so a clip cannot be baked onto it"):
@@ -209,15 +209,15 @@ def test_the_operator_refuses_a_vertex_in_two_groups_as_an_edit_and_adds_no_keys
     assert appearance_collection.mesh_data(collection).shape_keys is None
 
 
-def test_sculpting_a_clip_key_counts_as_edited(dump):
-    collection = player(dump)
+def test_sculpting_a_clip_key_counts_as_edited(cache):
+    collection = player(cache)
     appearance_clip.bake_clip(collection, CLIP)
     key_blocks(collection)["clip_3"].data[0].co.x += 40  # pyrefly: ignore[missing-attribute]
     assert appearance_collection.is_edited(collection)
 
 
-def test_a_key_the_user_added_is_refused_by_name_and_kept(dump):
-    collection = player(dump)
+def test_a_key_the_user_added_is_refused_by_name_and_kept(cache):
+    collection = player(cache)
     appearance_clip.bake_clip(collection, CLIP)
     obj = appearance_collection.mesh_of(collection)
     smile = obj.shape_key_add(name="smile", from_mix=False)
@@ -227,8 +227,8 @@ def test_a_key_the_user_added_is_refused_by_name_and_kept(dump):
     assert [k.name for k in key_blocks(collection)] == ["Basis"] + [f"clip_{i}" for i in range(8)] + ["smile"]
 
 
-def test_baking_refuses_a_player_in_edit_mode(dump):
-    collection = player(dump)
+def test_baking_refuses_a_player_in_edit_mode(cache):
+    collection = player(cache)
     bpy.context.view_layer.objects.active = appearance_collection.armature_of(collection)  # pyrefly: ignore[missing-attribute]
     bpy.ops.object.mode_set(mode="EDIT")
     with pytest.raises(ValueError, match="Edit Mode"):
@@ -258,8 +258,8 @@ def curves(collection):
 CLIP_CURVES = [f'key_blocks["clip_{i}"].value' for i in range(8)]
 
 
-def test_a_failed_bake_keeps_the_previous_clip(dump, monkeypatch):
-    collection = player(dump)
+def test_a_failed_bake_keeps_the_previous_clip(cache, monkeypatch):
+    collection = player(cache)
     appearance_clip.bake_clip(collection, CLIP)
     before = [(k.name, tuple(k.data[5].co)) for k in key_blocks(collection)]  # pyrefly: ignore[missing-attribute]
     broken_last_frame(monkeypatch)
@@ -270,23 +270,23 @@ def test_a_failed_bake_keeps_the_previous_clip(dump, monkeypatch):
     assert not appearance_collection.is_edited(collection)
 
 
-def test_a_failed_first_bake_leaves_no_keys(dump, monkeypatch):
-    collection = player(dump)
+def test_a_failed_first_bake_leaves_no_keys(cache, monkeypatch):
+    collection = player(cache)
     broken_last_frame(monkeypatch)
     with pytest.raises((RuntimeError, ValueError, TypeError)):
         appearance_clip.bake_clip(collection, CLIP)
     assert appearance_collection.mesh_data(collection).shape_keys is None
 
 
-def test_baking_again_keeps_one_curve_per_key(dump):
-    collection = player(dump)
+def test_baking_again_keeps_one_curve_per_key(cache):
+    collection = player(cache)
     appearance_clip.bake_clip(collection, CLIP)
     appearance_clip.bake_clip(collection, CLIP)
     assert curves(collection) == CLIP_CURVES
 
 
-def test_the_operator_names_a_truncated_frame(dump, tmp_path):
-    collection = player(dump)
+def test_the_operator_names_a_truncated_frame(cache, tmp_path):
+    collection = player(cache)
     clip = tmp_path / "clip"
     shutil.copytree(CLIP, clip)
     frame = clip / "frames/207_364.dat"
@@ -337,8 +337,8 @@ def largest_distance(a, b):
     return max(math.dist(p, q) for p, q in zip(a, b, strict=True))
 
 
-def test_every_blender_frame_of_the_bone_walk_poses_the_fitted_frame_the_client_shows(dump):
-    collection = player(dump)
+def test_every_blender_frame_of_the_bone_walk_poses_the_fitted_frame_the_client_shows(cache):
+    collection = player(cache)
     assert appearance_clip.bake_clip_to_rig(collection, CLIP) == 8
     fitted = fitted_clip(collection, POSE, CLIP)
     shown = TIMING[819, "pose"][:49]
@@ -356,9 +356,9 @@ def test_every_blender_frame_of_the_bone_walk_poses_the_fitted_frame_the_client_
 @pytest.mark.parametrize(
     ("clip", "kind", "mode"), [("idle", "female", "pose"), ("run", "male", "pose"), ("loop", "male", "action")]
 )
-def test_sampled_frames_of_other_bone_clips_pose_the_fitted_frame_the_client_shows(dump, clip, kind, mode):
+def test_sampled_frames_of_other_bone_clips_pose_the_fitted_frame_the_client_shows(cache, clip, kind, mode):
     pose = json.loads((CLIPS / f"{clip}/pose-{kind}.json").read_text())
-    collection = player(dump, pose)
+    collection = player(cache, pose)
     appearance_clip.bake_clip_to_rig(collection, CLIPS / clip, action=mode == "action")
     fitted = fitted_clip(collection, pose, CLIPS / clip)
     sequence = {"idle": 808, "run": 824, "loop": 1499}[clip]
@@ -375,8 +375,8 @@ def test_sampled_frames_of_other_bone_clips_pose_the_fitted_frame_the_client_sho
         )
 
 
-def test_blender_frame_0_shows_the_bone_clip_player_at_rest(dump):
-    collection = player(dump)
+def test_blender_frame_0_shows_the_bone_clip_player_at_rest(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     rest = zip(POSE["rest"]["e"], POSE["rest"]["l"], POSE["rest"]["s"], strict=True)
     assert largest_distance(posed_mesh(collection, 0), rest) <= RIG_ROUNDING
@@ -397,8 +397,8 @@ def first_curve(action):
     return action.layers[0].strips[0].channelbags[0].fcurves[0]  # pyrefly: ignore[missing-attribute]
 
 
-def test_the_bone_clip_keys_are_constant_and_the_player_is_not_edited(dump):
-    collection = player(dump)
+def test_the_bone_clip_keys_are_constant_and_the_player_is_not_edited(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     action = clip_action(collection)
     bags = [bag for layer in action.layers for strip in layer.strips for bag in strip.channelbags]  # pyrefly: ignore[missing-attribute]
@@ -407,8 +407,8 @@ def test_the_bone_clip_keys_are_constant_and_the_player_is_not_edited(dump):
     assert not appearance_collection.is_edited(collection)
 
 
-def test_the_clip_is_a_strip_that_plays_from_the_start_frame_and_holds_its_last_pose_after(dump):
-    collection = player(dump)
+def test_the_clip_is_a_strip_that_plays_from_the_start_frame_and_holds_its_last_pose_after(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP, start=10)
     (strip,) = clip_strips(collection)
     assert (strip.frame_start, strip.frame_end, strip.extrapolation) == (10, 59, "HOLD_FORWARD")
@@ -422,8 +422,8 @@ def test_the_clip_is_a_strip_that_plays_from_the_start_frame_and_holds_its_last_
     assert largest_distance(posed_mesh(collection, 70), fitted[shown[47]]) <= RIG_ROUNDING
 
 
-def test_a_gap_between_clips_holds_the_earlier_clips_last_pose(dump):
-    collection = player(dump)
+def test_a_gap_between_clips_holds_the_earlier_clips_last_pose(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     appearance_clip.bake_clip_to_rig(collection, CLIPS / "idle", start=80)
     fitted = fitted_clip(collection, POSE, CLIP)
@@ -432,16 +432,16 @@ def test_a_gap_between_clips_holds_the_earlier_clips_last_pose(dump):
         assert largest_distance(posed_mesh(collection, frame), last) <= RIG_ROUNDING
 
 
-def test_the_bake_keeps_an_empty_track_for_the_users_keys_above_the_clips(dump):
-    collection = player(dump)
+def test_the_bake_keeps_an_empty_track_for_the_users_keys_above_the_clips(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     tracks = appearance_collection.armature_of(collection).animation_data.nla_tracks  # pyrefly: ignore[missing-attribute]
     assert [track.name for track in tracks] == [appearance_clip.CLIP_TRACK, appearance_clip.USER_TRACK]
     assert len(tracks[appearance_clip.USER_TRACK].strips) == 0
 
 
-def test_the_users_keys_add_to_the_clip_pose_so_a_rest_key_leaves_the_clip_playing(dump):
-    collection = player(dump)
+def test_the_users_keys_add_to_the_clip_pose_so_a_rest_key_leaves_the_clip_playing(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     rig = appearance_collection.armature_of(collection)
     animation = rig.animation_data
@@ -468,16 +468,16 @@ def test_the_users_keys_add_to_the_clip_pose_so_a_rest_key_leaves_the_clip_playi
         )
 
 
-def test_baking_bones_again_on_the_same_frame_replaces_the_strip(dump):
-    collection = player(dump)
+def test_baking_bones_again_on_the_same_frame_replaces_the_strip(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     appearance_clip.bake_clip_to_rig(collection, CLIPS / "idle")
     assert list(bpy.data.actions) == [clip_action(collection)]
     assert bpy.context.scene.frame_end == 253  # pyrefly: ignore[missing-attribute]
 
 
-def test_clips_line_up_as_strips_and_an_overlapping_one_is_refused(dump):
-    collection = player(dump)
+def test_clips_line_up_as_strips_and_an_overlapping_one_is_refused(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     with pytest.raises(ValueError, match="over the strip"):
         appearance_clip.bake_clip_to_rig(collection, CLIPS / "idle", start=30)
@@ -487,16 +487,16 @@ def test_clips_line_up_as_strips_and_an_overlapping_one_is_refused(dump):
     assert len(bpy.data.actions) == 2
 
 
-def test_the_bone_bake_refuses_an_edited_player_and_adds_no_action(dump):
-    collection = player(dump)
+def test_the_bone_bake_refuses_an_edited_player_and_adds_no_action(cache):
+    collection = player(cache)
     appearance_collection.mesh_data(collection).vertices[0].co.x += 3
     with pytest.raises(ValueError, match="has edits"):
         appearance_clip.bake_clip_to_rig(collection, CLIP)
     assert len(bpy.data.actions) == 0
 
 
-def test_the_bone_bake_refuses_a_player_in_edit_mode(dump):
-    collection = player(dump)
+def test_the_bone_bake_refuses_a_player_in_edit_mode(cache):
+    collection = player(cache)
     bpy.context.view_layer.objects.active = appearance_collection.armature_of(collection)  # pyrefly: ignore[missing-attribute]
     bpy.ops.object.mode_set(mode="EDIT")
     with pytest.raises(ValueError, match="Edit Mode"):
@@ -504,8 +504,8 @@ def test_the_bone_bake_refuses_a_player_in_edit_mode(dump):
     assert len(bpy.data.actions) == 0
 
 
-def test_the_bone_bake_refuses_a_player_with_clip_shape_keys(dump):
-    collection = player(dump)
+def test_the_bone_bake_refuses_a_player_with_clip_shape_keys(cache):
+    collection = player(cache)
     appearance_clip.bake_clip(collection, CLIP)
     with pytest.raises(ValueError, match="Player has shape keys"):
         appearance_clip.bake_clip_to_rig(collection, CLIP)
@@ -513,24 +513,24 @@ def test_the_bone_bake_refuses_a_player_with_clip_shape_keys(dump):
     assert len(key_blocks(collection)) == 9
 
 
-def test_the_shape_key_bake_refuses_a_player_whose_rig_has_clip_strips(dump):
-    collection = player(dump)
+def test_the_shape_key_bake_refuses_a_player_whose_rig_has_clip_strips(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     with pytest.raises(ValueError, match="NLA strips on RS clips"):
         appearance_clip.bake_clip(collection, CLIP)
     assert appearance_collection.mesh_data(collection).shape_keys is None
 
 
-def test_removing_the_clip_strips_lets_the_shape_key_bake_run(dump):
-    collection = player(dump)
+def test_removing_the_clip_strips_lets_the_shape_key_bake_run(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     animation = appearance_collection.armature_of(collection).animation_data
     animation.nla_tracks.remove(animation.nla_tracks[appearance_clip.CLIP_TRACK])  # pyrefly: ignore[missing-attribute]
     assert appearance_clip.bake_clip(collection, CLIP) == 8
 
 
-def test_the_users_own_action_stays_active_and_is_not_an_edit(dump):
-    collection = player(dump)
+def test_the_users_own_action_stays_active_and_is_not_an_edit(cache):
+    collection = player(cache)
     rig = appearance_collection.armature_of(collection)
     mine = bpy.data.actions.new("wave")
     rig.animation_data_create().action = mine
@@ -540,8 +540,8 @@ def test_the_users_own_action_stays_active_and_is_not_an_edit(dump):
     assert len(clip_strips(collection)) == 1
 
 
-def test_a_failed_bone_bake_keeps_the_previous_clip_and_leaves_no_new_action(dump, monkeypatch):
-    collection = player(dump)
+def test_a_failed_bone_bake_keeps_the_previous_clip_and_leaves_no_new_action(cache, monkeypatch):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     before = clip_action(collection)
     broken_last_frame(monkeypatch)
@@ -551,8 +551,8 @@ def test_a_failed_bone_bake_keeps_the_previous_clip_and_leaves_no_new_action(dum
     assert clip_action(collection) == before
 
 
-def test_a_failure_while_writing_keys_removes_the_half_made_action(dump, monkeypatch):
-    collection = player(dump)
+def test_a_failure_while_writing_keys_removes_the_half_made_action(cache, monkeypatch):
+    collection = player(cache)
 
     def broken(*args):
         raise RuntimeError("stopped while writing keys")
@@ -564,8 +564,8 @@ def test_a_failure_while_writing_keys_removes_the_half_made_action(dump, monkeyp
     assert clip_strips(collection) == []
 
 
-def test_the_operator_bakes_bones_from_the_current_frame(dump):
-    collection = player(dump)
+def test_the_operator_bakes_bones_from_the_current_frame(cache):
+    collection = player(cache)
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(collection)  # pyrefly: ignore[missing-attribute]
     bpy.context.scene.frame_set(20)  # pyrefly: ignore[missing-attribute]
     assert bpy.ops.rsps.bake_clip(directory=str(CLIP), method="BONES") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
@@ -573,15 +573,15 @@ def test_the_operator_bakes_bones_from_the_current_frame(dump):
     assert appearance_collection.mesh_data(collection).shape_keys is None
 
 
-def test_posing_a_bone_of_a_player_without_a_clip_counts_as_edited(dump):
-    collection = player(dump)
+def test_posing_a_bone_of_a_player_without_a_clip_counts_as_edited(cache):
+    collection = player(cache)
     rig = appearance_collection.armature_of(collection)
     rig.pose.bones[0].location.x += 2  # pyrefly: ignore[missing-attribute]
     assert appearance_collection.is_edited(collection)
 
 
-def test_a_bone_clip_player_is_not_edited_on_another_frame_but_is_after_a_key_moves(dump):
-    collection = player(dump)
+def test_a_bone_clip_player_is_not_edited_on_another_frame_but_is_after_a_key_moves(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     bpy.context.scene.frame_set(5)  # pyrefly: ignore[missing-attribute]
     assert not appearance_collection.is_edited(collection)
@@ -589,16 +589,16 @@ def test_a_bone_clip_player_is_not_edited_on_another_frame_but_is_after_a_key_mo
     assert appearance_collection.is_edited(collection)
 
 
-def test_a_bone_bake_records_its_clip_on_the_strips_action(dump):
-    collection = player(dump)
+def test_a_bone_bake_records_its_clip_on_the_strips_action(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP, action=True, start=7)
     record = json.loads(clip_action(collection)[appearance_collection.CLIP_KEY])
     assert record == {"folder": str(CLIP.resolve()), "method": "BONES", "action": True, "smooth": False}
     assert appearance_clip.recorded_clips(collection) == [(json.dumps(record), 7)]
 
 
-def test_a_second_bone_bake_refuses_a_clip_whose_keys_were_edited(dump):
-    collection = player(dump)
+def test_a_second_bone_bake_refuses_a_clip_whose_keys_were_edited(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     action = clip_action(collection)
     first_curve(action).keyframe_points[2].co.y += 1.0
@@ -615,9 +615,9 @@ needs_cache = pytest.mark.skipif(
 
 
 @needs_cache
-def test_the_operator_bakes_the_chosen_clip_from_the_cache_and_records_it(dump, monkeypatch):
+def test_the_operator_bakes_the_chosen_clip_from_the_cache_and_records_it(cache, monkeypatch):
     monkeypatch.setattr(appearance_clip_cache.preferences, "cache_folder", lambda: SNAPSHOT_430)
-    collection = player(dump)
+    collection = player(cache)
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(collection)  # pyrefly: ignore[missing-attribute]
     assert bpy.ops.rsps.bake_clip(sequence=819) == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
     keys = key_blocks(collection)
@@ -629,24 +629,24 @@ def test_the_operator_bakes_the_chosen_clip_from_the_cache_and_records_it(dump, 
 
 
 @needs_cache
-def test_a_recorded_cache_clip_bakes_again(dump):
-    collection = player(dump)
+def test_a_recorded_cache_clip_bakes_again(cache):
+    collection = player(cache)
     record = {"cache": str(SNAPSHOT_430), "sequence": 808, "method": "BONES", "action": False}
     assert appearance_clip.bake_recorded(collection, json.dumps(record)) == 12
 
 
-def test_baking_from_the_cache_without_a_cache_folder_says_so(dump, monkeypatch):
+def test_baking_from_the_cache_without_a_cache_folder_says_so(cache, monkeypatch):
     monkeypatch.setattr(appearance_clip_cache.preferences, "cache_folder", lambda: None)
-    collection = player(dump)
+    collection = player(cache)
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(collection)  # pyrefly: ignore[missing-attribute]
     with pytest.raises(RuntimeError, match="Set the cache folder"):
         bpy.ops.rsps.bake_clip(sequence=819)  # pyrefly: ignore[missing-attribute]
 
 
-def test_a_player_with_clips_in_a_scene_at_another_frame_rate_is_flagged_until_one_click_sets_50(dump):
+def test_a_player_with_clips_in_a_scene_at_another_frame_rate_is_flagged_until_one_click_sets_50(cache):
     scene = bpy.context.scene
     assert scene is not None
-    collection = player(dump)
+    collection = player(cache)
     scene.render.fps, scene.render.fps_base = 24, 1.0
     assert not appearance_clip.plays_at_another_rate(scene, collection)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
@@ -658,10 +658,10 @@ def test_a_player_with_clips_in_a_scene_at_another_frame_rate_is_flagged_until_o
     assert not appearance_clip.plays_at_another_rate(scene, collection)
 
 
-def test_the_frame_rate_check_reads_the_rate_so_100_fps_on_base_2_is_50_and_set_50_fps_resets_the_base(dump):
+def test_the_frame_rate_check_reads_the_rate_so_100_fps_on_base_2_is_50_and_set_50_fps_resets_the_base(cache):
     scene = bpy.context.scene
     assert scene is not None
-    collection = player(dump)
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     scene.render.fps, scene.render.fps_base = 100, 2.0
     assert not appearance_clip.plays_at_another_rate(scene, collection)
@@ -673,7 +673,7 @@ def test_the_frame_rate_check_reads_the_rate_so_100_fps_on_base_2_is_50_and_set_
     assert (scene.render.fps, scene.render.fps_base) == (50, 1.0)
 
 
-def test_picking_a_clip_stores_its_sequence_and_the_panel_names_it(dump):
+def test_picking_a_clip_stores_its_sequence_and_the_panel_names_it(cache):
     assert bpy.ops.rsps.pick_clip(clip="808") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
     assert bpy.context.scene.rs_appearance.clip_sequence == 808  # pyrefly: ignore[missing-attribute]
     assert appearance_clip_cache.clip_label(808) == "HUMAN_READY (808)"
@@ -688,8 +688,8 @@ def wielding(collection, item_id):
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(collection)  # pyrefly: ignore[missing-attribute]
 
 
-def test_the_weapon_clip_buttons_choose_the_worn_weapons_clips_and_how_they_play(dump):
-    wielding(player(dump), 4151)
+def test_the_weapon_clip_buttons_choose_the_worn_weapons_clips_and_how_they_play(cache):
+    wielding(player(cache), 4151)
     props = bpy.context.scene.rs_appearance  # pyrefly: ignore[missing-attribute]
     for choice, clip, play_as in (
         ("WALK", 1660, "POSE"),
@@ -705,8 +705,8 @@ def test_the_weapon_clip_buttons_choose_the_worn_weapons_clips_and_how_they_play
     assert props.clip_sequence == 1659
 
 
-def test_a_weapon_no_table_lists_gives_the_unarmed_clips_and_is_named_for_the_note(dump):
-    collection = player(dump)
+def test_a_weapon_no_table_lists_gives_the_unarmed_clips_and_is_named_for_the_note(cache):
+    collection = player(cache)
     wielding(collection, 4162)
     assert appearance_clip.unlisted_weapon(collection) == 4162
     assert bpy.ops.rsps.pick_weapon_clip(choice="WALK") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
@@ -718,8 +718,8 @@ def test_a_weapon_no_table_lists_gives_the_unarmed_clips_and_is_named_for_the_no
     assert appearance_clip.worn_weapon_clips(collection) == appearance_clip.weapon_clip_table().unarmed
 
 
-def test_the_weapon_clip_buttons_need_an_active_player(dump):
-    player(dump)
+def test_the_weapon_clip_buttons_need_an_active_player(cache):
+    player(cache)
     bpy.context.view_layer.objects.active = None  # pyrefly: ignore[missing-attribute]
     assert not bpy.ops.rsps.pick_weapon_clip.poll()  # pyrefly: ignore[missing-attribute]
 
@@ -728,12 +728,12 @@ FADE_CLIP = CLIPS / "alpha-1994"
 FADE_POSE = json.loads((FADE_CLIP / "pose-male.json").read_text())
 
 
-def kept_faces(dump, pose):
+def kept_faces(cache, pose):
     """The model face behind each polygon: build_mesh leaves out faces that repeat a vertex or that another hides."""
     from rsps_toolkit.formats.face_order import visible_faces
 
     preset = AppearancePreset(149, 430, pose["female"], tuple(pose["equipment"]), tuple(pose["colours"]))
-    model, _ = appearance_preview.assemble_lit(preset, dump)
+    model, _ = appearance_preview.assemble_lit(preset, cache)
     visible = set(visible_faces(model))
     return [i for i, face in enumerate(model.faces) if len(set(face)) == 3 and i in visible]
 
@@ -772,10 +772,10 @@ def polygon_alphas(collection, owner):
     return alphas
 
 
-def test_a_shape_key_bake_fades_faces_as_the_client_does(dump):
-    collection = player(dump, FADE_POSE)
+def test_a_shape_key_bake_fades_faces_as_the_client_does(cache):
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip(collection, FADE_CLIP)
-    kept = kept_faces(dump, FADE_POSE)
+    kept = kept_faces(cache, FADE_POSE)
     materials = fade_materials(collection)
     assert len(materials) == len({m[appearance_fades.FADE_KEY] for m in materials}) > 0
     key = appearance_collection.mesh_data(collection).shape_keys
@@ -791,19 +791,19 @@ def test_a_shape_key_bake_fades_faces_as_the_client_does(dump):
 
 
 @pytest.mark.parametrize("bake", [appearance_clip.bake_clip, appearance_clip.bake_clip_to_rig])
-def test_a_clips_fade_materials_show_only_the_front_of_faces(dump, bake):
+def test_a_clips_fade_materials_show_only_the_front_of_faces(cache, bake):
     # The user chose that players cull back faces as the client does, fade materials included (issue 28, decision 1,
     # 2026-11-10).
-    collection = player(dump, FADE_POSE)
+    collection = player(cache, FADE_POSE)
     bake(collection, FADE_CLIP)
     materials = fade_materials(collection)
     assert materials and all(material.use_backface_culling for material in materials)
 
 
-def test_a_bone_bake_turns_culling_on_for_the_fade_materials_it_reuses(dump):
+def test_a_bone_bake_turns_culling_on_for_the_fade_materials_it_reuses(cache):
     # The user chose that a bake also makes a fade material it reuses cull, so one made before players culled gets it
     # at the next bake (issue 28, decision 4, 2026-11-10).
-    collection = player(dump, FADE_POSE)
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=10)
     materials = fade_materials(collection)
     for material in materials:
@@ -813,25 +813,25 @@ def test_a_bone_bake_turns_culling_on_for_the_fade_materials_it_reuses(dump):
     assert all(material.use_backface_culling for material in materials)
 
 
-def test_a_bone_clip_keys_its_fades_in_the_strip_and_holds_the_last_after_it(dump):
-    collection = player(dump, FADE_POSE)
+def test_a_bone_clip_keys_its_fades_in_the_strip_and_holds_the_last_after_it(cache):
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=10)
     rig = appearance_collection.armature_of(collection)
     shown = shown_frames(FADE_CLIP)
     last = len(shown) - 1
     bpy.context.scene.frame_set(10 + last)  # pyrefly: ignore[missing-attribute]
-    assert polygon_alphas(collection, rig) == client_alphas(shown[last], kept_faces(dump, FADE_POSE))
+    assert polygon_alphas(collection, rig) == client_alphas(shown[last], kept_faces(cache, FADE_POSE))
     bpy.context.scene.frame_set(10 + last + 5)  # pyrefly: ignore[missing-attribute]
-    assert polygon_alphas(collection, rig) == client_alphas(shown[last], kept_faces(dump, FADE_POSE))
+    assert polygon_alphas(collection, rig) == client_alphas(shown[last], kept_faces(cache, FADE_POSE))
     bpy.context.scene.frame_set(5)  # pyrefly: ignore[missing-attribute]
     assert set(polygon_alphas(collection, rig)) == {0}
     assert not appearance_collection.is_edited(collection)
 
 
-def test_a_duplicated_player_fades_with_its_own_materials_driven_by_its_own_rig(dump):
-    collection = player(dump, FADE_POSE)
+def test_a_duplicated_player_fades_with_its_own_materials_driven_by_its_own_rig(cache):
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=10)
-    copy = appearance_collection.duplicate_player(collection, str(dump))
+    copy = appearance_collection.duplicate_player(collection, str(cache))
     rig, copy_rig = appearance_collection.armature_of(collection), appearance_collection.armature_of(copy)
     ours = {material for obj in appearance_collection.parts(copy) for material in obj.data.materials}  # pyrefly: ignore[missing-attribute]
     theirs = {material for obj in appearance_collection.parts(collection) for material in obj.data.materials}  # pyrefly: ignore[missing-attribute]
@@ -844,8 +844,8 @@ def test_a_duplicated_player_fades_with_its_own_materials_driven_by_its_own_rig(
     assert polygon_alphas(copy, copy_rig) == polygon_alphas(collection, rig)
 
 
-def test_a_saved_player_appends_into_a_file_with_players_as_an_unedited_player_that_plays_its_clips(dump, tmp_path):
-    collection = player(dump, FADE_POSE)
+def test_a_saved_player_appends_into_a_file_with_players_as_an_unedited_player_that_plays_its_clips(cache, tmp_path):
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=10)
     path = tmp_path / "saved.blend"
     appearance_files.save_player(collection, path)
@@ -878,8 +878,8 @@ def append_player(path, name):
     return appended
 
 
-def test_a_saved_player_appended_twice_gives_two_unedited_players(dump, tmp_path):
-    collection = player(dump, FADE_POSE)
+def test_a_saved_player_appended_twice_gives_two_unedited_players(cache, tmp_path):
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=10)
     path = tmp_path / "saved.blend"
     appearance_files.save_player(collection, path)
@@ -888,8 +888,10 @@ def test_a_saved_player_appended_twice_gives_two_unedited_players(dump, tmp_path
     assert not appearance_collection.is_edited(first) and not appearance_collection.is_edited(second)
 
 
-def test_a_saved_player_appended_into_a_file_without_players_is_an_unedited_player_that_plays_its_clips(dump, tmp_path):
-    collection = player(dump, FADE_POSE)
+def test_a_saved_player_appended_into_a_file_without_players_is_an_unedited_player_that_plays_its_clips(
+    cache, tmp_path
+):
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=10)
     name = collection.name
     path = tmp_path / "saved.blend"
@@ -905,8 +907,8 @@ def test_a_saved_player_appended_into_a_file_without_players_is_an_unedited_play
     assert [strip.frame_start for strip in clips] == [10]
 
 
-def test_a_numbered_fade_material_reads_as_its_original_even_when_its_nodes_differ(dump):
-    collection = player(dump, FADE_POSE)
+def test_a_numbered_fade_material_reads_as_its_original_even_when_its_nodes_differ(cache):
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip_to_rig(collection, FADE_CLIP)
     mesh, index, fade = next(
         (obj.data, index, material)
@@ -924,8 +926,8 @@ def test_a_numbered_fade_material_reads_as_its_original_even_when_its_nodes_diff
     assert not appearance_collection.is_edited(collection)
 
 
-def test_a_clip_without_fades_and_a_player_built_without_face_attributes_get_no_fade_material(dump):
-    collection = player(dump, FADE_POSE)
+def test_a_clip_without_fades_and_a_player_built_without_face_attributes_get_no_fade_material(cache):
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip(collection, CLIP)
     assert fade_materials(collection) == []
     mesh = appearance_collection.mesh_data(collection)
@@ -935,8 +937,8 @@ def test_a_clip_without_fades_and_a_player_built_without_face_attributes_get_no_
     assert fade_materials(collection) == []
 
 
-def test_baking_a_clip_without_fades_over_one_with_them_drops_the_fade_material(dump):
-    collection = player(dump, FADE_POSE)
+def test_baking_a_clip_without_fades_over_one_with_them_drops_the_fade_material(cache):
+    collection = player(cache, FADE_POSE)
     before = all_fade_materials()
     appearance_clip.bake_clip(collection, FADE_CLIP)
     appearance_clip.bake_clip(collection, CLIP)
@@ -944,17 +946,17 @@ def test_baking_a_clip_without_fades_over_one_with_them_drops_the_fade_material(
     assert all_fade_materials() == before
 
 
-def test_removing_a_player_removes_its_fade_materials(dump):
+def test_removing_a_player_removes_its_fade_materials(cache):
     before = all_fade_materials()
-    collection = player(dump, FADE_POSE)
+    collection = player(cache, FADE_POSE)
     appearance_clip.bake_clip_to_rig(collection, FADE_CLIP)
     assert len(all_fade_materials()) > len(before)
     appearance_collection.remove_collection(collection)
     assert all_fade_materials() == before
 
 
-def test_a_later_clip_extends_the_scene_range_but_never_shortens_it(dump):
-    collection = player(dump)
+def test_a_later_clip_extends_the_scene_range_but_never_shortens_it(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     bpy.context.scene.frame_end = 400  # pyrefly: ignore[missing-attribute]
     appearance_clip.bake_clip_to_rig(collection, CLIPS / "run", start=60)
@@ -963,8 +965,8 @@ def test_a_later_clip_extends_the_scene_range_but_never_shortens_it(dump):
     assert bpy.context.scene.frame_end == 552  # pyrefly: ignore[missing-attribute]
 
 
-def test_a_smooth_bone_clip_meets_each_game_frame_on_its_first_tick_and_blends_between(dump):
-    collection = player(dump)
+def test_a_smooth_bone_clip_meets_each_game_frame_on_its_first_tick_and_blends_between(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP, smooth=True)
     fitted = fitted_clip(collection, POSE, CLIP)
     shown = shown_frames(CLIP)
@@ -981,8 +983,8 @@ def test_a_smooth_bone_clip_meets_each_game_frame_on_its_first_tick_and_blends_b
     assert not appearance_collection.is_edited(collection)
 
 
-def test_the_joints_carry_the_walk_and_label_bones_keep_only_a_small_leftover(dump):
-    collection = player(dump)
+def test_the_joints_carry_the_walk_and_label_bones_keep_only_a_small_leftover(cache):
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     rig = appearance_collection.armature_of(collection)
     joint_turns, leftovers = [], []
@@ -997,8 +999,8 @@ def test_the_joints_carry_the_walk_and_label_bones_keep_only_a_small_leftover(du
     assert max(leftovers) < 12 and sum(leftovers) / len(leftovers) < 2
 
 
-def test_the_bone_bake_refuses_a_player_built_before_joint_bones(dump):
-    collection = player(dump)
+def test_the_bone_bake_refuses_a_player_built_before_joint_bones(cache):
+    collection = player(cache)
     del appearance_collection.armature_of(collection)[appearance_collection.JOINT_RIG_KEY]
     with pytest.raises(ValueError, match="before players had joint bones"):
         appearance_clip.bake_clip_to_rig(collection, CLIP)
@@ -1007,14 +1009,14 @@ def test_the_bone_bake_refuses_a_player_built_before_joint_bones(dump):
 ARMED = (0, 0, 0, 512 + 1333, 274, 512 + 1201, 282, 292, 256, 289, 298, 266)
 
 
-def armed_player(dump):
+def armed_player(cache):
     preset = AppearancePreset(149, 430, False, ARMED, (0,) * 5)
-    body, shading, slots = appearance_preview.assemble_parts(preset, dump)
+    body, shading, slots = appearance_preview.assemble_parts(preset, cache)
     return body, appearance_collection.build_collection(body, shading, preset, "Player", slots=slots)
 
 
-def test_a_shape_key_bake_poses_the_weapon_and_shield_with_the_body_as_one_model(armed_dump):
-    body, collection = armed_player(armed_dump)
+def test_a_shape_key_bake_poses_the_weapon_and_shield_with_the_body_as_one_model(armed_cache):
+    body, collection = armed_player(armed_cache)
     assert body.vertex_skins is not None
     appearance_clip.bake_clip(collection, CLIP)
     posed = pose_vertices(tuple(body.vertices), tuple(body.vertex_skins), CLIP)
@@ -1031,8 +1033,8 @@ def test_a_shape_key_bake_poses_the_weapon_and_shield_with_the_body_as_one_model
 
 
 @pytest.mark.parametrize("moved", [False, True])
-def test_a_bone_bake_moves_the_weapon_and_shield_with_the_body_as_one_model(armed_dump, moved):
-    body, collection = armed_player(armed_dump)
+def test_a_bone_bake_moves_the_weapon_and_shield_with_the_body_as_one_model(armed_cache, moved):
+    body, collection = armed_player(armed_cache)
     if moved:
         move_whole(collection)
     assert body.vertex_skins is not None
@@ -1054,12 +1056,12 @@ def test_a_bone_bake_moves_the_weapon_and_shield_with_the_body_as_one_model(arme
             assert largest_distance(moved, [fitted[index][v] for v in model_vertex]) <= RIG_ROUNDING
 
 
-def held_model(dump, clip):
+def held_model(cache, clip):
     """The client's held variant for the armed player while the recorded clip plays, assembled as the bake does."""
     sequence = read_sequence(CLIPS / clip)
     preset = AppearancePreset(149, 430, False, ARMED, (0,) * 5)
     equipment = held_equipment(ARMED, sequence.left_hand_item, sequence.right_hand_item)
-    return CacheProfile(dump).assemble_slots(preset, equipment)[0]
+    return CacheProfile(cache).assemble_slots(preset, equipment)[0]
 
 
 def shown(obj, frame):
@@ -1073,11 +1075,11 @@ def by_name(collection):
 
 
 @pytest.mark.parametrize("clip", ["held-717", "held-1365", "held-909"])
-def test_a_shape_key_action_bake_shows_the_held_items_posed_as_the_client_does(armed_dump, clip):
-    _, collection = armed_player(armed_dump)
+def test_a_shape_key_action_bake_shows_the_held_items_posed_as_the_client_does(armed_cache, clip):
+    _, collection = armed_player(armed_cache)
     client = json.loads((CLIPS / clip / "pose-male.json").read_text())
-    model = held_model(armed_dump, clip)
-    assert appearance_clip.bake_clip(collection, CLIPS / clip, action=True, dump_folder=str(armed_dump)) > 0
+    model = held_model(armed_cache, clip)
+    assert appearance_clip.bake_clip(collection, CLIPS / clip, action=True, cache_folder=str(armed_cache)) > 0
     objects = by_name(collection)
     held = {"held-717": [], "held-1365": ["Steel axe"], "held-909": ["Charcoal", "Papyrus"]}[clip]
     assert sorted(objects) == sorted(["Body", "Weapon", "Shield", *held])
@@ -1105,11 +1107,11 @@ def bone_names(collection):
     return sorted(bone.name for bone in appearance_collection.armature_data(collection).bones)
 
 
-def test_posing_a_held_clip_gives_the_clients_frames_and_adds_its_objects_only_with_the_parts(armed_dump):
-    _, collection = armed_player(armed_dump)
+def test_posing_a_held_clip_gives_the_clients_frames_and_adds_its_objects_only_with_the_parts(armed_cache):
+    _, collection = armed_player(armed_cache)
     client = json.loads((CLIPS / "held-1365" / "pose-male.json").read_text())
     before = (set(bpy.data.objects), set(bpy.data.meshes), bone_names(collection))
-    posed = appearance_pose.pose_player(collection, CLIPS / "held-1365", action=True, dump_folder=str(armed_dump))
+    posed = appearance_pose.pose_player(collection, CLIPS / "held-1365", action=True, cache_folder=str(armed_cache))
     assert [list(frame.vertices) for frame in posed.frames] == [
         list(zip(frame["e"], frame["l"], frame["s"], strict=True)) for frame in client["frames"]
     ]
@@ -1121,7 +1123,7 @@ def test_posing_a_held_clip_gives_the_clients_frames_and_adds_its_objects_only_w
 LONE_LABEL = 250
 
 
-def axe_with_a_lone_label(dump):
+def axe_with_a_lone_label(cache):
     """Give the Steel axe's model a label the armed player lacks, so a bake that holds it also adds a label bone."""
 
     def relabel(parts):
@@ -1129,7 +1131,7 @@ def axe_with_a_lone_label(dump):
         model.vertex_skins = [LONE_LABEL] * len(model.vertices)
         parts["models"][510] = encode(model)
 
-    rewrite_cache(dump, relabel)
+    rewrite_cache(cache, relabel)
 
 
 @pytest.mark.parametrize(
@@ -1141,13 +1143,13 @@ def axe_with_a_lone_label(dump):
     ],
 )
 def test_a_held_bake_that_fails_after_making_the_held_items_leaves_the_file_as_it_was(
-    armed_dump, monkeypatch, bake, module, step
+    armed_cache, monkeypatch, bake, module, step
 ):
     # The user chose that a bake failing after it made the held items leaves the file's objects, meshes, bones and
     # actions as they were, and that the test forces the failure at the step after them, since no real input is known
     # to fail there (issue 13, decisions 1, 2, 4 and 6, 2026-11-10).
-    axe_with_a_lone_label(armed_dump)
-    _, collection = armed_player(armed_dump)
+    axe_with_a_lone_label(armed_cache)
+    _, collection = armed_player(armed_cache)
 
     def state():
         return set(bpy.data.objects), set(bpy.data.meshes), bone_names(collection), set(bpy.data.actions)
@@ -1160,14 +1162,14 @@ def test_a_held_bake_that_fails_after_making_the_held_items_leaves_the_file_as_i
     before = state()
     monkeypatch.setattr(module, step, fail)
     with pytest.raises(ValueError, match="forced failure"):
-        bake(collection, CLIPS / "held-1365", action=True, dump_folder=str(armed_dump))
+        bake(collection, CLIPS / "held-1365", action=True, cache_folder=str(armed_cache))
     assert state() == before
 
 
-def test_a_clip_that_ends_where_the_next_strip_starts_bakes_beside_it(dump):
+def test_a_clip_that_ends_where_the_next_strip_starts_bakes_beside_it(cache):
     # The user chose that a clip baked to end exactly where another strip on RS clips starts bakes fine (issue 13,
     # decision 3, 2026-11-10).
-    collection = player(dump)
+    collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP, start=500)
     idle = CLIPS / "idle"
     before = 500 - len(shown_frames(idle))
@@ -1179,30 +1181,30 @@ def test_a_clip_that_ends_where_the_next_strip_starts_bakes_beside_it(dump):
     ]
 
 
-def test_a_clip_played_as_a_pose_never_changes_the_hands(armed_dump):
-    _, collection = armed_player(armed_dump)
-    appearance_clip.bake_clip(collection, CLIPS / "held-1365", dump_folder=str(armed_dump))
+def test_a_clip_played_as_a_pose_never_changes_the_hands(armed_cache):
+    _, collection = armed_player(armed_cache)
+    appearance_clip.bake_clip(collection, CLIPS / "held-1365", cache_folder=str(armed_cache))
     objects = by_name(collection)
     assert sorted(objects) == ["Body", "Shield", "Weapon"]
     assert shown(objects["Weapon"], 1) and shown(objects["Shield"], 1)
 
 
 @pytest.mark.parametrize("moved", [False, True])
-def test_a_bone_action_bake_moves_the_held_items_with_the_body_from_its_strip_on(armed_dump, moved):
-    _, collection = armed_player(armed_dump)
+def test_a_bone_action_bake_moves_the_held_items_with_the_body_from_its_strip_on(armed_cache, moved):
+    _, collection = armed_player(armed_cache)
     if moved:
         move_whole(collection)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
     start = 60
     appearance_clip.bake_clip_to_rig(
-        collection, CLIPS / "held-909", action=True, start=start, dump_folder=str(armed_dump)
+        collection, CLIPS / "held-909", action=True, start=start, cache_folder=str(armed_cache)
     )
     objects = by_name(collection)
     assert sorted(objects) == ["Body", "Charcoal", "Papyrus", "Shield", "Weapon"]
     for frame, held_shown in ((start - 1, False), (start, True), (start + 400, True)):
         assert shown(objects["Weapon"], frame) == shown(objects["Shield"], frame) == (not held_shown)
         assert shown(objects["Charcoal"], frame) == shown(objects["Papyrus"], frame) == held_shown
-    model = held_model(armed_dump, "held-909")
+    model = held_model(armed_cache, "held-909")
     assert model.vertex_skins is not None
     rest, labels = tuple(model.vertices), tuple(model.vertex_skins)
     fitted = [

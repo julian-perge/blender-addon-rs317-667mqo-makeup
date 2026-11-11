@@ -21,22 +21,22 @@ def preset():
     return AppearancePreset(149, 430, False, tuple(case["equipment"]), tuple(case["colours"]))
 
 
-def build(dump):
+def build(cache):
     source = preset()
-    body, shading, slots = appearance_preview.assemble_parts(source, dump)
+    body, shading, slots = appearance_preview.assemble_parts(source, cache)
     return source, body, appearance_collection.build_collection(body, shading, source, "Player", slots=slots)
 
 
-def test_collection_holds_a_mesh_and_an_armature_and_the_recipe(dump):
-    source, body, collection = build(dump)
+def test_collection_holds_a_mesh_and_an_armature_and_the_recipe(cache):
+    source, body, collection = build(cache)
     kinds = sorted(obj.type for obj in collection.objects)
     assert kinds == ["ARMATURE", "MESH"]
     assert loads_preset(collection[appearance_preview.PRESET_KEY]) == source
     assert collection.name in bpy.context.scene.collection.children  # pyrefly: ignore[missing-attribute]
 
 
-def test_bones_are_one_per_label_in_blender_axes(dump):
-    _, body, collection = build(dump)
+def test_bones_are_one_per_label_in_blender_axes(cache):
+    _, body, collection = build(cache)
     bones = sorted(
         (b for b in appearance_collection.armature_data(collection).bones if b.name.startswith("label_")),
         key=lambda b: int(b.name.removeprefix("label_")),
@@ -50,8 +50,8 @@ def test_bones_are_one_per_label_in_blender_axes(dump):
     assert bone.tail_local.z > bone.head_local.z
 
 
-def test_every_vertex_has_weight_one_on_exactly_its_label(dump):
-    _, body, collection = build(dump)
+def test_every_vertex_has_weight_one_on_exactly_its_label(cache):
+    _, body, collection = build(cache)
     mesh_obj = appearance_collection.mesh_of(collection)
     assert body.vertex_skins is not None
     for vertex, label in zip(appearance_collection.mesh_data(collection).vertices, body.vertex_skins, strict=True):
@@ -59,8 +59,8 @@ def test_every_vertex_has_weight_one_on_exactly_its_label(dump):
         assert weights == {f"label_{label}": 1.0}
 
 
-def test_mesh_is_bound_to_the_armature(dump):
-    _, _, collection = build(dump)
+def test_mesh_is_bound_to_the_armature(cache):
+    _, _, collection = build(cache)
     mesh_obj = appearance_collection.mesh_of(collection)
     armature_obj = appearance_collection.armature_of(collection)
     assert mesh_obj.parent == armature_obj
@@ -68,19 +68,19 @@ def test_mesh_is_bound_to_the_armature(dump):
     assert len(modifiers) == 1 and modifiers[0].object == armature_obj  # pyrefly: ignore[missing-attribute]
 
 
-def test_a_fresh_build_is_not_edited(dump):
-    _, _, collection = build(dump)
+def test_a_fresh_build_is_not_edited(cache):
+    _, _, collection = build(cache)
     assert not appearance_collection.is_edited(collection)
 
 
-def test_moving_a_vertex_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_moving_a_vertex_counts_as_edited(cache):
+    _, _, collection = build(cache)
     appearance_collection.mesh_data(collection).vertices[0].co.x += 5
     assert appearance_collection.is_edited(collection)
 
 
-def test_moving_a_bone_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_moving_a_bone_counts_as_edited(cache):
+    _, _, collection = build(cache)
     armature_obj = appearance_collection.armature_of(collection)
     layer = bpy.context.view_layer
     assert layer is not None
@@ -91,22 +91,22 @@ def test_moving_a_bone_counts_as_edited(dump):
     assert appearance_collection.is_edited(collection)
 
 
-def test_changing_a_weight_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_changing_a_weight_counts_as_edited(cache):
+    _, _, collection = build(cache)
     mesh_obj = appearance_collection.mesh_of(collection)
     group = mesh_obj.vertex_groups[0]
     group.add([0], 0.5, "REPLACE")
     assert appearance_collection.is_edited(collection)
 
 
-def test_a_collection_without_a_build_record_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_a_collection_without_a_build_record_counts_as_edited(cache):
+    _, _, collection = build(cache)
     del collection[appearance_collection.HASH_KEY]
     assert appearance_collection.is_edited(collection)
 
 
-def test_deleting_a_face_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_deleting_a_face_counts_as_edited(cache):
+    _, _, collection = build(cache)
     mesh = appearance_collection.mesh_data(collection)
     bm = bmesh.new()
     bm.from_mesh(mesh)
@@ -124,8 +124,8 @@ def edit(obj):
     bpy.ops.object.mode_set(mode="EDIT")
 
 
-def test_moving_a_vertex_in_edit_mode_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_moving_a_vertex_in_edit_mode_counts_as_edited(cache):
+    _, _, collection = build(cache)
     obj = appearance_collection.mesh_of(collection)
     edit(obj)
     mesh = bmesh.from_edit_mesh(obj.data)  # pyrefly: ignore[bad-argument-type]
@@ -135,8 +135,8 @@ def test_moving_a_vertex_in_edit_mode_counts_as_edited(dump):
     assert appearance_collection.is_edited(collection)
 
 
-def test_moving_a_bone_in_edit_mode_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_moving_a_bone_in_edit_mode_counts_as_edited(cache):
+    _, _, collection = build(cache)
     edit(appearance_collection.armature_of(collection))
     appearance_collection.armature_data(collection).edit_bones[0].head.x += 3
     assert appearance_collection.is_edited(collection)
@@ -147,16 +147,16 @@ def edit_bones(collection):
     return appearance_collection.armature_data(collection).edit_bones
 
 
-def test_parenting_a_bone_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_parenting_a_bone_counts_as_edited(cache):
+    _, _, collection = build(cache)
     bones = edit_bones(collection)
     bones["label_1"].parent = bones["label_0"]
     bpy.ops.object.mode_set(mode="OBJECT")
     assert appearance_collection.is_edited(collection)
 
 
-def test_rolling_a_bone_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_rolling_a_bone_counts_as_edited(cache):
+    _, _, collection = build(cache)
     edit_bones(collection)[2].roll = 1.0
     bpy.ops.object.mode_set(mode="OBJECT")
     assert appearance_collection.is_edited(collection)
@@ -168,15 +168,15 @@ def update_layer():
     layer.update()
 
 
-def test_moving_a_part_against_the_rig_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_moving_a_part_against_the_rig_counts_as_edited(cache):
+    _, _, collection = build(cache)
     appearance_collection.mesh_of(collection).location.x += 10
     update_layer()
     assert appearance_collection.is_edited(collection)
 
 
-def test_moving_turning_or_scaling_the_whole_player_is_not_an_edit(dump):
-    _, _, collection = build(dump)
+def test_moving_turning_or_scaling_the_whole_player_is_not_an_edit(cache):
+    _, _, collection = build(cache)
     rig = appearance_collection.armature_of(collection)
     rig.location = (40.0, -12.0, 3.0)
     rig.rotation_euler.z = 1.2
@@ -185,18 +185,18 @@ def test_moving_turning_or_scaling_the_whole_player_is_not_an_edit(dump):
     assert not appearance_collection.is_edited(collection)
 
 
-def test_unparenting_a_part_from_the_rig_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_unparenting_a_part_from_the_rig_counts_as_edited(cache):
+    _, _, collection = build(cache)
     appearance_collection.mesh_of(collection).parent = None
     update_layer()
     assert appearance_collection.is_edited(collection)
 
 
-def test_moving_the_weapon_against_the_rig_counts_as_edited(armed_dump):
+def test_moving_the_weapon_against_the_rig_counts_as_edited(armed_cache):
     source = AppearancePreset(
         149, 430, False, (0, 0, 0, 512 + 1333, 274, 512 + 1201, 282, 292, 256, 289, 298, 266), (0,) * 5
     )
-    body, shading, slots = appearance_preview.assemble_parts(source, armed_dump)
+    body, shading, slots = appearance_preview.assemble_parts(source, armed_cache)
     collection = appearance_collection.build_collection(body, shading, source, "Player", slots=slots)
     (weapon,) = (obj for obj in appearance_collection.parts(collection) if obj.name == "Player Weapon")
     weapon.location.z += 5
@@ -204,28 +204,28 @@ def test_moving_the_weapon_against_the_rig_counts_as_edited(armed_dump):
     assert appearance_collection.is_edited(collection)
 
 
-def test_adding_a_shape_key_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_adding_a_shape_key_counts_as_edited(cache):
+    _, _, collection = build(cache)
     obj = appearance_collection.mesh_of(collection)
     obj.shape_key_add(name="Basis")
     obj.shape_key_add(name="smile")
     assert appearance_collection.is_edited(collection)
 
 
-def test_adding_a_material_slot_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_adding_a_material_slot_counts_as_edited(cache):
+    _, _, collection = build(cache)
     appearance_collection.mesh_data(collection).materials.append(bpy.data.materials.new("Skin"))
     assert appearance_collection.is_edited(collection)
 
 
-def test_replacing_the_material_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_replacing_the_material_counts_as_edited(cache):
+    _, _, collection = build(cache)
     appearance_collection.mesh_data(collection).materials[0] = bpy.data.materials.new("Skin")
     assert appearance_collection.is_edited(collection)
 
 
-def test_a_numbered_copy_of_the_lit_material_counts_as_edited_only_once_its_nodes_differ(dump):
-    _, _, collection = build(dump)
+def test_a_numbered_copy_of_the_lit_material_counts_as_edited_only_once_its_nodes_differ(cache):
+    _, _, collection = build(cache)
     mesh = appearance_collection.mesh_data(collection)
     copy = mesh.materials[0].copy()  # pyrefly: ignore[missing-attribute]
     assert copy.name.startswith(f"{appearance_preview.MATERIAL_NAME}.")
@@ -235,8 +235,8 @@ def test_a_numbered_copy_of_the_lit_material_counts_as_edited_only_once_its_node
     assert appearance_collection.is_edited(collection)
 
 
-def test_a_numbered_copy_of_the_lit_material_whose_image_node_shows_another_image_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_a_numbered_copy_of_the_lit_material_whose_image_node_shows_another_image_counts_as_edited(cache):
+    _, _, collection = build(cache)
     mesh = appearance_collection.mesh_data(collection)
     original = mesh.materials[0]
     assert original is not None
@@ -250,16 +250,16 @@ def test_a_numbered_copy_of_the_lit_material_whose_image_node_shows_another_imag
 
 
 @pytest.mark.parametrize("predates_culling", [False, True])
-def test_building_a_player_makes_the_lit_material_show_only_the_front_of_faces(dump, predates_culling):
+def test_building_a_player_makes_the_lit_material_show_only_the_front_of_faces(cache, predates_culling):
     # The user chose that players cull back faces as the client does, and that Create Player turns culling on again
     # for a lit material made before players culled (issue 28, decisions 1 and 3, 2026-11-10).
     old = bpy.data.materials.get(appearance_preview.MATERIAL_NAME)
     if old is not None:
         bpy.data.materials.remove(old)
     if predates_culling:
-        build(dump)
+        build(cache)
         bpy.data.materials[appearance_preview.MATERIAL_NAME].use_backface_culling = False
-    _, _, collection = build(dump)
+    _, _, collection = build(cache)
     material = appearance_collection.mesh_data(collection).materials[0]
     assert material is not None and material.name == appearance_preview.MATERIAL_NAME
     assert material.use_backface_culling
@@ -275,14 +275,14 @@ def test_showing_the_lit_colours_makes_a_solid_view_draw_only_the_front_of_faces
     assert space.shading.show_backface_culling
 
 
-def test_adding_a_colour_attribute_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_adding_a_colour_attribute_counts_as_edited(cache):
+    _, _, collection = build(cache)
     appearance_collection.mesh_data(collection).color_attributes.new("paint", "BYTE_COLOR", "CORNER")
     assert appearance_collection.is_edited(collection)
 
 
-def test_renaming_the_lit_colour_attribute_counts_as_edited(dump):
-    _, _, collection = build(dump)
+def test_renaming_the_lit_colour_attribute_counts_as_edited(cache):
+    _, _, collection = build(cache)
     appearance_collection.mesh_data(collection).color_attributes[appearance_preview.LIT_ATTRIBUTE].name = "renamed"
     assert appearance_collection.is_edited(collection)
 
@@ -295,8 +295,8 @@ def user_objects(collection):
     return empty, camera
 
 
-def test_removing_a_collection_with_objects_the_add_on_did_not_make_is_refused_and_changes_nothing(dump):
-    _, _, collection = build(dump)
+def test_removing_a_collection_with_objects_the_add_on_did_not_make_is_refused_and_changes_nothing(cache):
+    _, _, collection = build(cache)
     user_objects(collection)
     with pytest.raises(ValueError, match="MyEmpty, MyCamera"):
         appearance_collection.remove_collection(collection)
@@ -304,31 +304,31 @@ def test_removing_a_collection_with_objects_the_add_on_did_not_make_is_refused_a
     assert len(bpy.data.meshes) == 1 and len(bpy.data.armatures) == 1
 
 
-def test_the_notice_of_a_fresh_player_is_empty(dump):
-    _, _, collection = build(dump)
+def test_the_notice_of_a_fresh_player_is_empty(cache):
+    _, _, collection = build(cache)
     assert appearance_collection.notice(collection) is None
 
 
-def test_the_notice_names_edits(dump):
-    _, _, collection = build(dump)
+def test_the_notice_names_edits(cache):
+    _, _, collection = build(cache)
     appearance_collection.mesh_data(collection).vertices[0].co.x += 5
     assert "has edits" in (appearance_collection.notice(collection) or "")
 
 
-def test_the_notice_names_edit_mode(dump):
-    _, _, collection = build(dump)
+def test_the_notice_names_edit_mode(cache):
+    _, _, collection = build(cache)
     edit(appearance_collection.mesh_of(collection))
     assert "Edit Mode" in (appearance_collection.notice(collection) or "")
 
 
-def test_the_notice_of_a_collection_with_two_meshes_is_a_warning_and_does_not_raise(dump):
-    _, _, collection = build(dump)
+def test_the_notice_of_a_collection_with_two_meshes_is_a_warning_and_does_not_raise(cache):
+    _, _, collection = build(cache)
     collection.objects.link(bpy.data.objects.new("Second", appearance_collection.mesh_data(collection).copy()))
     assert "holds 2" in (appearance_collection.notice(collection) or "")
 
 
-def test_player_objects_are_refused_by_static_export_and_others_are_not(dump):
-    _, _, collection = build(dump)
+def test_player_objects_are_refused_by_static_export_and_others_are_not(cache):
+    _, _, collection = build(cache)
     with pytest.raises(ValueError, match="Player, Player_rig"):
         assert_static_exportable(
             [appearance_collection.mesh_of(collection), appearance_collection.armature_of(collection)]
@@ -336,8 +336,8 @@ def test_player_objects_are_refused_by_static_export_and_others_are_not(dump):
     assert_static_exportable([bpy.data.objects.new("Elsewhere", None)])
 
 
-def test_joint_bones_form_the_frame_maps_hierarchy_with_label_bones_under_them(dump):
-    _, body, collection = build(dump)
+def test_joint_bones_form_the_frame_maps_hierarchy_with_label_bones_under_them(cache):
+    _, body, collection = build(cache)
     rig = derive_rig(body)
     bones = appearance_collection.armature_data(collection).bones
     for joint in rig.joints:
@@ -360,10 +360,10 @@ def posed_points(collection):
         evaluated.to_mesh_clear()
 
 
-def test_turning_the_head_joint_moves_labels_1_and_3_about_the_neck_and_nothing_else(dump):
+def test_turning_the_head_joint_moves_labels_1_and_3_about_the_neck_and_nothing_else(cache):
     from mathutils import Matrix, Quaternion
 
-    _, body, collection = build(dump)
+    _, body, collection = build(cache)
     rig = appearance_collection.armature_of(collection)
     rest = posed_points(collection)
     head = rig.pose.bones["head"]  # pyrefly: ignore[missing-attribute]
@@ -380,8 +380,8 @@ def test_turning_the_head_joint_moves_labels_1_and_3_about_the_neck_and_nothing_
         assert (after - expected).length < 1e-3
 
 
-def test_joints_are_shown_and_label_bones_are_kept_in_a_hidden_bone_collection(dump):
-    _, _, collection = build(dump)
+def test_joints_are_shown_and_label_bones_are_kept_in_a_hidden_bone_collection(cache):
+    _, _, collection = build(cache)
     armature = appearance_collection.armature_data(collection)
     joints = armature.collections[appearance_collection.JOINT_COLLECTION]
     labels = armature.collections[appearance_collection.LABEL_COLLECTION]
@@ -393,9 +393,9 @@ def test_joints_are_shown_and_label_bones_are_kept_in_a_hidden_bone_collection(d
 ARMED = (0, 0, 0, 512 + 1333, 274, 512 + 1201, 282, 292, 256, 289, 298, 266)
 
 
-def build_armed(dump):
+def build_armed(cache):
     source = AppearancePreset(149, 430, False, ARMED, (0,) * 5)
-    body, shading, slots = appearance_preview.assemble_parts(source, dump)
+    body, shading, slots = appearance_preview.assemble_parts(source, cache)
     return source, body, shading, appearance_collection.build_collection(body, shading, source, "Player", slots=slots)
 
 
@@ -415,8 +415,8 @@ def corners(obj) -> list[tuple]:
     ]
 
 
-def test_a_worn_weapon_and_shield_are_their_own_objects_moved_by_the_rig(armed_dump):
-    _, _, _, collection = build_armed(armed_dump)
+def test_a_worn_weapon_and_shield_are_their_own_objects_moved_by_the_rig(armed_cache):
+    _, _, _, collection = build_armed(armed_cache)
     rig = appearance_collection.armature_of(collection)
     parts = appearance_collection.parts(collection)
     assert [obj.name for obj in parts] == ["Player", "Player Weapon", "Player Shield"]
@@ -427,16 +427,16 @@ def test_a_worn_weapon_and_shield_are_their_own_objects_moved_by_the_rig(armed_d
     assert not appearance_collection.is_edited(collection)
 
 
-def test_the_parts_together_hold_the_single_meshs_faces_colours_and_labels(armed_dump):
-    _, body, shading, collection = build_armed(armed_dump)
+def test_the_parts_together_hold_the_single_meshs_faces_colours_and_labels(armed_cache):
+    _, body, shading, collection = build_armed(armed_cache)
     whole = bpy.data.objects.new("whole", appearance_preview.build_mesh(body, shading, "whole"))
     expected = sorted(corners(whole))
     assert sorted(face for obj in appearance_collection.parts(collection) for face in corners(obj)) == expected
     assert len(appearance_collection.parts(collection)[1].data.polygons) > 0  # pyrefly: ignore[missing-attribute, bad-argument-type]
 
 
-def test_each_part_vertex_carries_its_merged_vertex_position_and_label(armed_dump):
-    _, body, _, collection = build_armed(armed_dump)
+def test_each_part_vertex_carries_its_merged_vertex_position_and_label(armed_cache):
+    _, body, _, collection = build_armed(armed_cache)
     assert body.vertex_skins is not None
     for obj in appearance_collection.parts(collection):
         model_vertex = appearance_preview.vertex_indices(obj.data)  # pyrefly: ignore[missing-attribute, bad-argument-type]
@@ -448,21 +448,21 @@ def test_each_part_vertex_carries_its_merged_vertex_position_and_label(armed_dum
             ]
 
 
-def test_moving_a_weapon_vertex_counts_as_edited(armed_dump):
-    _, _, _, collection = build_armed(armed_dump)
+def test_moving_a_weapon_vertex_counts_as_edited(armed_cache):
+    _, _, _, collection = build_armed(armed_cache)
     appearance_collection.parts(collection)[1].data.vertices[0].co.x += 5  # pyrefly: ignore[missing-attribute, bad-argument-type]
     assert appearance_collection.is_edited(collection)
 
 
-def test_a_player_without_a_weapon_or_shield_is_one_mesh_with_every_vertex_in_order(dump):
-    _, body, collection = build(dump)
+def test_a_player_without_a_weapon_or_shield_is_one_mesh_with_every_vertex_in_order(cache):
+    _, body, collection = build(cache)
     assert len(appearance_collection.parts(collection)) == 1
     mesh = appearance_collection.mesh_data(collection)
     assert appearance_preview.vertex_indices(mesh) == list(range(len(body.vertices)))
 
 
-def test_a_player_holding_two_rigs_says_to_use_duplicate_player(dump):
-    _, _, collection = build(dump)
+def test_a_player_holding_two_rigs_says_to_use_duplicate_player(cache):
+    _, _, collection = build(cache)
     rig = appearance_collection.armature_of(collection)
     copy = rig.copy()
     collection.objects.link(copy)

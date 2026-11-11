@@ -11,8 +11,8 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "appearance"
 
 
 @pytest.fixture
-def props(monkeypatch, dump):
-    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
+def props(monkeypatch, cache):
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
     cache_profile.clear_shared_profiles()
     for cls in (*appearance_props.classes, *appearance_items.classes):
         bpy.utils.register_class(cls)

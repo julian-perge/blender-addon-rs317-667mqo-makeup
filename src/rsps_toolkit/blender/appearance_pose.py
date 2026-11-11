@@ -1,7 +1,7 @@
 """The model the client poses while a clip plays on a player, and the player's objects that show it.
 
 A clip is posed on the worn model, read back from the player's worn mesh objects. An action sequence with held items
-is posed on the held variant instead, assembled from the dump (`appearance_held`), which is what the client's `hu.l`
+is posed on the held variant instead, assembled from the cache (`appearance_held`), which is what the client's `hu.l`
 builds; `formats.appearance.held_equipment` cites it. Both bakes take their frames from here, so neither knows which
 of the two models a clip uses.
 """
@@ -63,17 +63,17 @@ class PosedPlayer:
 
 
 def pose_player(
-    collection: bpy.types.Collection, clip: ClipSource | Path, *, action: bool = False, dump_folder: str = ""
+    collection: bpy.types.Collection, clip: ClipSource | Path, *, action: bool = False, cache_folder: str = ""
 ) -> PosedPlayer:
     """Pose the model the client shows while the clip plays on the player, changing nothing in the file.
 
-    `dump_folder` overrides the add-on preference for the dump a held variant is assembled from. Raises ValueError
+    `cache_folder` overrides the add-on preference for the cache a held variant is assembled from. Raises ValueError
     for a player whose meshes no longer hold the model as built.
     """
     source = source_of(clip)
     sequence = read_sequence(source)
     held = appearance_held.held_items(sequence, action)
-    variant = None if held is None else appearance_held.variant(collection, held, dump_folder)
+    variant = None if held is None else appearance_held.variant(collection, held, cache_folder)
     if held is None or variant is None:
         vertices, labels, faces, worn = _worn_inputs(appearance_collection.worn_parts(collection))
         frames = pose_vertices(vertices, labels, source, *(faces or ()))
