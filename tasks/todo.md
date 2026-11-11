@@ -4,7 +4,8 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
 
 ## Phase 1: Decoders on committed bytes
 
-- [ ] **T1 Raw fixtures and the mini-cache builder** (S)
+- [x] **T1 Raw fixtures and the mini-cache builder** (S)
+  - Result: 151 kits and 18 enums extracted from cache 430. A second run found them byte-equal. The kit files match `raw_kits_sha256` in `reference.json`, and a test checks this. `build_cache` stores a config group of one file without a size table, as a real cache does, and a test covers that case. Added `tests` to the pyrefly `search-path` so pyrefly finds `js5_builder` (not in the plan). Test result: `test_js5.py` 11 passed, 1 skipped (no cache variable). prek passed. Two-axis review: no spec findings. All standards findings were fixed.
   - Add `scripts/extract-config-fixtures.py`: reads cache 430 with `Js5Store` and writes `tests/fixtures/appearance/kits/<id>.dat` (151, index 2 group 3) and `enums/<id>.dat` (the 18 style enums of `STYLE_ENUMS`, index 2 group 8). Move the js5 writer helpers from `tests/unit/test_js5.py` to `tests/js5_builder.py` and add `build_cache(folder, ...)` that writes models (index 7), kits, items (group 10) and enums into a real mini disk cache.
   - Accept: the builder's cache opens with `Js5Store`; `files(2, 3)` returns the 151 raw kits; `files(7, 230)[0]` equals `230.dat`; the existing js5 tests still pass.
   - Verify: `uv run pytest tests/unit/test_js5.py`; script run once on `<path to cache>`, fixtures byte-equal to the cache.

@@ -1,72 +1,28 @@
-import gzip
 import hashlib
 import json
 import os
-import struct
 from pathlib import Path
 
 import pytest
+from js5_builder import (
+    CONFIG_INDEX,
+    ENUM_GROUP,
+    ITEM_GROUP,
+    KIT_GROUP,
+    MODEL_INDEX,
+    build_cache,
+    container,
+    grouped,
+    table,
+    write_store,
+)
 
-from rsps_toolkit.formats.js5 import SECTOR_SIZE, Js5Store, reference_table, split
+from rsps_toolkit.formats.js5 import Js5Store, reference_table, split
 
 SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
 HAS_SNAPSHOT_430 = "RSPS_SNAPSHOT_430_CACHE" in os.environ and SNAPSHOT_430.is_dir()
 WALK = Path(__file__).parents[1] / "fixtures/animation149/walk"
-
-
-def container(data: bytes, kind: int = 0) -> bytes:
-    if kind == 0:
-        return bytes([0]) + struct.pack(">I", len(data)) + data
-    body = gzip.compress(data)
-    return bytes([2]) + struct.pack(">II", len(body), len(data)) + body
-
-
-def table(groups: dict[int, tuple[int, ...]], protocol: int = 6) -> bytes:
-    def number(value: int) -> bytes:
-        return struct.pack(">H", value)
-
-    out = bytes([protocol]) + (b"\0\0\0\1" if protocol >= 6 else b"") + bytes([0]) + number(len(groups))
-    last = 0
-    for group in groups:
-        out += number(group - last)
-        last = group
-    out += b"\0" * 8 * len(groups)
-    out += b"".join(number(len(files)) for files in groups.values())
-    for files in groups.values():
-        last = 0
-        for file in files:
-            out += number(file - last)
-            last = file
-    return out
-
-
-def grouped(files: list[bytes]) -> bytes:
-    """Files joined into one chunk, followed by the chunk table of their sizes and a chunk count of 1."""
-    sizes, last = b"", 0
-    for data in files:
-        sizes += struct.pack(">i", len(data) - last)
-        last = len(data)
-    return b"".join(files) + sizes + bytes([1])
-
-
-def write_store(folder: Path, stored: dict[tuple[int, int], bytes]) -> None:
-    """Write each (index, group) container into sectors, the second sector of a group placed after another group's."""
-    sectors: list[bytes] = [b"\0" * SECTOR_SIZE]
-    entries: dict[int, dict[int, bytes]] = {}
-    for (index, group), data in stored.items():
-        chunks = [data[i : i + SECTOR_SIZE - 8] for i in range(0, len(data), SECTOR_SIZE - 8)] or [b""]
-        first = len(sectors)
-        for part, chunk in enumerate(chunks):
-            following = first + part + 1 if part + 1 < len(chunks) else 0
-            head = struct.pack(">HH", group, part) + following.to_bytes(3, "big") + bytes([index])
-            sectors.append((head + chunk).ljust(SECTOR_SIZE, b"\0"))
-        entries.setdefault(index, {})[group] = len(data).to_bytes(3, "big") + first.to_bytes(3, "big")
-    (folder / "main_file_cache.dat2").write_bytes(b"".join(sectors))
-    for index, groups in entries.items():
-        out = bytearray(6 * (max(groups) + 1))
-        for group, entry in groups.items():
-            out[group * 6 : group * 6 + 6] = entry
-        (folder / f"main_file_cache.idx{index}").write_bytes(bytes(out))
+APPEARANCE = Path(__file__).parents[1] / "fixtures/appearance"
 
 
 @pytest.fixture
@@ -114,6 +70,44 @@ def test_protocol_7_reference_tables_read_their_ids_as_smart_numbers():
 def test_split_refuses_a_chunk_table_longer_than_the_group():
     with pytest.raises(ValueError, match="chunk table"):
         split(b"\x05", (0, 1))
+
+
+def raw_files(folder: Path) -> dict[int, bytes]:
+    return {int(path.stem): path.read_bytes() for path in folder.glob("*.dat")}
+
+
+def test_the_raw_kit_fixtures_are_the_kits_the_client_recording_read():
+    recorded = json.loads((APPEARANCE / "reference.json").read_text())["raw_kits_sha256"]
+    kits = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in (APPEARANCE / "kits").glob("*.dat")}
+    assert kits == recorded
+
+
+def test_a_built_cache_holds_the_raw_kits_in_config_group_3(tmp_path):
+    kits = raw_files(APPEARANCE / "kits")
+    build_cache(tmp_path, kits=kits)
+    assert len(kits) == 151
+    assert Js5Store(tmp_path).files(CONFIG_INDEX, KIT_GROUP) == kits
+
+
+def test_a_built_cache_holds_each_model_as_file_0_of_its_group_in_index_7(tmp_path):
+    model = (APPEARANCE / "230.dat").read_bytes()
+    build_cache(tmp_path, models={230: model})
+    assert Js5Store(tmp_path).files(MODEL_INDEX, 230) == {0: model}
+
+
+def test_a_built_cache_holds_items_in_config_group_10_and_enums_in_group_8(tmp_path):
+    items = raw_files(APPEARANCE / "items")
+    enums = raw_files(APPEARANCE / "enums")
+    build_cache(tmp_path, items=items, enums=enums)
+    assert len(enums) == 18
+    assert Js5Store(tmp_path).files(CONFIG_INDEX, ITEM_GROUP) == items
+    assert Js5Store(tmp_path).files(CONFIG_INDEX, ENUM_GROUP) == enums
+
+
+def test_a_built_cache_holds_a_config_group_of_one_file(tmp_path):
+    item = (APPEARANCE / "items/35.dat").read_bytes()
+    build_cache(tmp_path, items={35: item})
+    assert Js5Store(tmp_path).files(CONFIG_INDEX, ITEM_GROUP) == {35: item}
 
 
 @pytest.mark.skipif(not HAS_SNAPSHOT_430, reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder")

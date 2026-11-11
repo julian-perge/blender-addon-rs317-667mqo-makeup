@@ -50,7 +50,7 @@ ignore-names = ["*_OT_*", "*_PT_*", "*_MT_*", "*_UL_*"]
 
 [tool.pyrefly]
 project-includes = ["src", "tests"]
-search-path = ["src"]
+search-path = ["src", "tests"]
 python-version = "3.13"
 # Type errors in the legacy modules are recorded here so only new errors fail the check. Shrink it with
 # `uv run pyrefly check --prune-baseline` as step 5 rewrites those modules.
