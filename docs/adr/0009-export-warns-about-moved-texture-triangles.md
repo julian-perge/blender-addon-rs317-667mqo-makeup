@@ -13,4 +13,4 @@ On 2026-11-05 the owner also deferred repairing the storage. Edit Mode Undo rest
 
 Accepted gaps: the warning gives a count and does not name the faces. Fit clears it only in part: after deleting vertex 0, 13 of the 1,010 affected models keep warning, because Fit refuses triangles with no area or with UVs on one line (seen on models 528, 3153 and 6822). Fit with all of 5452's faces selected clears the warning by collapsing its 58 triangles to 1, and Fit per triangle leaves 4 of its 128 textured faces on positions different from the original. Joining objects is untested. A move of less than half a game unit does not count, since positions are compared as game integers.
 
-Measured on 2026-11-05: deleting vertex 14 of model 5452 moves 40 of its 58 triangles, the same count as comparing the exported and original models; none of the 7,456 models of `dump317` warns as imported, and all still round-trip exactly.
+Measured on 2026-11-05: deleting vertex 14 of model 5452 moves 40 of its 58 triangles, the same count as comparing the exported and original models; none of the 7,456 models of the 317 cache warns as imported, and all still round-trip exactly.

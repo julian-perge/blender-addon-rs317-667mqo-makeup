@@ -108,9 +108,10 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Deps: T9, T11.
   - Result: README, AGENTS.md, `docs/agents/testing.md`, `blender.md`, `osrs-cache-workflow.md` and `animation-workflow.md` no longer name the dumper, `dump_index`, `dump317`, the definition JSON names, `round-trip-dump.py` or the 667 importer, and say "Blender 5.2 or later". The user decided on 2026-11-11 that the animation workflow's bundle section describes the bundle by its manifest and layout, says a local tool not in this repo made it, and drops the commands. `architecture.md` and `GLOSSARY.md` needed no change; GLOSSARY's 317 and 667 mentions define revisions. `docs/research/runelite-cache.md` keeps `cache_dump_folder`, because research notes stay as dated history (spec, Out of scope). Left for T13: ADRs 0001, 0003, 0005, 0006 and 0011 name the dumper or the 667 importer. Verify: prek passed.
 
-- [ ] **T13 ADR 0017, glossary, issue 24** (S)
+- [x] **T13 ADR 0017, glossary, issue 24** (S)
   - New ADR `0017-...` that supersedes ADR 0003, records the four decisions (old format kept, revision 1 tested by fixtures only, textures stay PNG, Blender 5.2 is a floor), and the T8 decoder result. Mark ADR 0003 superseded. Close `.scratch/osrs-focus/issues/24-...` with a pointer. Check the `Cache` and `Texture dump` glossary entries.
   - Verify: `prek run --all-files`. Deps: T12.
+  - Result: ADR 0017 supersedes ADR 0003 and records the approved spec, the four decisions and the T8 decoder result. ADR 0003 has a superseded line. ADRs 0001, 0005, 0006 and 0011 got a dated note that points at ADR 0017; ADRs 0009 and 0011 say "the 317 cache" in place of `dump317`. The only `rg` hit left in the ADRs is the dated 2026-11-06 text of ADR 0003. Issue 24 is resolved with a pointer to the spec and ADR 0017. The `Cache` and `Texture dump` glossary entries need no change. Not done: issue 23 (667 new-format models) still says 667 is parked; closing it is the user's call. prek passed.
 
 - [ ] **T14 Fixture provenance notes and recorders** (S)
   - `tests/fixtures/*/README.md`, `record_appearance.py`, `ColourReference.java`, `ModelReference.java`, `animation149/export_clip.py`: say where each file came from without telling the reader to run the dumper. `record_appearance.py --kits` takes the new `kits/` folder or a cache folder.
