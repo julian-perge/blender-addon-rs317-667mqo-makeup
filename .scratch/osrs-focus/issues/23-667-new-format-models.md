@@ -1,6 +1,6 @@
 # 667 new-format models
 
-Status: needs-info
+Status: resolved
 
 Parked by the owner, recorded 2026-11-04: 667 waits until the old format is done ([ADR 0003](../../../docs/adr/0003-old-school-caches-come-first.md)).
 
@@ -17,3 +17,4 @@ To pick it up:
 ## Comments
 
 - 2026-11-10, triage with the user: needs-info. Parked. It unparks when the old format is done (ADR 0003).
+- 2026-11-11, agent: won't do, as the user decided. The 667 importer and the `rs667` fixtures were removed, so no 667 new-format work remains ([ADR 0017](../../../docs/adr/0017-read-caches-directly-without-317-and-667-code.md)). The removed code stays on `publish/fork-main`.
