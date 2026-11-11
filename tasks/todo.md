@@ -59,7 +59,8 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Verify: `RSPS_SNAPSHOT_430_CACHE=<path to cache> uv run pytest tests/unit/test_cache_profile.py`, and the skip without the variable.
   - Deps: T5. Files: `tests/unit/test_cache_profile.py`.
 
-- [ ] **T8 Share the item decoder with `generate-item-wear.py`** (M)
+- [x] **T8 Share the item decoder with `generate-item-wear.py`** (M)
+  - Result: the script now imports `decode_item` and reads with `Js5Store`. Its own `Store`, `Reader`, `reference_table`, `split` and `decode` are gone, and it shrank from about 340 to 96 lines. `status`, `describe` and the JSON writer stay. Running it with caches 2757 and 430 gives an output byte-equal to the committed `data/item_wear.json` (3058 items). The decoder needed no new opcodes, so there is nothing to record in the ADR. prek passed. The review found no findings.
   - The script imports `formats/item_definition.py` (PEP 723 script, add `src` to its path) and drops its own `Store`, `Reader` and `decode`. It keeps `status`, `describe` and the JSON writing. Use `Js5Store` for reading.
   - Accept: running it with caches 2757 and 430 gives a `data/item_wear.json` byte-equal to the committed one. If a decoder difference blocks that, record why in the ADR.
   - Verify: run the script to a temporary output and `cmp`; `prek run --all-files`.
