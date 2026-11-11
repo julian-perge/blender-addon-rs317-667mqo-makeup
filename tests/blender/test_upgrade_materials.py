@@ -5,12 +5,11 @@ import bmesh
 import bpy
 import pytest
 
-from rsps_toolkit.blender import face_materials, importer_667, texture_triangles, upgrade_materials
+from rsps_toolkit.blender import face_materials, texture_triangles, upgrade_materials
 from rsps_toolkit.blender.mesh import model_to_object, object_to_model
 from rsps_toolkit.formats import Model, decode
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
-RS667 = sorted((FIXTURES / "models" / "rs667").glob("*.dat"))
 
 
 @pytest.fixture(autouse=True)
@@ -41,57 +40,8 @@ def upgrade() -> set[str]:
     return bpy.ops.rsps.upgrade_materials()  # pyrefly: ignore[missing-attribute]
 
 
-def runelite_values(dat: Path) -> list[tuple[int | None, int | None, int]]:
-    # These fixtures have no face alphas.
-    ref = json.loads(dat.with_suffix(".json").read_text())
-    textures = [None if t == -1 else t for t in ref["face_textures"]]
-    colours = [None if t is not None else c for c, t in zip(ref["face_colours"], textures, strict=True)]
-    return [(c, t, 0) for c, t in zip(colours, textures, strict=True)]
-
-
-def face_values(obj: bpy.types.Object) -> list[tuple[int | None, int | None, int]]:
-    mesh = obj.data
-    assert isinstance(mesh, bpy.types.Mesh)
-    return [face_materials.material_values(mesh.materials[p.material_index]) for p in mesh.polygons]
-
-
-@pytest.mark.parametrize("dat", RS667, ids=lambda p: p.stem)
-@pytest.mark.timeout(10, method="thread")
-def test_667_importer_materials_carry_the_runelite_face_values(dat: Path):
-    importer_667.decode_667_format(dat.read_bytes(), str(dat))
-
-    assert face_values(bpy.data.objects[dat.stem]) == runelite_values(dat)
-
-
-@pytest.mark.parametrize("dat", RS667, ids=lambda p: p.stem)
-@pytest.mark.timeout(10, method="thread")
-def test_upgrade_reads_the_face_values_back_from_667_importer_material_names(dat: Path):
-    # Older versions of the 667 importer stored nothing but the names RS_Color_<colour> and Texture_<id>, with
-    # Blender adding .001 and so on to repeated names.
-    importer_667.decode_667_format(dat.read_bytes(), str(dat))
-    obj = bpy.data.objects[dat.stem]
-    mesh = obj.data
-    assert isinstance(mesh, bpy.types.Mesh)
-    for material in mesh.materials:
-        assert material is not None
-        for key in (face_materials.FACE_COLOUR, face_materials.TEXTURE_ID, face_materials.ALPHA):
-            material.pop(key, None)
-    select_only(obj)
-
-    assert upgrade() == {"FINISHED"}
-
-    assert face_values(obj) == runelite_values(dat)
-
-
-def legacy_material(name: str, alpha: int | None) -> bpy.types.Material:
-    """A material as the original importers left it: alpha set up by their setup_material_alpha, or none."""
-    material = importer_667.create_material_from_hsl(0)
-    material.name = name
-    for key in (face_materials.FACE_COLOUR, face_materials.TEXTURE_ID, face_materials.ALPHA):
-        material.pop(key, None)
-    if alpha is not None:
-        importer_667.setup_material_alpha(material, alpha)
-    return material
+def material_without_values(name: str) -> bpy.types.Material:
+    return bpy.data.materials.new(name)
 
 
 def object_with(*materials: bpy.types.Material) -> bpy.types.Object:
@@ -111,47 +61,36 @@ def material_values(obj: bpy.types.Object) -> list[tuple[int | None, int | None,
     return [face_materials.material_values(material) for material in mesh.materials]
 
 
-def test_alpha_comes_from_the_material_and_one_without_is_invisible_beside_ones_with():
-    # The original 317 importer set up alpha without renaming the material. Both importers set up every face of a
-    # model with face alphas except those at 255, so in such a model a material without alpha stands for 255.
-    obj = object_with(
-        legacy_material("RS_Color_100", 0),
-        legacy_material("Texture_16_Alpha_128.001", 128),
-        legacy_material("RS_Color_200", None),
-    )
-    select_only(obj)
-
-    assert upgrade() == {"FINISHED"}
-
-    assert material_values(obj) == [(100, None, 0), (None, 16, 128), (200, None, 255)]
-
-
-def test_materials_of_a_model_without_alphas_are_opaque():
-    obj = object_with(legacy_material("RS_Color_100", None), legacy_material("Texture_16.002", None))
-    select_only(obj)
-
-    assert upgrade() == {"FINISHED"}
-
-    assert material_values(obj) == [(100, None, 0), (None, 16, 0)]
-
-
 def test_aether_copies_and_pmn_materials_are_read():
     # The Aether panel names its copies <name>_unique. The PMN tool names materials PMN_<image name>, and the
     # original exporter read the first number after PMN_.
     obj = object_with(
-        legacy_material("RS_Color_100.001_unique_unique", None),
-        legacy_material("PMN_16.png", None),
-        legacy_material("PMN_tex_40.png.001", None),
+        material_without_values("PMN_16.png.001_unique_unique"),
+        material_without_values("PMN_tex_40.png.001"),
     )
     select_only(obj)
 
     assert upgrade() == {"FINISHED"}
 
-    assert material_values(obj) == [(100, None, 0), (None, 16, 0), (None, 40, 0)]
+    assert material_values(obj) == [(None, 16, 0), (None, 40, 0)]
+
+
+def test_a_blended_pmn_material_keeps_its_alpha():
+    material = material_without_values("PMN_16.png")
+    material.use_nodes = True
+    material.surface_render_method = "BLENDED"
+    shader = next(n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED")  # pyrefly: ignore[missing-attribute]
+    shader.inputs["Alpha"].default_value = (255 - 64) / 255
+    obj = object_with(material)
+    select_only(obj)
+
+    assert upgrade() == {"FINISHED"}
+
+    assert material_values(obj) == [(None, 16, 64)]
 
 
 def test_blender_copy_number_is_not_read_as_a_pmn_texture_id():
-    obj = object_with(legacy_material("PMN_brick.png.001", None))
+    obj = object_with(material_without_values("PMN_brick.png.001"))
     select_only(obj)
 
     upgrade()
@@ -161,7 +100,7 @@ def test_blender_copy_number_is_not_read_as_a_pmn_texture_id():
 
 def test_materials_with_game_values_are_left_alone_and_unreadable_ones_too():
     imported = face_materials.face_material(1000, None, 5)
-    obj = object_with(legacy_material("hand made", None), imported)
+    obj = object_with(material_without_values("hand made"), imported)
     select_only(obj)
 
     # A material that cannot be read is a warning, so the operator still finishes.
@@ -327,8 +266,8 @@ def test_faces_of_a_shared_pmn_material_with_no_usable_uvs_on_their_object_are_u
 
 
 def test_upgrade_leaves_alone_a_blended_material_of_stacked_textured_faces():
-    # Blended is also how Upgrade RS Materials recognises an old alpha, so it must not take these for one: their model
-    # has no face alphas and comes back the same.
+    # Upgrade RS Materials reads alpha from blended materials, so a blended material that import made for stacked
+    # faces must come back the same.
     model = Model(
         vertices=[(0, 0, 0), (1, 0, 0), (0, 1, 0)],
         faces=[(0, 1, 2), (0, 1, 2)],
@@ -345,16 +284,3 @@ def test_upgrade_leaves_alone_a_blended_material_of_stacked_textured_faces():
     assert upgrade() == {"FINISHED"}
 
     assert object_to_model(obj) == model
-
-
-def test_a_stacked_material_does_not_make_a_legacy_material_beside_it_invisible():
-    # Joining a new import to an old model puts both kinds on one object. Without face alphas the legacy material is
-    # opaque, the reading the user chose on 2026-11-05 (upgrade_materials.py).
-    stacked = face_materials.face_material(None, 1, 0)
-    face_materials.show_stacked(stacked)
-    obj = object_with(stacked, legacy_material("RS_Color_100", None))
-    select_only(obj)
-
-    assert upgrade() == {"FINISHED"}
-
-    assert material_values(obj) == [(None, 1, 0), (100, None, 0)]

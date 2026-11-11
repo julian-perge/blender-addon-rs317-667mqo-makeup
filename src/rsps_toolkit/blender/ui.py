@@ -95,9 +95,7 @@ class VIEW3D_PT_rsps_model_io(bpy.types.Panel):
         import_box = layout.box()
         import_box.label(text="Import Models", icon="IMPORT")
 
-        row = import_box.row(align=True)
-        row.operator("import_scene.rs_model", text="Import RS Model", icon="IMPORT")
-        row.operator("import_scene.rs_667_model", text="Import 667 Model", icon="IMPORT")
+        import_box.operator("import_scene.rs_model", text="Import RS Model", icon="IMPORT")
         import_box.operator(
             "import_scene.rs_model", text="Import OSRS 149 Model", icon="IMPORT"
         ).model_profile = "OSRS149"
