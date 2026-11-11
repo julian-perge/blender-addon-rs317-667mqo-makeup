@@ -945,7 +945,8 @@ def test_changing_the_cache_folder_preference_uses_that_folders_item_catalog(cac
 
 def test_a_missing_item_group_names_the_preference_at_every_create(cache):
     # The user asked that a missing catalog gives the same message at every Create (spec of the shared catalog cache,
-    # user story 6). spec/remove-dumper-and-legacy-revisions.md made the message name the Cache folder preference.
+    # user story 6). The spec of 2026-11-11 in spec/ that made the Cache folder the only cache setting changed the
+    # message to name that preference.
     rewrite_cache(cache, lambda parts: parts["items"].clear())
     show(case(None, False, [0, 0, 0, 0, 0]))
     for _ in range(2):
