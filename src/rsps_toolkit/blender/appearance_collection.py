@@ -541,9 +541,9 @@ def _activate(context: bpy.types.Context, collection: bpy.types.Collection, kind
         bpy.ops.object.mode_set(mode="POSE")
 
 
-def _dump_folder_property():
+def _cache_folder_property():
     return bpy.props.StringProperty(
-        name="Dump folder",
+        name="Cache folder",
         description="Overrides the add-on preference; scripts and tests set it, the panel never shows it",
         subtype="DIR_PATH",
         options={"HIDDEN", "SKIP_SAVE"},
@@ -553,16 +553,16 @@ def _dump_folder_property():
 class RSPS_OT_create_appearance_preview(bpy.types.Operator):
     bl_idname = "rsps.create_appearance_preview"
     bl_label = "Create Player"
-    bl_description = "Assemble the player appearance from the cache dump into a collection with a lit mesh and a rig"
+    bl_description = "Assemble the player appearance from the cache into a collection with a lit mesh and a rig"
     bl_options = {"REGISTER", "UNDO"}
 
-    dump_folder: _dump_folder_property()  # pyrefly: ignore[bad-assignment]
+    cache_folder: _cache_folder_property()  # pyrefly: ignore[bad-assignment]
 
     def execute(self, context):
         try:
             check_no_edit_mode("creating a player")
             preset = appearance_props.to_preset(context.scene.rs_appearance)
-            folder = appearance_preview.dump_folder(self.dump_folder)
+            folder = appearance_preview.cache_folder(self.cache_folder)
             body, shading, slots = appearance_preview.assemble_parts(preset, folder)
             collection = build_collection(
                 body, shading, preset, "Player", preferences.brightness(), beside_players(body), slots
@@ -586,7 +586,7 @@ class RSPS_OT_update_appearance_preview(bpy.types.Operator):
     )
     bl_options = {"REGISTER", "UNDO"}
 
-    dump_folder: _dump_folder_property()  # pyrefly: ignore[bad-assignment]
+    cache_folder: _cache_folder_property()  # pyrefly: ignore[bad-assignment]
 
     @classmethod
     def poll(cls, context):
@@ -608,7 +608,7 @@ class RSPS_OT_update_appearance_preview(bpy.types.Operator):
             if not edited:
                 check_removable(old)
             preset = appearance_props.to_preset(context.scene.rs_appearance)
-            folder = appearance_preview.dump_folder(self.dump_folder)
+            folder = appearance_preview.cache_folder(self.cache_folder)
             body, shading, slots = appearance_preview.assemble_parts(preset, folder)
             name = old.name
             # An unedited player's rebuilt rig takes the old rig's placement in `_replace`, so it is built at the origin.
@@ -621,7 +621,7 @@ class RSPS_OT_update_appearance_preview(bpy.types.Operator):
         if edited:
             self.report({"WARNING"}, f"{name} has edits, so it was kept and the update is a separate copy")
         else:
-            _replace(self, old, new, name, lost_clip, self.dump_folder)
+            _replace(self, old, new, name, lost_clip, self.cache_folder)
         context.scene.rs_appearance.source_player = new.name
         _activate(context, new, kind, mode)
         appearance_preview.show_lit_colours(context)
@@ -634,7 +634,7 @@ def _replace(
     new: bpy.types.Collection,
     name: str,
     lost_clip: str | None,
-    dump_folder: str = "",
+    cache_folder: str = "",
 ) -> None:
     """Swap the rebuilt player in for the old one: carry the user's animation over, then bake the old clips again.
 
@@ -658,7 +658,7 @@ def _replace(
     _rename(new, name)
     for clip, start in clips:
         try:
-            appearance_clip.bake_recorded(new, clip, start, dump_folder)
+            appearance_clip.bake_recorded(new, clip, start, cache_folder)
         except (OSError, LookupError, ValueError, RuntimeError) as error:
             operator.report({"WARNING"}, f"{name}: the baked clip could not be baked again ({error})")
     if lost_clip is not None and not clips:
@@ -747,7 +747,7 @@ def follow_active_player(*_args) -> None:
         follow_selection(bpy.context)
 
 
-def duplicate_player(old: bpy.types.Collection, dump_folder: str = "") -> bpy.types.Collection:
+def duplicate_player(old: bpy.types.Collection, cache_folder: str = "") -> bpy.types.Collection:
     """Build a second player from the old one's stored settings, beside the players, with copies of the user's own
     actions and the old player's clips baked again at their start frames. The two share only the file's one lit
     material, which every player uses; the copy's rig, meshes, actions and fade materials are its own.
@@ -767,7 +767,7 @@ def duplicate_player(old: bpy.types.Collection, dump_folder: str = "") -> bpy.ty
             "settings"
         )
     preset = loads_preset(old[appearance_preview.PRESET_KEY])
-    body, shading, slots = appearance_preview.assemble_parts(preset, appearance_preview.dump_folder(dump_folder))
+    body, shading, slots = appearance_preview.assemble_parts(preset, appearance_preview.cache_folder(cache_folder))
     new = build_collection(body, shading, preset, old.name, preferences.brightness(), beside_players(body), slots)
     # The collection took the next free name, so the objects are named after it rather than after the original.
     _rename(new, new.name)
@@ -775,7 +775,7 @@ def duplicate_player(old: bpy.types.Collection, dump_folder: str = "") -> bpy.ty
         if is_joint_rig(armature_of(old)):
             appearance_clip.carry_animation(armature_of(old), armature_of(new), copy_actions=True)
         for clip, start in appearance_clip.recorded_clips(old):
-            appearance_clip.bake_recorded(new, clip, start, dump_folder)
+            appearance_clip.bake_recorded(new, clip, start, cache_folder)
     except Exception:
         remove_collection(new)
         raise
@@ -792,7 +792,7 @@ class RSPS_OT_duplicate_player(bpy.types.Operator):
     )
     bl_options = {"REGISTER", "UNDO"}
 
-    dump_folder: _dump_folder_property()  # pyrefly: ignore[bad-assignment]
+    cache_folder: _cache_folder_property()  # pyrefly: ignore[bad-assignment]
 
     @classmethod
     def poll(cls, context):
@@ -807,7 +807,7 @@ class RSPS_OT_duplicate_player(bpy.types.Operator):
         try:
             rig = armature_of(old)
             keys_left = not is_joint_rig(rig) and appearance_clip.has_own_animation(rig)
-            new = duplicate_player(old, self.dump_folder)
+            new = duplicate_player(old, self.cache_folder)
         except (OSError, LookupError, ValueError, RuntimeError) as error:
             appearance_preview.fail(self, context, error)
             return {"CANCELLED"}

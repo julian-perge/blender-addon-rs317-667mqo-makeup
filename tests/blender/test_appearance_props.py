@@ -35,10 +35,10 @@ def test_a_preset_for_another_revision_is_refused_and_changes_nothing(props):
 
 # Kit ids come from KitDefinitions.json: kit 18 is a male torso kit, kit 56 a female torso kit, and kit 64 is not a
 # male torso kit. Kit 14 is the clean-shaven jaw and kit 101 is named Leggings (see test_kit_names.py).
-def test_kit_dropdowns_read_and_write_the_equipment_slots(props, monkeypatch, dump):
+def test_kit_dropdowns_read_and_write_the_equipment_slots(props, monkeypatch, cache):
     from rsps_toolkit.blender import preferences
 
-    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
     cache_profile.clear_shared_profiles()
     props.female = False
     choices = [name for name, _, _ in appearance_props.kit_choices(props, 2)]
@@ -74,11 +74,11 @@ def test_a_preset_with_an_unavailable_colour_choice_is_refused_not_clamped(props
 
 
 def test_a_slot_that_holds_an_item_or_the_other_bodys_kit_shows_other_and_picking_it_changes_nothing(
-    props, monkeypatch, dump
+    props, monkeypatch, cache
 ):
     from rsps_toolkit.blender import preferences
 
-    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
     cache_profile.clear_shared_profiles()
     props.female = False
     props.equipment = (0, 0, 0, 0, 512 + 2653, 0, 282, 292, 256, 289, 298, 266)
@@ -103,12 +103,12 @@ def test_the_panel_can_say_why_kits_are_missing(props, monkeypatch, tmp_path):
 
 
 @pytest.fixture
-def kits_folder(monkeypatch, dump):
+def kits_folder(monkeypatch, cache):
     from rsps_toolkit.blender import preferences
 
-    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
     cache_profile.clear_shared_profiles()
-    return dump
+    return cache
 
 
 def add_leggings(parts):

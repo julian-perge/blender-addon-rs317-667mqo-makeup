@@ -25,13 +25,13 @@ def appearance_cache() -> dict[str, dict[int, bytes]]:
 
 
 @pytest.fixture
-def dump(tmp_path):
+def cache(tmp_path):
     build_cache(tmp_path, **appearance_cache())
     return tmp_path
 
 
 @pytest.fixture
-def armed_dump(tmp_path):
+def armed_cache(tmp_path):
     """The cache plus the items of the held-item clip fixtures: the Rune scimitar (1333) and Rune kiteshield (1201)
     worn when they were recorded, and the Steel axe, Charcoal and Papyrus the clips hold."""
     parts = appearance_cache()

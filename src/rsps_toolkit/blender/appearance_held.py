@@ -49,13 +49,13 @@ class Variant:
     names: dict[int, str]
 
 
-def variant(collection: bpy.types.Collection, held: tuple[int, int], dump_folder: str) -> Variant | None:
+def variant(collection: bpy.types.Collection, held: tuple[int, int], cache_folder: str) -> Variant | None:
     """The player's held variant, or None when the held items leave every slot as worn."""
     preset = loads_preset(collection[appearance_preview.PRESET_KEY])
     equipment = held_equipment(preset.equipment, *held)
     if equipment == list(preset.equipment):
         return None
-    profile = shared_profile(appearance_preview.dump_folder(dump_folder))
+    profile = shared_profile(appearance_preview.cache_folder(cache_folder))
     model, slots = profile.assemble_slots(preset, equipment)
     worn_model, worn_slots = profile.assemble_slots(preset)
     names = {value - ITEM_OFFSET: profile.items[value - ITEM_OFFSET].name for value in held if value >= ITEM_OFFSET}

@@ -46,7 +46,8 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Verify: `uv run pytest`; `BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh`.
   - Deps: T2, T3, T4. Files: `cache_profile.py`, `appearance.py`, `preferences.py`, `appearance_{props,preview,items,panel}.py`, `tests/blender/conftest.py`, `test_cache_profile.py`.
 
-- [ ] **T6 Rename `dump_folder` to `cache_folder`** (M)
+- [x] **T6 Rename `dump_folder` to `cache_folder`** (M)
+  - Result: operator properties, parameters and `appearance_preview.cache_folder` are renamed. The property label is now "Cache folder". The descriptions and docstrings that said "dump" now say "cache". The Blender fixtures are `cache` and `armed_cache`. Saved layer names are unchanged. `rg -i 'dump_folder|dump_root|cache_dump_folder' src tests` finds nothing. Comments that pointed at `ItemDefinitions.json` now say that it is the source of the names, not of the fixture. Test result: Blender suite 770 passed. prek passed. Left for T9: `test_osrs149_io.py` and `round-trip-dump.py`. Left for T12: `docs/research/runelite-cache.md` names `cache_dump_folder`.
   - Operator properties, parameters, descriptions and error text in `appearance_collection`, `appearance_clip`, `appearance_pose`, `appearance_held`, `appearance_preview`. Rename the `dump` and `armed_dump` fixtures to `cache` and `armed_cache` in all Blender tests. Layer names stay.
   - Accept: `rg -i 'dump_folder|dump_root|cache_dump_folder' src tests` finds nothing.
   - Verify: `scripts/test-blender.sh`; `prek run --all-files`.

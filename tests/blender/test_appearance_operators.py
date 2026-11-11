@@ -79,10 +79,10 @@ def painted_last(before):
 
 @pytest.mark.parametrize("outfit", [None, "dragon_plate", "excalibur"])
 @pytest.mark.parametrize("female", [False, True])
-def test_preview_has_the_clients_geometry_and_lit_colours(dump, outfit, female):
+def test_preview_has_the_clients_geometry_and_lit_colours(cache, outfit, female):
     reference = case(outfit, female, [1, 2, 3, 4, 5])
     show(reference)
-    assert create(dump_folder=str(dump)) == {"FINISHED"}
+    assert create(cache_folder=str(cache)) == {"FINISHED"}
     parts = appearance_collection.parts(appearance_preview.collection_of(active()))  # pyrefly: ignore[bad-argument-type]
     assert [obj.get(appearance_collection.PART_KEY) for obj in parts] == ["Body"] + (
         ["Weapon"] if outfit == "excalibur" else []
@@ -115,22 +115,22 @@ def test_preview_has_the_clients_geometry_and_lit_colours(dump, outfit, female):
     assert sorted(seen_faces) == kept
 
 
-def test_preview_stores_the_source_preset(dump):
+def test_preview_stores_the_source_preset(cache):
     preset = show(case("dragon_plate", True, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     obj = active()
     assert loads_preset(appearance_preview.collection_of(obj)[appearance_preview.PRESET_KEY]) == preset  # pyrefly: ignore[unsupported-operation]
 
 
-def test_a_missing_model_cancels_and_creates_nothing(dump):
+def test_a_missing_model_cancels_and_creates_nothing(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    rewrite_cache(dump, lambda parts: parts["models"].pop(230))
+    rewrite_cache(cache, lambda parts: parts["models"].pop(230))
     with pytest.raises(RuntimeError, match="Model 230"):
-        create(dump_folder=str(dump))
+        create(cache_folder=str(cache))
     assert not bpy.data.objects
 
 
-def test_no_dump_folder_is_an_error(dump):
+def test_no_cache_folder_is_an_error(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
     with pytest.raises(RuntimeError, match="Set the Cache folder"):
         create()
@@ -148,12 +148,12 @@ def stored(collection):
     return loads_preset(collection[appearance_preview.PRESET_KEY])
 
 
-def test_update_replaces_the_players_contents_and_the_stored_preset(dump):
+def test_update_replaces_the_players_contents_and_the_stored_preset(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     old_name = players()[0].name
     preset = show(case("dragon_plate", True, [1, 2, 3, 4, 5]))
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     (collection,) = players()
     assert collection.name == old_name == "Player"
     assert stored(collection) == preset
@@ -163,23 +163,23 @@ def test_update_replaces_the_players_contents_and_the_stored_preset(dump):
     assert appearance_collection.mesh_of(collection).name == "Player"
 
 
-def test_update_turns_culling_on_again_for_the_shared_lit_material(dump):
+def test_update_turns_culling_on_again_for_the_shared_lit_material(cache):
     # The user chose that Update turns culling on again for a lit material made before players culled (issue 28,
     # decision 3, 2026-11-10).
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     material = bpy.data.materials[appearance_preview.MATERIAL_NAME]
     material.use_backface_culling = False
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert material.use_backface_culling
 
 
 WALK = Path(__file__).parent.parent / "fixtures" / "animation149" / "walk"
 
 
-def baked_player(dump, method, clip=WALK):
+def baked_player(cache, method, clip=WALK):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = players()
     bake = appearance_clip.bake_clip if method == "shape keys" else appearance_clip.bake_clip_to_rig
     bake(collection, clip)
@@ -187,10 +187,10 @@ def baked_player(dump, method, clip=WALK):
 
 
 @pytest.mark.parametrize("method", ["shape keys", "bones"])
-def test_update_bakes_the_players_clip_again_and_leaves_no_old_action(dump, capfd, method):
-    baked_player(dump, method)
+def test_update_bakes_the_players_clip_again_and_leaves_no_old_action(cache, capfd, method):
+    baked_player(cache, method)
     capfd.readouterr()
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert "baked clip" not in capfd.readouterr().out
     (rebuilt,) = players()
     assert appearance_collection.baked_clip(rebuilt) == method
@@ -199,8 +199,8 @@ def test_update_bakes_the_players_clip_again_and_leaves_no_old_action(dump, capf
     assert users == []
 
 
-def test_update_keeps_the_clip_strips_frames_and_the_users_own_animation(dump):
-    collection = baked_player(dump, "bones")
+def test_update_keeps_the_clip_strips_frames_and_the_users_own_animation(cache):
+    collection = baked_player(cache, "bones")
     appearance_clip.bake_clip_to_rig(collection, WALK.parent / "idle", start=60)
     rig = appearance_collection.armature_of(collection)
     wave, step = bpy.data.actions.new("wave"), bpy.data.actions.new("step")
@@ -209,7 +209,7 @@ def test_update_keeps_the_clip_strips_frames_and_the_users_own_animation(dump):
     track.name = "mine"
     placed = track.strips.new("step", 5, step)
     placed.influence = 0.5
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     (rebuilt,) = players()
     animation = appearance_collection.armature_of(rebuilt).animation_data
     assert animation.action == wave  # pyrefly: ignore[missing-attribute]
@@ -224,8 +224,8 @@ def duplicate(**options):
     return bpy.ops.rsps.duplicate_player(**options)  # pyrefly: ignore[missing-attribute]
 
 
-def test_duplicate_builds_a_copy_beside_the_players_with_its_own_clips_and_animation(dump):
-    collection = baked_player(dump, "bones")
+def test_duplicate_builds_a_copy_beside_the_players_with_its_own_clips_and_animation(cache):
+    collection = baked_player(cache, "bones")
     appearance_clip.bake_clip_to_rig(collection, WALK.parent / "idle", start=60)
     rig = appearance_collection.armature_of(collection)
     wave, step = bpy.data.actions.new("wave"), bpy.data.actions.new("step")
@@ -234,7 +234,7 @@ def test_duplicate_builds_a_copy_beside_the_players_with_its_own_clips_and_anima
     track.name = "mine"
     track.strips.new("step", 5, step)
     originals = {strip.action for track in rig.animation_data.nla_tracks for strip in track.strips}  # pyrefly: ignore[missing-attribute]
-    assert duplicate(dump_folder=str(dump)) == {"FINISHED"}
+    assert duplicate(cache_folder=str(cache)) == {"FINISHED"}
     copy = next(c for c in players() if c is not collection)
     # The user chose that a copy is named after the original with Blender's next number (plan 14, 2026-11-10).
     assert copy.name == "Player.001"
@@ -256,37 +256,37 @@ def test_duplicate_builds_a_copy_beside_the_players_with_its_own_clips_and_anima
     assert not appearance_collection.is_edited(copy) and not appearance_collection.is_edited(collection)
 
 
-def test_duplicating_an_edited_player_is_refused_and_adds_nothing(dump):
+def test_duplicating_an_edited_player_is_refused_and_adds_nothing(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = players()
     appearance_collection.mesh_data(collection).vertices[0].co.z += 7
     objects = set(bpy.data.objects)
     with pytest.raises(RuntimeError, match="has edits"):
-        duplicate(dump_folder=str(dump))
+        duplicate(cache_folder=str(cache))
     assert players() == [collection] and set(bpy.data.objects) == objects
 
 
-def test_duplicating_a_player_in_edit_mode_is_refused_and_adds_nothing(dump):
+def test_duplicating_a_player_in_edit_mode_is_refused_and_adds_nothing(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = players()
     obj = appearance_collection.mesh_of(collection)
     bpy.ops.object.mode_set(mode="EDIT")
     with pytest.raises(RuntimeError, match="Leave Edit Mode"):
-        duplicate(dump_folder=str(dump))
+        duplicate(cache_folder=str(cache))
     assert players() == [collection] and obj.mode == "EDIT"
     bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def test_duplicating_a_player_whose_clip_cannot_be_baked_again_adds_nothing(dump, tmp_path):
+def test_duplicating_a_player_whose_clip_cannot_be_baked_again_adds_nothing(cache, tmp_path):
     clip = tmp_path / "walk"
     shutil.copytree(WALK, clip)
-    collection = baked_player(dump, "bones", clip)
+    collection = baked_player(cache, "bones", clip)
     shutil.rmtree(clip)
     objects = set(bpy.data.objects)
     with pytest.raises(RuntimeError, match="The clip folder lacks"):
-        duplicate(dump_folder=str(dump))
+        duplicate(cache_folder=str(cache))
     assert players() == [collection] and set(bpy.data.objects) == objects
 
 
@@ -295,8 +295,8 @@ def location_curve(action, bone):
     return bag.fcurves.find(f'pose.bones["{bone}"].location', index=2)
 
 
-def test_strips_sharing_one_action_on_the_original_share_one_copied_action_on_the_duplicate(dump):
-    collection = baked_player(dump, "bones")
+def test_strips_sharing_one_action_on_the_original_share_one_copied_action_on_the_duplicate(cache):
+    collection = baked_player(cache, "bones")
     rig = appearance_collection.armature_of(collection)
     bone = next(b for b in rig.pose.bones if not b.name.startswith(appearance_collection.BONE_PREFIX))  # pyrefly: ignore[missing-attribute]
     bone.keyframe_insert("location", frame=1)
@@ -308,7 +308,7 @@ def test_strips_sharing_one_action_on_the_original_share_one_copied_action_on_th
     track.name = "mine"
     for start in (5, 200):
         track.strips.new("wave", start, wave).action_slot = slot
-    assert duplicate(dump_folder=str(dump)) == {"FINISHED"}
+    assert duplicate(cache_folder=str(cache)) == {"FINISHED"}
     copy = next(c for c in players() if c is not collection)
     strips = appearance_collection.armature_of(copy).animation_data.nla_tracks["mine"].strips  # pyrefly: ignore[missing-attribute]
     actions = {strip.action for strip in strips}
@@ -316,15 +316,15 @@ def test_strips_sharing_one_action_on_the_original_share_one_copied_action_on_th
     assert [strip.action_slot.identifier for strip in strips] == [slot.identifier] * 2
 
 
-def test_keys_changed_on_a_duplicate_leave_the_originals_keys_alone(dump):
-    collection = baked_player(dump, "bones")
+def test_keys_changed_on_a_duplicate_leave_the_originals_keys_alone(cache):
+    collection = baked_player(cache, "bones")
     rig = appearance_collection.armature_of(collection)
     bone = next(b for b in rig.pose.bones if not b.name.startswith(appearance_collection.BONE_PREFIX))  # pyrefly: ignore[missing-attribute]
     bone.location = (0.0, 0.0, 1.0)
     bone.keyframe_insert("location", frame=1)
     animation = rig.animation_data
     assert animation is not None and animation.action is not None and animation.action_slot is not None
-    assert duplicate(dump_folder=str(dump)) == {"FINISHED"}
+    assert duplicate(cache_folder=str(cache)) == {"FINISHED"}
     copy = next(c for c in players() if c is not collection)
     copied = appearance_collection.armature_of(copy).animation_data
     assert copied is not None and copied.action is not None and copied.action is not animation.action
@@ -333,9 +333,9 @@ def test_keys_changed_on_a_duplicate_leave_the_originals_keys_alone(dump):
     assert location_curve(animation.action, bone.name).keyframe_points[0].co.y == 1.0
 
 
-def test_duplicating_a_player_with_a_shape_key_clip_bakes_the_copy_its_own_keys(dump):
-    collection = baked_player(dump, "shape keys")
-    assert duplicate(dump_folder=str(dump)) == {"FINISHED"}
+def test_duplicating_a_player_with_a_shape_key_clip_bakes_the_copy_its_own_keys(cache):
+    collection = baked_player(cache, "shape keys")
+    assert duplicate(cache_folder=str(cache)) == {"FINISHED"}
     copy = next(c for c in players() if c is not collection)
     assert appearance_collection.baked_clip(copy) == "shape keys"
     ours, theirs = (appearance_collection.mesh_data(c).shape_keys for c in (copy, collection))
@@ -349,26 +349,26 @@ def test_duplicating_a_player_with_a_shape_key_clip_bakes_the_copy_its_own_keys(
     assert not appearance_collection.is_edited(copy)
 
 
-def test_duplicate_leaves_the_panel_on_the_original_while_it_holds_changes_not_yet_applied(dump):
+def test_duplicate_leaves_the_panel_on_the_original_while_it_holds_changes_not_yet_applied(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = players()
     changed = show(case("dragon_plate", True, [1, 2, 3, 4, 5]))
-    assert duplicate(dump_folder=str(dump)) == {"FINISHED"}
+    assert duplicate(cache_folder=str(cache)) == {"FINISHED"}
     assert len(players()) == 2
     assert panel().source_player == collection.name
     assert appearance_props.to_preset(panel()) == changed
 
 
-def test_duplicating_an_old_label_only_player_gives_the_copy_joints_and_says_its_own_keys_stayed_behind(dump, capfd):
-    collection = baked_player(dump, "bones")
+def test_duplicating_an_old_label_only_player_gives_the_copy_joints_and_says_its_own_keys_stayed_behind(cache, capfd):
+    collection = baked_player(cache, "bones")
     rig = appearance_collection.armature_of(collection)
     del rig[appearance_collection.JOINT_RIG_KEY]
     wave = bpy.data.actions.new("wave")
     rig.animation_data.action = wave  # pyrefly: ignore[missing-attribute]
     collection[appearance_collection.HASH_KEY] = appearance_collection.fingerprint(collection)
     capfd.readouterr()
-    assert duplicate(dump_folder=str(dump)) == {"FINISHED"}
+    assert duplicate(cache_folder=str(cache)) == {"FINISHED"}
     assert "were not copied" in capfd.readouterr().out
     copy = next(c for c in players() if c is not collection)
     copy_rig = appearance_collection.armature_of(copy)
@@ -380,25 +380,25 @@ def test_duplicating_an_old_label_only_player_gives_the_copy_joints_and_says_its
 
 @pytest.mark.parametrize("method", ["shape keys", "bones"])
 @pytest.mark.parametrize("rebuild", [duplicate, update], ids=["duplicate", "update"])
-def test_duplicate_and_update_bake_the_clips_again_without_changing_the_scenes_rate_or_range(dump, method, rebuild):
-    baked_player(dump, method)
+def test_duplicate_and_update_bake_the_clips_again_without_changing_the_scenes_rate_or_range(cache, method, rebuild):
+    baked_player(cache, method)
     scene = bpy.context.scene
     assert scene is not None
     scene.render.fps, scene.render.fps_base = 24, 1.0
     scene.frame_start, scene.frame_end = 3, 500
-    assert rebuild(dump_folder=str(dump)) == {"FINISHED"}
+    assert rebuild(cache_folder=str(cache)) == {"FINISHED"}
     assert (scene.render.fps, scene.render.fps_base, scene.frame_start, scene.frame_end) == (24, 1.0, 3, 500)
     if active().mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def test_update_moves_a_users_strip_from_the_clip_track_to_the_users_track(dump):
-    collection = baked_player(dump, "bones")
+def test_update_moves_a_users_strip_from_the_clip_track_to_the_users_track(cache):
+    collection = baked_player(cache, "bones")
     rig = appearance_collection.armature_of(collection)
     turn = bpy.data.actions.new("turn")
     clips = rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK]  # pyrefly: ignore[missing-attribute]
     clips.strips.new("turn", 270, turn)
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     (rebuilt,) = players()
     tracks = appearance_collection.armature_of(rebuilt).animation_data.nla_tracks  # pyrefly: ignore[missing-attribute]
     assert [s.frame_start for s in tracks[appearance_clip.CLIP_TRACK].strips] == [1]
@@ -407,12 +407,12 @@ def test_update_moves_a_users_strip_from_the_clip_track_to_the_users_track(dump)
     assert turn.users > 0
 
 
-def test_update_keeps_the_users_track_above_the_clips(dump):
-    collection = baked_player(dump, "bones")
+def test_update_keeps_the_users_track_above_the_clips(cache):
+    collection = baked_player(cache, "bones")
     rig = appearance_collection.armature_of(collection)
     turn = bpy.data.actions.new("turn")
     rig.animation_data.nla_tracks[appearance_clip.USER_TRACK].strips.new("turn", 270, turn)  # pyrefly: ignore[missing-attribute]
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     (rebuilt,) = players()
     tracks = appearance_collection.armature_of(rebuilt).animation_data.nla_tracks  # pyrefly: ignore[missing-attribute]
     assert [track.name for track in tracks] == [appearance_clip.CLIP_TRACK, appearance_clip.USER_TRACK]
@@ -420,28 +420,28 @@ def test_update_keeps_the_users_track_above_the_clips(dump):
     assert appearance_collection.armature_of(rebuilt).animation_data.action_blend_type == "COMBINE"  # pyrefly: ignore[missing-attribute]
 
 
-def test_update_from_pose_mode_leaves_the_rebuilt_rig_active_in_pose_mode(dump):
+def test_update_from_pose_mode_leaves_the_rebuilt_rig_active_in_pose_mode(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = players()
     rig = appearance_collection.armature_of(collection)
     bpy.context.view_layer.objects.active = rig  # pyrefly: ignore[missing-attribute]
     bpy.ops.object.mode_set(mode="POSE")
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     (rebuilt,) = players()
     assert active() is appearance_collection.armature_of(rebuilt)
     assert active().mode == "POSE"
     bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def test_update_gives_an_old_label_only_player_joints_and_says_its_own_keys_stayed_behind(dump, capfd):
-    collection = baked_player(dump, "bones")
+def test_update_gives_an_old_label_only_player_joints_and_says_its_own_keys_stayed_behind(cache, capfd):
+    collection = baked_player(cache, "bones")
     rig = appearance_collection.armature_of(collection)
     del rig[appearance_collection.JOINT_RIG_KEY]
     rig.animation_data.action = bpy.data.actions.new("wave")  # pyrefly: ignore[missing-attribute]
     collection[appearance_collection.HASH_KEY] = appearance_collection.fingerprint(collection)
     capfd.readouterr()
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert "were not carried over" in capfd.readouterr().out
     (rebuilt,) = players()
     new_rig = appearance_collection.armature_of(rebuilt)
@@ -450,74 +450,74 @@ def test_update_gives_an_old_label_only_player_joints_and_says_its_own_keys_stay
     assert appearance_collection.baked_clip(rebuilt) == "bones"
 
 
-def test_update_warns_when_the_clip_folder_is_gone(dump, capfd, tmp_path):
+def test_update_warns_when_the_clip_folder_is_gone(cache, capfd, tmp_path):
     clip = tmp_path / "walk"
     shutil.copytree(WALK, clip)
-    baked_player(dump, "bones", clip)
+    baked_player(cache, "bones", clip)
     shutil.rmtree(clip)
     capfd.readouterr()
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert "the baked clip could not be baked again" in capfd.readouterr().out
     (rebuilt,) = players()
     assert appearance_collection.baked_clip(rebuilt) is None
 
 
-def test_update_of_a_player_baked_without_a_record_warns_that_the_clip_was_removed(dump, capfd):
-    collection = baked_player(dump, "shape keys")
+def test_update_of_a_player_baked_without_a_record_warns_that_the_clip_was_removed(cache, capfd):
+    collection = baked_player(cache, "shape keys")
     del collection[appearance_collection.CLIP_KEY]
     capfd.readouterr()
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert "the baked clip (shape keys) was removed; bake it again" in capfd.readouterr().out
 
 
-def test_update_of_a_player_without_a_clip_does_not_warn_about_one(dump, capfd):
+def test_update_of_a_player_without_a_clip_does_not_warn_about_one(cache, capfd):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     capfd.readouterr()
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert "baked clip" not in capfd.readouterr().out
 
 
-def test_a_failed_update_keeps_the_old_player_and_preset(dump):
+def test_a_failed_update_keeps_the_old_player_and_preset(cache):
     first = show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = players()
     mesh = appearance_collection.mesh_data(collection)
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
-    rewrite_cache(dump, lambda parts: parts["models"].pop(3379))
+    rewrite_cache(cache, lambda parts: parts["models"].pop(3379))
     with pytest.raises(RuntimeError, match="Model 3379"):
-        update(dump_folder=str(dump))
+        update(cache_folder=str(cache))
     assert players() == [collection]
     assert appearance_collection.mesh_data(collection) is mesh
     assert stored(collection) == first
     assert len(bpy.data.meshes) == 1 and len(bpy.data.armatures) == 1
 
 
-def test_repeated_updates_do_not_leak_data(dump):
+def test_repeated_updates_do_not_leak_data(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     materials = len(bpy.data.materials)
     for outfit in ("dragon_plate", "excalibur", None, "dragon_chain"):
         show(case(outfit, False, [0, 0, 0, 0, 0]))
-        assert update(dump_folder=str(dump)) == {"FINISHED"}
+        assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert len(players()) == 1
     assert len(bpy.data.meshes) == 1 and len(bpy.data.armatures) == 1 and len(bpy.data.materials) == materials
     assert len(bpy.data.objects) == 2
 
 
-def test_update_needs_a_player(dump):
+def test_update_needs_a_player(cache):
     with pytest.raises(RuntimeError, match="poll"):
-        update(dump_folder=str(dump))
+        update(cache_folder=str(cache))
 
 
-def test_an_edited_player_is_kept_and_the_update_is_a_separate_copy(dump):
+def test_an_edited_player_is_kept_and_the_update_is_a_separate_copy(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (old,) = players()
     appearance_collection.mesh_data(old).vertices[0].co.x += 7
     edited_x = appearance_collection.mesh_data(old).vertices[0].co.x
     preset = show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert len(players()) == 2
     assert appearance_collection.mesh_data(old).vertices[0].co.x == edited_x
     new = next(c for c in players() if c is not old)
@@ -540,35 +540,35 @@ def x_extent(collection):
     return min(xs), max(xs)
 
 
-def test_the_copy_of_an_edited_player_stands_to_the_right_of_it(dump):
+def test_the_copy_of_an_edited_player_stands_to_the_right_of_it(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (old,) = players()
     appearance_collection.mesh_data(old).vertices[0].co.z += 7
-    update(dump_folder=str(dump))
+    update(cache_folder=str(cache))
     new = next(c for c in players() if c is not old)
     assert x_extent(new)[0] == pytest.approx(x_extent(old)[1] + appearance_collection.PLAYER_GAP, abs=1e-3)
     assert not appearance_collection.is_edited(new)
 
 
-def test_a_second_player_is_created_to_the_right_of_the_first(dump):
+def test_a_second_player_is_created_to_the_right_of_the_first(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (first,) = players()
     assert rig_location(first) == (0, 0, 0)
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     second = next(c for c in players() if c is not first)
     assert x_extent(second)[0] == pytest.approx(x_extent(first)[1] + appearance_collection.PLAYER_GAP, abs=1e-3)
     assert not appearance_collection.is_edited(second)
 
 
-def test_two_players_keep_their_own_mesh_and_rig_data(dump):
+def test_two_players_keep_their_own_mesh_and_rig_data(cache):
     # Issue 12 asks that two players built in one file use their own mesh and armature data, and its decisions 1 and 2
     # (2026-11-10) set this check: every part's mesh, the Excalibur player's Weapon included, and the rig, and that
     # moving a vertex of one player leaves the other unedited.
     show(case("excalibur", False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
+    create(cache_folder=str(cache))
     first, second = players()
     first_parts, second_parts = appearance_collection.parts(first), appearance_collection.parts(second)
     assert len(first_parts) == len(second_parts) == 2
@@ -578,27 +578,27 @@ def test_two_players_keep_their_own_mesh_and_rig_data(dump):
     assert appearance_collection.is_edited(first) and not appearance_collection.is_edited(second)
 
 
-def test_updating_a_player_that_stands_aside_keeps_it_there(dump):
+def test_updating_a_player_that_stands_aside_keeps_it_there(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
+    create(cache_folder=str(cache))
     location = rig_location()
     assert location[0] > 0
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
-    update(dump_folder=str(dump))
+    update(cache_folder=str(cache))
     assert rig_location() == location
 
 
-def test_updating_a_moved_turned_and_scaled_player_keeps_it_so(dump):
+def test_updating_a_moved_turned_and_scaled_player_keeps_it_so(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (old,) = players()
     rig = appearance_collection.armature_of(old)
     rig.location = (40.0, -12.0, 3.0)
     rig.rotation_euler.z = 1.2
     rig.scale = (2.0, 2.0, 2.0)
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
-    update(dump_folder=str(dump))
+    update(cache_folder=str(cache))
     (player,) = players()
     rig = appearance_collection.armature_of(player)
     assert rig_location(player) == (40.0, -12.0, 3.0)
@@ -607,9 +607,9 @@ def test_updating_a_moved_turned_and_scaled_player_keeps_it_so(dump):
     assert not appearance_collection.is_edited(player)
 
 
-def test_updating_a_player_keeps_its_rigs_parent_and_constraints(dump):
+def test_updating_a_player_keeps_its_rigs_parent_and_constraints(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (old,) = players()
     anchor = bpy.data.objects.new("Anchor", None)
     bpy.context.scene.collection.objects.link(anchor)  # pyrefly: ignore[missing-attribute]
@@ -618,21 +618,21 @@ def test_updating_a_player_keeps_its_rigs_parent_and_constraints(dump):
     rig.parent = anchor
     rig.constraints.new("LIMIT_ROTATION")
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
-    update(dump_folder=str(dump))
+    update(cache_folder=str(cache))
     (player,) = players()
     rig = appearance_collection.armature_of(player)
     assert rig.parent == anchor
     assert [constraint.type for constraint in rig.constraints] == ["LIMIT_ROTATION"]
 
 
-def test_one_undo_restores_the_previous_player(dump):
+def test_one_undo_restores_the_previous_player(cache):
     first = show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     vertices = len(appearance_collection.mesh_data(players()[0]).vertices)
     # Background Blender pushes undo states only when asked, so the test pushes one after each operator.
     bpy.ops.ed.undo_push(message="Player created")
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
-    update(dump_folder=str(dump))
+    update(cache_folder=str(cache))
     bpy.ops.ed.undo_push(message="Player updated")
     assert len(appearance_collection.mesh_data(players()[0]).vertices) != vertices
     bpy.ops.ed.undo()
@@ -641,19 +641,19 @@ def test_one_undo_restores_the_previous_player(dump):
     assert stored(collection) == first
 
 
-def test_empty_equipment_cancels_with_a_message_and_creates_nothing(dump):
+def test_empty_equipment_cancels_with_a_message_and_creates_nothing(cache):
     appearance_props.from_preset(
         bpy.context.scene.rs_appearance,  # pyrefly: ignore[missing-attribute]
         AppearancePreset(149, 430, False, (0,) * 12, (0,) * 5),
     )
     with pytest.raises(RuntimeError, match="nothing to assemble"):
-        create(dump_folder=str(dump))
+        create(cache_folder=str(cache))
     assert not bpy.data.objects and not bpy.data.collections
 
 
-def test_update_refuses_a_player_holding_objects_the_add_on_did_not_make_and_changes_nothing(dump):
+def test_update_refuses_a_player_holding_objects_the_add_on_did_not_make_and_changes_nothing(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = players()
     mesh = appearance_collection.mesh_data(collection)
     collection.objects.link(bpy.data.objects.new("MyEmpty", None))
@@ -661,16 +661,16 @@ def test_update_refuses_a_player_holding_objects_the_add_on_did_not_make_and_cha
     cameras = len(bpy.data.cameras)
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
     with pytest.raises(RuntimeError, match="MyEmpty, MyCamera"):
-        update(dump_folder=str(dump))
+        update(cache_folder=str(cache))
     assert players() == [collection]
     assert appearance_collection.mesh_data(collection) is mesh
     assert sorted(obj.name for obj in collection.objects) == ["MyCamera", "MyEmpty", "Player", "Player_rig"]
     assert len(bpy.data.meshes) == 1 and len(bpy.data.armatures) == 1 and len(bpy.data.cameras) == cameras
 
 
-def test_update_refuses_a_player_in_edit_mode_and_keeps_the_edit(dump):
+def test_update_refuses_a_player_in_edit_mode_and_keeps_the_edit(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = players()
     obj = appearance_collection.mesh_of(collection)
     bpy.ops.object.mode_set(mode="EDIT")
@@ -680,14 +680,14 @@ def test_update_refuses_a_player_in_edit_mode_and_keeps_the_edit(dump):
     moved = edited.verts[0].co.x
     bmesh.update_edit_mesh(obj.data)  # pyrefly: ignore[bad-argument-type]
     with pytest.raises(RuntimeError, match="Edit Mode"):
-        update(dump_folder=str(dump))
+        update(cache_folder=str(cache))
     assert players() == [collection] and obj.mode == "EDIT"
     bpy.ops.object.mode_set(mode="OBJECT")
     assert appearance_collection.mesh_data(collection).vertices[0].co.x == pytest.approx(moved)
 
 
 @pytest.mark.parametrize("kind", ["mesh", "armature"])
-def test_create_refuses_while_any_mesh_or_armature_is_in_edit_mode_and_changes_nothing(dump, kind):
+def test_create_refuses_while_any_mesh_or_armature_is_in_edit_mode_and_changes_nothing(cache, kind):
     show(case(None, False, [0, 0, 0, 0, 0]))
     if kind == "mesh":
         other = bpy.data.objects.new("Other", bpy.data.meshes.new("Other"))
@@ -700,7 +700,7 @@ def test_create_refuses_while_any_mesh_or_armature_is_in_edit_mode_and_changes_n
     layer.objects.active = other
     bpy.ops.object.mode_set(mode="EDIT")
     with pytest.raises(RuntimeError, match="Leave Edit Mode on Other"):
-        create(dump_folder=str(dump))
+        create(cache_folder=str(cache))
     assert players() == [] and other.mode == "EDIT"
     bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -709,9 +709,9 @@ def panel():
     return bpy.context.scene.rs_appearance  # pyrefly: ignore[missing-attribute]
 
 
-def make_player(dump, outfit):
+def make_player(cache, outfit):
     show(case(outfit, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     (collection,) = [c for c in players() if c.name not in seen]
     seen.add(collection.name)
     return collection
@@ -720,33 +720,33 @@ def make_player(dump, outfit):
 seen: set[str] = set()
 
 
-def test_create_ties_the_panel_to_the_new_player(dump):
+def test_create_ties_the_panel_to_the_new_player(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
+    create(cache_folder=str(cache))
     assert panel().source_player == players()[0].name
 
 
-def test_updating_a_player_the_panel_is_not_tied_to_is_refused_and_changes_nothing(dump):
+def test_updating_a_player_the_panel_is_not_tied_to_is_refused_and_changes_nothing(cache):
     seen.clear()
-    first = make_player(dump, None)
-    second = make_player(dump, "dragon_plate")
+    first = make_player(cache, None)
+    second = make_player(cache, "dragon_plate")
     stored_second = stored(second)
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(first)  # pyrefly: ignore[missing-attribute]
     assert panel().source_player == second.name
     with pytest.raises(RuntimeError, match="Load Player Settings"):
-        update(dump_folder=str(dump))
+        update(cache_folder=str(cache))
     assert stored(second) == stored_second and len(players()) == 2
 
 
-def test_load_player_settings_fills_the_panel_from_the_players_stored_preset(dump):
+def test_load_player_settings_fills_the_panel_from_the_players_stored_preset(cache):
     seen.clear()
-    first = make_player(dump, None)
-    make_player(dump, "dragon_plate")
+    first = make_player(cache, None)
+    make_player(cache, "dragon_plate")
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(first)  # pyrefly: ignore[missing-attribute]
     assert bpy.ops.rsps.load_player_settings() == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
     assert appearance_props.to_preset(panel()) == stored(first)
     assert panel().source_player == first.name
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
 
 
 def select(obj):
@@ -754,23 +754,23 @@ def select(obj):
     appearance_collection.follow_selection(bpy.context)
 
 
-def test_selecting_another_player_loads_its_settings_into_the_panel(dump):
+def test_selecting_another_player_loads_its_settings_into_the_panel(cache):
     seen.clear()
-    first = make_player(dump, None)
-    make_player(dump, "dragon_plate")
+    first = make_player(cache, None)
+    make_player(cache, "dragon_plate")
     select(appearance_collection.armature_of(first))
     assert appearance_props.to_preset(panel()) == stored(first)
     assert panel().source_player == first.name
     assert not appearance_collection.holds_unapplied_settings(panel())
 
 
-def test_selecting_a_players_weapon_loads_its_settings(armed_dump):
+def test_selecting_a_players_weapon_loads_its_settings(armed_cache):
     seen.clear()
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(armed_dump))
+    create(cache_folder=str(armed_cache))
     (plain,) = players()
     appearance_props.from_preset(panel(), AppearancePreset(149, 430, False, ARMED, (0,) * 5))
-    create(dump_folder=str(armed_dump))
+    create(cache_folder=str(armed_cache))
     armed = next(c for c in players() if c is not plain)
     select(appearance_collection.mesh_of(plain))
     (weapon,) = (obj for obj in armed.objects if obj.get(appearance_collection.PART_KEY) == "Weapon")
@@ -779,10 +779,10 @@ def test_selecting_a_players_weapon_loads_its_settings(armed_dump):
     assert appearance_props.to_preset(panel()) == stored(armed)
 
 
-def test_selecting_another_player_keeps_changes_not_yet_applied_with_update(dump):
+def test_selecting_another_player_keeps_changes_not_yet_applied_with_update(cache):
     seen.clear()
-    first = make_player(dump, None)
-    second = make_player(dump, "dragon_plate")
+    first = make_player(cache, None)
+    second = make_player(cache, "dragon_plate")
     panel().colours[0] = 1
     changed = appearance_props.to_preset(panel())
     select(appearance_collection.mesh_of(first))
@@ -791,9 +791,9 @@ def test_selecting_another_player_keeps_changes_not_yet_applied_with_update(dump
     assert appearance_collection.holds_unapplied_settings(panel())
 
 
-def test_selecting_a_player_keeps_the_settings_of_a_preset_file(dump):
+def test_selecting_a_player_keeps_the_settings_of_a_preset_file(cache):
     seen.clear()
-    first = make_player(dump, None)
+    first = make_player(cache, None)
     from_file = show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
     panel().source_player = ""
     select(appearance_collection.mesh_of(first))
@@ -801,9 +801,9 @@ def test_selecting_a_player_keeps_the_settings_of_a_preset_file(dump):
     assert appearance_props.to_preset(panel()) == from_file
 
 
-def test_selecting_an_object_of_no_player_leaves_the_panel_as_it_is(dump):
+def test_selecting_an_object_of_no_player_leaves_the_panel_as_it_is(cache):
     seen.clear()
-    first = make_player(dump, None)
+    first = make_player(cache, None)
     lamp = bpy.data.objects.new("Lamp", bpy.data.lights.new("Lamp", "POINT"))
     bpy.context.scene.collection.objects.link(lamp)  # pyrefly: ignore[missing-attribute]
     select(lamp)
@@ -811,62 +811,62 @@ def test_selecting_an_object_of_no_player_leaves_the_panel_as_it_is(dump):
     assert appearance_props.to_preset(panel()) == stored(first)
 
 
-def test_selecting_a_renamed_player_whose_settings_the_panel_holds_ties_the_panel_to_it(dump):
+def test_selecting_a_renamed_player_whose_settings_the_panel_holds_ties_the_panel_to_it(cache):
     seen.clear()
-    first = make_player(dump, None)
+    first = make_player(cache, None)
     first.name = "Guard"
     select(appearance_collection.mesh_of(first))
     assert panel().source_player == "Guard"
 
 
-def test_a_panel_tied_to_a_deleted_player_keeps_its_settings_and_may_update_another(dump):
+def test_a_panel_tied_to_a_deleted_player_keeps_its_settings_and_may_update_another(cache):
     seen.clear()
-    first = make_player(dump, None)
-    second = make_player(dump, "dragon_plate")
+    first = make_player(cache, None)
+    second = make_player(cache, "dragon_plate")
     held = appearance_props.to_preset(panel())
     appearance_collection.remove_collection(second)
     select(appearance_collection.mesh_of(first))
     assert panel().source_player == ""
     assert appearance_props.to_preset(panel()) == held
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
     assert stored(players()[0]) == held
 
 
-def test_a_player_whose_settings_the_panel_refuses_leaves_the_panel_and_says_why(dump):
+def test_a_player_whose_settings_the_panel_refuses_leaves_the_panel_and_says_why(cache):
     seen.clear()
-    first = make_player(dump, None)
-    second = make_player(dump, "dragon_plate")
+    first = make_player(cache, None)
+    second = make_player(cache, "dragon_plate")
     first[appearance_preview.PRESET_KEY] = dumps_preset(dataclasses.replace(stored(first), client_revision=170))
     select(appearance_collection.mesh_of(first))
     assert panel().source_player == second.name
     assert "client revision 170" in panel().last_error
 
 
-def test_the_panel_follows_the_active_player_after_an_undo(dump):
+def test_the_panel_follows_the_active_player_after_an_undo(cache):
     seen.clear()
-    first = make_player(dump, None)
-    make_player(dump, "dragon_plate")
+    first = make_player(cache, None)
+    make_player(cache, "dragon_plate")
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(first)  # pyrefly: ignore[missing-attribute]
     appearance_collection.follow_active_player()
     assert panel().source_player == first.name
 
 
-def test_a_panel_loaded_from_a_preset_file_may_update_any_player(dump):
+def test_a_panel_loaded_from_a_preset_file_may_update_any_player(cache):
     seen.clear()
-    make_player(dump, None)
+    make_player(cache, None)
     panel().source_player = ""
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
     panel().source_player = ""
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
 
 
-def test_an_edited_players_copy_becomes_the_tied_player(dump):
+def test_an_edited_players_copy_becomes_the_tied_player(cache):
     seen.clear()
-    first = make_player(dump, None)
+    first = make_player(cache, None)
     appearance_collection.mesh_data(first).vertices[0].co.x += 7
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
     panel().source_player = first.name
-    update(dump_folder=str(dump))
+    update(cache_folder=str(cache))
     copy = next(c for c in players() if c is not first)
     assert panel().source_player == copy.name
 
@@ -875,13 +875,13 @@ ARMED = (0, 0, 0, 512 + 1333, 274, 512 + 1201, 282, 292, 256, 289, 298, 266)
 
 
 @pytest.mark.parametrize("method", ["shape keys", "bones"])
-def test_update_bakes_a_clip_with_held_items_again_with_them(armed_dump, method):
+def test_update_bakes_a_clip_with_held_items_again_with_them(armed_cache, method):
     appearance_props.from_preset(bpy.context.scene.rs_appearance, AppearancePreset(149, 430, False, ARMED, (0,) * 5))  # pyrefly: ignore[missing-attribute]
-    create(dump_folder=str(armed_dump))
+    create(cache_folder=str(armed_cache))
     (collection,) = players()
     bake = appearance_clip.bake_clip if method == "shape keys" else appearance_clip.bake_clip_to_rig
-    bake(collection, FIXTURES.parent / "animation149/held-1365", action=True, dump_folder=str(armed_dump))
-    assert update(dump_folder=str(armed_dump)) == {"FINISHED"}
+    bake(collection, FIXTURES.parent / "animation149/held-1365", action=True, cache_folder=str(armed_cache))
+    assert update(cache_folder=str(armed_cache)) == {"FINISHED"}
     (rebuilt,) = players()
     names = sorted(obj.name for obj in appearance_collection.parts(rebuilt))
     assert names == ["Player", "Player Shield", "Player Steel axe", "Player Weapon"]
@@ -905,67 +905,67 @@ def count_item_catalog_loads(monkeypatch):
     return loads
 
 
-def test_create_twice_and_update_once_read_the_item_catalog_once(dump, monkeypatch):
+def test_create_twice_and_update_once_read_the_item_catalog_once(cache, monkeypatch):
     # The user chose that Create and Update share one parsed copy of the catalogs per cache folder (issue 29,
     # decision 2, 2026-11-10).
     loads = count_item_catalog_loads(monkeypatch)
     show(case(None, False, [0, 0, 0, 0, 0]))
-    create(dump_folder=str(dump))
-    create(dump_folder=str(dump))
-    assert update(dump_folder=str(dump)) == {"FINISHED"}
-    assert loads == [dump]
+    create(cache_folder=str(cache))
+    create(cache_folder=str(cache))
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
+    assert loads == [cache]
 
 
-def test_create_reuses_the_item_catalog_the_panel_read(dump, monkeypatch):
+def test_create_reuses_the_item_catalog_the_panel_read(cache, monkeypatch):
     # The user chose that the panel and Create share one parsed copy of the catalogs per cache folder (issue 29,
-    # decision 2, 2026-11-10). Item 35 is named Excalibur in the fixture ItemDefinitions.json.
-    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
+    # decision 2, 2026-11-10). Item 35 is named Excalibur, as its row in the fixture ItemDefinitions.json says.
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
     loads = count_item_catalog_loads(monkeypatch)
     assert appearance_items.item_name(35) == "Excalibur"
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create() == {"FINISHED"}
-    assert loads == [dump]
+    assert loads == [cache]
 
 
-def test_changing_the_dump_folder_preference_uses_that_folders_item_catalog(dump, monkeypatch, tmp_path_factory):
+def test_changing_the_cache_folder_preference_uses_that_folders_item_catalog(cache, monkeypatch, tmp_path_factory):
     # The user asked that changing the cache folder preference uses that folder's catalog, as before (spec of the
     # shared catalog cache, user story 5).
-    other = tmp_path_factory.mktemp("other_dump")
-    shutil.copytree(dump, other, dirs_exist_ok=True)
+    other = tmp_path_factory.mktemp("other_cache")
+    shutil.copytree(cache, other, dirs_exist_ok=True)
     rewrite_cache(other, rename_item(35, "Excalibur", "Renamed sword"))
     loads = count_item_catalog_loads(monkeypatch)
-    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
     assert appearance_items.item_name(35) == "Excalibur"
     monkeypatch.setattr(preferences, "cache_folder", lambda: other)
     assert appearance_items.item_name(35) == "Renamed sword"
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create() == {"FINISHED"}
-    assert loads == [dump, other]
+    assert loads == [cache, other]
 
 
-def test_a_missing_item_group_names_the_preference_at_every_create(dump):
+def test_a_missing_item_group_names_the_preference_at_every_create(cache):
     # The user asked that a missing catalog gives the same message at every Create (spec of the shared catalog cache,
     # user story 6). spec/remove-dumper-and-legacy-revisions.md made the message name the Cache folder preference.
-    rewrite_cache(dump, lambda parts: parts["items"].clear())
+    rewrite_cache(cache, lambda parts: parts["items"].clear())
     show(case(None, False, [0, 0, 0, 0, 0]))
     for _ in range(2):
         with pytest.raises(RuntimeError, match=r"no group 10 .*Set the Cache folder in the add-on preferences"):
-            create(dump_folder=str(dump))
+            create(cache_folder=str(cache))
     assert not players()
 
 
 @pytest.mark.parametrize("method", ["shape keys", "bones"])
-def test_a_held_item_bake_reuses_the_item_catalog_create_read(armed_dump, monkeypatch, method):
+def test_a_held_item_bake_reuses_the_item_catalog_create_read(armed_cache, monkeypatch, method):
     # The user chose that held-item bakes share Create's parsed copy of the catalogs (issue 29, decision 2,
     # 2026-11-10).
     loads = count_item_catalog_loads(monkeypatch)
     appearance_props.from_preset(bpy.context.scene.rs_appearance, AppearancePreset(149, 430, False, ARMED, (0,) * 5))  # pyrefly: ignore[missing-attribute]
-    create(dump_folder=str(armed_dump))
+    create(cache_folder=str(armed_cache))
     (collection,) = players()
     bake = appearance_clip.bake_clip if method == "shape keys" else appearance_clip.bake_clip_to_rig
-    bake(collection, FIXTURES.parent / "animation149/held-1365", action=True, dump_folder=str(armed_dump))
+    bake(collection, FIXTURES.parent / "animation149/held-1365", action=True, cache_folder=str(armed_cache))
     assert "Player Steel axe" in [obj.name for obj in appearance_collection.parts(collection)]
-    assert loads == [armed_dump]
+    assert loads == [armed_cache]
 
 
 def rename_item(item_id, old, new):
@@ -977,14 +977,14 @@ def rename_item(item_id, old, new):
     return change
 
 
-def test_the_item_search_after_create_sees_a_renamed_item(dump, monkeypatch):
+def test_the_item_search_after_create_sees_a_renamed_item(cache, monkeypatch):
     # The user chose that a catalog whose files' modified times change is parsed again at the next use (issue 29,
-    # decision 3, 2026-11-10). Item 35 is named Excalibur in the fixture ItemDefinitions.json.
-    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
+    # decision 3, 2026-11-10). Item 35 is named Excalibur, as its row in the fixture ItemDefinitions.json says.
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create() == {"FINISHED"}
     assert appearance_items.item_name(35) == "Excalibur"
-    rewrite_cache(dump, rename_item(35, "Excalibur", "Renamed sword"))
+    rewrite_cache(cache, rename_item(35, "Excalibur", "Renamed sword"))
     assert appearance_items.item_name(35) == "Renamed sword"
 
 
@@ -995,45 +995,45 @@ def search_labels(slot):
     return {identifier: label for identifier, label, _ in choices}
 
 
-def test_the_item_search_popup_after_create_lists_a_renamed_item(dump, monkeypatch):
+def test_the_item_search_popup_after_create_lists_a_renamed_item(cache, monkeypatch):
     # The user chose that a catalog whose files' modified times change is parsed again at the next use (issue 29,
     # decision 3, 2026-11-10). Item 2653 is the Zamorak platebody, a male body item, in the fixture
     # ItemDefinitions.json.
-    monkeypatch.setattr(preferences, "cache_folder", lambda: dump)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
     show(case(None, False, [0, 0, 0, 0, 0]))
     assert create() == {"FINISHED"}
     assert "Zamorak platebody" in search_labels(4)["2653"]
-    rewrite_cache(dump, rename_item(2653, "Zamorak platebody", "Renamed platebody"))
+    rewrite_cache(cache, rename_item(2653, "Zamorak platebody", "Renamed platebody"))
     label = search_labels(4)["2653"]
     assert "Renamed platebody" in label and "Zamorak platebody" not in label
 
 
-def test_create_after_create_sees_an_item_a_changed_cache_added_and_reads_the_catalog_once_more(dump, monkeypatch):
+def test_create_after_create_sees_an_item_a_changed_cache_added_and_reads_the_catalog_once_more(cache, monkeypatch):
     # The user chose that a catalog whose files' modified times change is parsed again at the next use, and that an
     # unchanged one is shared (issue 29, decisions 2 and 3, 2026-11-10). Item 9035 is a copy of Excalibur (item 35)
-    # under an id the fixture ItemDefinitions.json lacks.
+    # under an id the fixture cache lacks.
     def add_sword(parts):
         parts["items"][9035] = parts["items"][35]
 
     loads = count_item_catalog_loads(monkeypatch)
     show(case(None, False, [0, 0, 0, 0, 0]))
-    assert create(dump_folder=str(dump)) == {"FINISHED"}
+    assert create(cache_folder=str(cache)) == {"FINISHED"}
     equipment = list(case("excalibur", False, [0, 0, 0, 0, 0])["equipment"])
     equipment[3] = 512 + 9035
     bpy.context.scene.rs_appearance.equipment = equipment  # pyrefly: ignore[missing-attribute]
-    rewrite_cache(dump, add_sword)
-    assert create(dump_folder=str(dump)) == {"FINISHED"}
-    assert create(dump_folder=str(dump)) == {"FINISHED"}
-    assert loads == [dump] * 2
+    rewrite_cache(cache, add_sword)
+    assert create(cache_folder=str(cache)) == {"FINISHED"}
+    assert create(cache_folder=str(cache)) == {"FINISHED"}
+    assert loads == [cache] * 2
 
 
-def test_create_after_create_sees_a_kit_a_changed_cache_removed(dump):
+def test_create_after_create_sees_a_kit_a_changed_cache_removed(cache):
     # The user chose that each catalog whose files' modified times change is parsed again at the next use (issue 29,
     # decision 3, 2026-11-10), so Create refuses a look whose kit the changed cache lacks instead of building it from the
     # old catalog. The default male look wears torso kit 18 (equipment 274 in reference.json).
     show(case(None, False, [0, 0, 0, 0, 0]))
-    assert create(dump_folder=str(dump)) == {"FINISHED"}
-    rewrite_cache(dump, lambda parts: parts["kits"].pop(18))
+    assert create(cache_folder=str(cache)) == {"FINISHED"}
+    rewrite_cache(cache, lambda parts: parts["kits"].pop(18))
     with pytest.raises(RuntimeError):
-        create(dump_folder=str(dump))
+        create(cache_folder=str(cache))
     assert len(players()) == 1

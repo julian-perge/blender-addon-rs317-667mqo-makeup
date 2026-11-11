@@ -163,7 +163,7 @@ def fail(operator: bpy.types.Operator, context: bpy.types.Context, error: Except
     context.scene.rs_appearance.last_error = str(error)
 
 
-def dump_folder(setting: str) -> Path:
+def cache_folder(setting: str) -> Path:
     folder = preferences.folder_in_setting(setting) if setting else preferences.cache_folder()
     if folder is None:
         raise ValueError("Set the Cache folder in the add-on preferences.")

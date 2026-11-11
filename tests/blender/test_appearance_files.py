@@ -88,26 +88,26 @@ def test_loading_a_preset_file_unties_the_panel(props, tmp_path):
 APPEARANCE = Path(__file__).parent.parent / "fixtures" / "appearance"
 
 
-def active_hero(dump):
+def active_hero(cache):
     cases = json.loads((APPEARANCE / "reference.json").read_text())["cases"]
     case = next(c for c in cases if not c.get("outfit") and not c["female"] and c["colours"] == [0] * 5)
     preset = AppearancePreset(149, 430, False, tuple(case["equipment"]), tuple(case["colours"]))
-    body, shading, slots = appearance_preview.assemble_parts(preset, dump)
+    body, shading, slots = appearance_preview.assemble_parts(preset, cache)
     player = appearance_collection.build_collection(body, shading, preset, "Hero", slots=slots)
     bpy.context.view_layer.objects.active = appearance_collection.mesh_of(player)  # pyrefly: ignore[missing-attribute]
     return player
 
 
-def test_save_player_writes_the_active_player_to_its_own_blend(props, dump, clean, tmp_path):
-    active_hero(dump)
+def test_save_player_writes_the_active_player_to_its_own_blend(props, cache, clean, tmp_path):
+    active_hero(cache)
     path = tmp_path / "Hero.blend"
     assert bpy.ops.rsps.save_player(filepath=str(path)) == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
     with bpy.data.libraries.load(str(path)) as (source, _):  # pyrefly: ignore[bad-context-manager]
         assert list(source.collections) == ["Hero"]
 
 
-def test_save_player_refuses_a_player_in_edit_mode_and_writes_nothing(props, dump, clean, tmp_path):
-    active_hero(dump)
+def test_save_player_refuses_a_player_in_edit_mode_and_writes_nothing(props, cache, clean, tmp_path):
+    active_hero(cache)
     bpy.ops.object.mode_set(mode="EDIT")
     path = tmp_path / "Hero.blend"
     with pytest.raises(RuntimeError, match="Leave Edit Mode"):
@@ -117,9 +117,9 @@ def test_save_player_refuses_a_player_in_edit_mode_and_writes_nothing(props, dum
 
 
 def test_save_player_also_writes_the_objects_outside_it_that_its_rig_uses_and_names_them(
-    props, dump, clean, tmp_path, capfd
+    props, cache, clean, tmp_path, capfd
 ):
-    rig = appearance_collection.armature_of(active_hero(dump))
+    rig = appearance_collection.armature_of(active_hero(cache))
     stand, target = bpy.data.objects.new("Stand", None), bpy.data.objects.new("Target", None)
     for empty in (stand, target):
         bpy.context.scene.collection.objects.link(empty)  # pyrefly: ignore[missing-attribute]

@@ -61,7 +61,7 @@ def bake_clip(
     clip: ClipSource | Path,
     *,
     action: bool = False,
-    dump_folder: str = "",
+    cache_folder: str = "",
     set_scene_timing: bool = True,
 ) -> int:
     """Replace the player's clip shape keys with one per frame of the clip, keyed on the ticks the client shows them.
@@ -99,7 +99,7 @@ def bake_clip(
     if appearance_collection.is_edited(collection):
         raise ValueError(f"{collection.name} has edits, so a clip cannot be baked onto it")
     source = source_of(clip)
-    posed = appearance_pose.pose_player(collection, source, action=action, dump_folder=dump_folder)
+    posed = appearance_pose.pose_player(collection, source, action=action, cache_folder=cache_folder)
     with appearance_held.held_items_undone_on_failure(collection):
         parts = posed.ensure_parts()
         appearance_shape_keys.write(parts, posed.schedule)
@@ -125,7 +125,7 @@ def bake_clip_to_rig(
     action: bool = False,
     start: int = 1,
     smooth: bool = False,
-    dump_folder: str = "",
+    cache_folder: str = "",
     set_scene_timing: bool = True,
 ) -> int:
     """Add the clip to the rig as an NLA strip on the "RS clips" track, starting at Blender frame `start`.
@@ -163,7 +163,7 @@ def bake_clip_to_rig(
     if appearance_collection.is_edited(collection):
         raise ValueError(f"{collection.name} has edits, so a clip cannot be baked onto it")
     source = source_of(clip)
-    posed = appearance_pose.pose_player(collection, source, action=action, dump_folder=dump_folder)
+    posed = appearance_pose.pose_player(collection, source, action=action, cache_folder=cache_folder)
     length = sum(ticks for _, ticks in posed.schedule)
     track = _clip_track(rig)
     replaced = None if track is None else next((s for s in track.strips if round(s.frame_start) == start), None)
@@ -265,7 +265,7 @@ def _strip_spans(
     return spans
 
 
-def bake_recorded(collection: bpy.types.Collection, clip: str, start: int = 1, dump_folder: str = "") -> int:
+def bake_recorded(collection: bpy.types.Collection, clip: str, start: int = 1, cache_folder: str = "") -> int:
     """Bake a clip recorded by an earlier bake, as Update and Duplicate Player do for the player they build. Returns
     the frame count.
 
@@ -280,14 +280,14 @@ def bake_recorded(collection: bpy.types.Collection, clip: str, start: int = 1, d
             action=record["action"],
             start=start,
             smooth=record.get("smooth", False),
-            dump_folder=dump_folder,
+            cache_folder=cache_folder,
             set_scene_timing=False,
         )
     return bake_clip(
         collection,
         clip_from_record(record),
         action=record["action"],
-        dump_folder=dump_folder,
+        cache_folder=cache_folder,
         set_scene_timing=False,
     )
 
@@ -539,8 +539,8 @@ class RSPS_OT_bake_clip(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     sequence: bpy.props.IntProperty(name="Sequence", default=-1, options={"HIDDEN"})  # pyrefly: ignore[bad-assignment]
-    # Overrides the add-on preference for the dump a clip's held items are assembled from; scripts and tests set it.
-    dump_folder: bpy.props.StringProperty(subtype="DIR_PATH", options={"HIDDEN", "SKIP_SAVE"})  # pyrefly: ignore[bad-assignment]
+    # Overrides the add-on preference for the cache a clip's held items are assembled from; scripts and tests set it.
+    cache_folder: bpy.props.StringProperty(subtype="DIR_PATH", options={"HIDDEN", "SKIP_SAVE"})  # pyrefly: ignore[bad-assignment]
     smooth: bpy.props.BoolProperty(name="Smooth", options={"HIDDEN"})  # pyrefly: ignore[bad-assignment]
     # Scripts and tests bake a folder written by tests/fixtures/animation149/export_clip.py instead of the cache.
     directory: bpy.props.StringProperty(subtype="DIR_PATH", options={"HIDDEN", "SKIP_SAVE"})  # pyrefly: ignore[bad-assignment]
@@ -588,10 +588,10 @@ class RSPS_OT_bake_clip(bpy.types.Operator):
                     action=action,
                     start=context.scene.frame_current,
                     smooth=self.smooth,
-                    dump_folder=self.dump_folder,
+                    cache_folder=self.cache_folder,
                 )
             else:
-                frames = bake_clip(player, clip, action=action, dump_folder=self.dump_folder)
+                frames = bake_clip(player, clip, action=action, cache_folder=self.cache_folder)
         except (OSError, LookupError, ValueError, RuntimeError) as error:
             appearance_preview.fail(self, context, error)
             return {"CANCELLED"}
