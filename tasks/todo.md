@@ -53,7 +53,8 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Verify: `scripts/test-blender.sh`; `prek run --all-files`.
   - Deps: T5.
 
-- [ ] **T7 Real-cache end-to-end test** (S)
+- [x] **T7 Real-cache end-to-end test** (S)
+  - Result: four tests are gated by `RSPS_SNAPSHOT_430_CACHE`. The first builds the default male preset from the real cache and checks 476 faces and 264 vertices (`reference.json`). The others decode every definition of groups 3, 8 and 10 and check their counts: 151 kits, 1725 enums and 21392 items. The counts match the raw config files in an export of snapshot 430 that the RuneLite cache library wrote. That export is not committed, so this source is weaker than a fixture file. Test result: 14 passed with the variable set, and 10 passed and 4 skipped without it. prek passed. The review found no spec gaps. Its suggestion to use keyword arguments was applied.
   - Gated by `RSPS_SNAPSHOT_430_CACHE`: build the default preset from the real cache; decode all 151 kits, all 21392 items and all 1725 enums without an unknown opcode or leftover bytes; check group ids 3, 8, 10 hold the counts above.
   - Verify: `RSPS_SNAPSHOT_430_CACHE=<path to cache> uv run pytest tests/unit/test_cache_profile.py`, and the skip without the variable.
   - Deps: T5. Files: `tests/unit/test_cache_profile.py`.
