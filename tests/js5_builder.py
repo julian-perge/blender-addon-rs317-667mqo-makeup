@@ -83,6 +83,7 @@ def build_cache(
         for group, files in ((KIT_GROUP, kits), (ENUM_GROUP, enums), (ITEM_GROUP, items))
         if files
     }
+    folder.mkdir(parents=True, exist_ok=True)
     models = dict(sorted((models or {}).items()))
     stored = {
         (REFERENCE_INDEX, CONFIG_INDEX): container(table({group: tuple(files) for group, files in config.items()})),

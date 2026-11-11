@@ -66,7 +66,8 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Verify: run the script to a temporary output and `cmp`; `prek run --all-files`.
   - Deps: T3. Files: the script, `item_definition.py` if 2757 needs more opcodes.
 
-- [ ] **T9 Round-trip script reads a cache folder** (S)
+- [x] **T9 Round-trip script reads a cache folder** (S)
+  - Result: `scripts/round-trip-dump.py` is now `scripts/round-trip-cache.py`. It reads models from index 7 with `Js5Store`, and `--ids <first>-<last>` limits the range. The user decided on 2026-11-11 to keep only the osrs-149 operator mode. The dump317 default mode, its textures folder, the missing-texture check and the Edit Mode check on set-aside faces are gone. Each model is written to a temporary folder for File > Import, so the source check covers those copies. The docstring sentence about `compare-osrs149-references.py` was removed, because the temporary originals are deleted at the end of the run. `build_cache` now creates its folder. On cache 430, models 0 to 199 gave 200 models with 0 failures and 0 differences (exit 0). Test result: Blender suite 770 passed. prek passed. The review findings were applied. Left for T12: docs that name `round-trip-dump.py`.
   - Rename to `scripts/round-trip-cache.py`; read models from index 7 with `Js5Store`; drop `dump317` and `dump_index`. Update references in docs later (T12).
   - Verify: run on `<path to cache>` for a small id range in headless Blender.
   - Deps: T5.
