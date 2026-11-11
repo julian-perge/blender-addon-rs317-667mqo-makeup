@@ -9,6 +9,7 @@ from pathlib import Path
 import bmesh
 import bpy
 import pytest
+from js5_builder import build_cache
 
 from rsps_toolkit.blender import export_model, import_model, model_source, rs_layers
 from rsps_toolkit.blender.mesh import model_to_object, object_to_model
@@ -335,11 +336,11 @@ def test_preserve_source_refuses_a_negative_scale_object(exporter: Path):
         export_model.prepare_exports([obj], "PRESERVE_SOURCE", False)
 
 
-# The sweep script runs in its own Blender process, as it does for a real dump.
-SCRIPT = Path(__file__).parents[2] / "scripts" / "round-trip-dump.py"
+# The sweep script runs in its own Blender process, as it does for a real cache.
+SCRIPT = Path(__file__).parents[2] / "scripts" / "round-trip-cache.py"
 
 
-def run_sweep(dump: Path, root: Path, report: Path, script: Path = SCRIPT) -> subprocess.CompletedProcess:
+def run_sweep(cache: Path, root: Path, report: Path, script: Path = SCRIPT) -> subprocess.CompletedProcess:
     source = Path(__file__).parents[2] / "src"
     environment = {**os.environ, "PYTHONPATH": str(source)}
     return subprocess.run(
@@ -353,10 +354,7 @@ def run_sweep(dump: Path, root: Path, report: Path, script: Path = SCRIPT) -> su
             "--python",
             str(script),
             "--",
-            str(dump),
-            "--profile",
-            "osrs-149",
-            "--preserve-source",
+            str(cache),
             "--export-root",
             str(root),
             "--report",
@@ -371,12 +369,10 @@ def run_sweep(dump: Path, root: Path, report: Path, script: Path = SCRIPT) -> su
 
 @pytest.mark.timeout(150, method="thread")
 def test_roundtrip_cli_uses_preserve_source_actions(tmp_path: Path):
-    models = tmp_path / "dump" / "dump_index" / "models"
-    models.mkdir(parents=True)
     ids = (28954, 28634, 96, 32181)
-    for model_id in ids:
-        shutil.copy(OSRS149 / f"{model_id}.dat", models / f"{model_id}.dat")
-    result = run_sweep(tmp_path / "dump", tmp_path / "export", tmp_path / "report.json")
+    models = {model_id: (OSRS149 / f"{model_id}.dat").read_bytes() for model_id in ids}
+    build_cache(tmp_path / "cache", models=models)
+    result = run_sweep(tmp_path / "cache", tmp_path / "export", tmp_path / "report.json")
     assert result.returncode == 0, result.stdout[-2000:]
     report = json.loads((tmp_path / "report.json").read_text())
     assert report["models"] == 4 and report["failed"] == [] and report["differs"] == []
@@ -384,9 +380,8 @@ def test_roundtrip_cli_uses_preserve_source_actions(tmp_path: Path):
     assert sorted(p.name for p in (tmp_path / "export").iterdir()) == sorted(f"{i}.dat" for i in ids)
     assert "Exported 1 model files" in result.stdout
 
-    for model_id in (3, 4):
-        (models / f"{model_id}.dat").write_bytes(b"\x00" * 10)
-    broken = run_sweep(tmp_path / "dump", tmp_path / "export-two", tmp_path / "report-two.json")
+    build_cache(tmp_path / "cache", models=models | {3: b"\x00" * 10, 4: b"\x00" * 10})
+    broken = run_sweep(tmp_path / "cache", tmp_path / "export-two", tmp_path / "report-two.json")
     assert broken.returncode == 1
     report = json.loads((tmp_path / "report-two.json").read_text())
     assert [entry[0] for entry in report["failed"]] == ["3", "4"]
@@ -396,9 +391,7 @@ def test_roundtrip_cli_uses_preserve_source_actions(tmp_path: Path):
 
 @pytest.mark.timeout(150, method="thread")
 def test_roundtrip_cli_fails_when_an_export_changes_source_fields(tmp_path: Path):
-    models = tmp_path / "dump" / "dump_index" / "models"
-    models.mkdir(parents=True)
-    shutil.copy(OSRS149 / "28954.dat", models / "28954.dat")
+    build_cache(tmp_path / "cache", models={28954: (OSRS149 / "28954.dat").read_bytes()})
     # The wrapper makes the exporter write a different opaque tail, as an encoder that lost a field would.
     wrapper = tmp_path / "wrapper.py"
     wrapper.write_text(
@@ -413,7 +406,7 @@ def test_roundtrip_cli_fails_when_an_export_changes_source_fields(tmp_path: Path
         "export_model.encode = lossy\n"
         f"runpy.run_path({str(SCRIPT)!r}, run_name='__main__')\n"
     )
-    result = run_sweep(tmp_path / "dump", tmp_path / "export", tmp_path / "report.json", wrapper)
+    result = run_sweep(tmp_path / "cache", tmp_path / "export", tmp_path / "report.json", wrapper)
     assert result.returncode == 1, (result.stdout + result.stderr)[-1500:]
     report = json.loads((tmp_path / "report.json").read_text())
     assert report["source_field_failures"] == ["28954"]
