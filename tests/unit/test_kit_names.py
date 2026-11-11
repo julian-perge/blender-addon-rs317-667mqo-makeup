@@ -1,11 +1,13 @@
 from pathlib import Path
 
 from rsps_toolkit.formats.appearance import load_kits
+from rsps_toolkit.formats.enum_definition import decode_enum
 from rsps_toolkit.formats.kit_names import load_kit_names
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/appearance"
 KITS = load_kits(FIXTURES / "KitDefinitions.json")
-NAMES = load_kit_names(FIXTURES / "KitStyleEnums.json", KITS)
+ENUMS = {int(path.stem): decode_enum(int(path.stem), path.read_bytes()) for path in (FIXTURES / "enums").iterdir()}
+NAMES = load_kit_names(ENUMS, KITS)
 
 
 def test_kit_101_is_leggings_by_its_model_28339():

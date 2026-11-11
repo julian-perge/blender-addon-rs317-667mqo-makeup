@@ -25,7 +25,8 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Verify: `uv run pytest tests/unit/test_item_definition.py`.
   - Deps: T1. Files: `formats/item_definition.py`, its test.
 
-- [ ] **T4 Enum decoder** (S)
+- [x] **T4 Enum decoder** (S)
+  - Result: `decode_enum` follows RuneLite `EnumLoader` at commit bb0fa42b3 (`ConfigType.ENUM(8)`). The 18 raw style enums equal `KitStyleEnums.json`. `load_kit_names` takes decoded enums, and the `test_kit_names` expectations are unchanged and pass. The user decided on 2026-11-11 that opcodes 7 and 8 (long values) are refused. All 1725 cache 430 enums use only opcodes 1 to 6, and T7 now checks this. `cache_profile.py` has a temporary `_load_enums` JSON bridge, which T5 deletes. The fixture README now says where `KitStyleEnums.json` came from: the 18 rows were checked equal to the dumper's `enums/Enums.json`. Open points: an empty enum (the single byte 0) decodes to empty tuples, where RuneLite returns null. Text uses Python's cp1252, which may differ from RuneLite's table for bytes 128 to 159. Neither affects the style enums. Test result: unit suite 1324 passed. prek passed. Blender appearance_props and appearance_items passed.
   - `formats/enum_definition.py` decodes an enum (int and string values) following RuneLite `EnumLoader`. `kit_names.load_kit_names` takes the decoded enums, not a path.
   - Accept: the 18 raw style enums equal `KitStyleEnums.json`; `test_kit_names` expectations unchanged and green.
   - Verify: `uv run pytest tests/unit/test_enum_definition.py tests/unit/test_kit_names.py`.
@@ -51,7 +52,7 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
   - Deps: T5.
 
 - [ ] **T7 Real-cache end-to-end test** (S)
-  - Gated by `RSPS_SNAPSHOT_430_CACHE`: build the default preset from the real cache; decode all 151 kits and all 21392 items without an unknown opcode or leftover bytes; check group ids 3, 8, 10 hold the counts above.
+  - Gated by `RSPS_SNAPSHOT_430_CACHE`: build the default preset from the real cache; decode all 151 kits, all 21392 items and all 1725 enums without an unknown opcode or leftover bytes; check group ids 3, 8, 10 hold the counts above.
   - Verify: `RSPS_SNAPSHOT_430_CACHE=<path to cache> uv run pytest tests/unit/test_cache_profile.py`, and the skip without the variable.
   - Deps: T5. Files: `tests/unit/test_cache_profile.py`.
 

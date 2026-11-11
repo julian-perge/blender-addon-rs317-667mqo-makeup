@@ -6,11 +6,10 @@ This was matched by comparing the enums of OpenRS2 snapshot 430 with the kits' m
 snapshot data and not part of the revision 149 client. Hands and feet have no such enums and use WIKI_NAMES.
 """
 
-import json
 from collections.abc import Mapping
-from pathlib import Path
 
 from .appearance import Kit
+from .enum_definition import EnumDefinition
 
 # Body part category -> (enum of style names, enum of style models). Hair and jaw enums list chathead models, the
 # others list body models.
@@ -33,7 +32,7 @@ STYLE_ENUMS = {
 WIKI_NAMES = {4: ("Basic", "Plain"), 6: ("Basic", "Elven"), 11: ("Basic", "Plain"), 13: ("Basic", "Elven")}
 
 
-def load_kit_names(enums_path: Path, kits: Mapping[int, Kit]) -> dict[int, str]:
+def load_kit_names(enums: Mapping[int, EnumDefinition], kits: Mapping[int, Kit]) -> dict[int, str]:
     """Name each kit that a style list covers.
 
     A kit takes the name of the style whose model it uses, when only one style lists that model. Kits and styles
@@ -42,14 +41,14 @@ def load_kit_names(enums_path: Path, kits: Mapping[int, Kit]) -> dict[int, str]:
     base model. The order rule is unverified against the client: its only check is that it agrees with the model rule
     for every kit that both rules name. A category whose leftover kits and styles differ in number is left unnamed.
     """
-    enums = {enum["id"]: enum for enum in json.loads(enums_path.read_text())}
     names: dict[int, str] = {}
     for category, (names_id, models_id) in STYLE_ENUMS.items():
         if names_id not in enums or models_id not in enums:
             raise ValueError(f"Enums {names_id} and {models_id} are missing for body part category {category}")
-        style_names = dict(zip(enums[names_id]["keys"], enums[names_id]["stringVals"], strict=True))
-        models = enums[models_id]["intVals"]
-        style_of_model = dict(zip(models, enums[models_id]["keys"], strict=True))
+        names_enum, models_enum = enums[names_id], enums[models_id]
+        style_names = dict(zip(names_enum.keys, names_enum.string_values, strict=True))
+        models = models_enum.int_values
+        style_of_model = dict(zip(models, models_enum.keys, strict=True))
         claimed: set[int] = set()
         unmatched: list[Kit] = []
         for kit in sorted(kits.values(), key=lambda k: k.id):

@@ -4,6 +4,7 @@ The dump folder is the dumper's output for OpenRS2 snapshot 430. Kits come from 
 from its `items` target and model bytes from `dump_index/models`. The colour palette ships with the extension.
 """
 
+import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -13,6 +14,7 @@ from typing import Any, NamedTuple
 from . import decode
 from .appearance import Kit, Palette, WornItem, assemble_body, assemble_slots, load_items, load_kits, load_palette
 from .appearance_preset import AppearancePreset
+from .enum_definition import EnumDefinition
 from .kit_names import load_kit_names
 from .model import Model
 
@@ -22,6 +24,19 @@ PALETTE_PATH = Path(__file__).parent.parent / "data" / "revision149-palette.json
 
 class MissingResourceError(FileNotFoundError):
     """A file the appearance needs is not in the dump folder."""
+
+
+def _load_enums(path: Path) -> dict[int, EnumDefinition]:
+    """Read the dumper's `enums/Enums.json`."""
+    return {
+        row["id"]: EnumDefinition(
+            id=row["id"],
+            keys=tuple(row.get("keys", ())),
+            int_values=tuple(row.get("intVals", ())),
+            string_values=tuple(row.get("stringVals", ())),
+        )
+        for row in json.loads(path.read_text())
+    }
 
 
 def _require(path: Path, hint: str) -> Path:
@@ -68,7 +83,7 @@ class CacheProfile:
         # The kits are read only inside the load, after both files' times are taken, so names built from kits that a
         # re-dump replaced meanwhile are kept under the older time and named again at the next use.
         return self._kept_unless_changed(
-            "kit_names", [enums, self._kits_file()], lambda: load_kit_names(enums, self.kits)
+            "kit_names", [enums, self._kits_file()], lambda: load_kit_names(_load_enums(enums), self.kits)
         )
 
     @property
