@@ -35,7 +35,7 @@ T2, T3 and T4 depend only on T1. They touch `import_item.py` or `mesh.py`, so th
 ## Architecture decisions
 
 - **New module `blender/import_item.py`** with the operator, its item list, its menu entry and `classes`. The spec left this open. Reason: `import_model.py` holds the file-based importer (`ImportHelper`, `files`, profiles) and shares nothing with a cache-based one. The module name follows `import_model`, `import_animation`.
-- **Properties:** `body` (EnumProperty `MALE` default, `FEMALE`, shown expanded) and `item` (EnumProperty with an items callback, like `RSPS_OT_pick_item`). The callback lists items whose first model id for the chosen body is not -1, sorted by lower-case name then id, labelled `<name> (<id>)`.
+- **Properties and operators:** `import_scene.rs_item` has `body` (EnumProperty `MALE` default, `FEMALE`) and `item` (EnumProperty with an items callback, like `RSPS_OT_pick_item`), and its `invoke` opens a search popup. A second operator, `import_scene.rs_item_body`, shows the body choice as a dialog, and OK opens the search popup of the first (user, 2026-11-11: the plain dropdown could not be searched). The callback lists items whose first model id for the chosen body is not -1, sorted by lower-case name then id, labelled `<name> (<id>)`.
 - **Item list function** `items_with_worn_model(items, female)` is pure and goes in `formats/appearance.py` beside `items_for_slot`. It adds a function and changes none that Player Appearance uses (the spec's "ask first" does not apply). If the user prefers no edit to that file, it moves into `import_item.py`.
 - **Recolours shown:** `model_to_object` gains an optional `shown_colours: Sequence[int | None] | None` (one per face, `None` means "same as stored"). `face_materials.face_material` gains an optional `shown_colour`. The material key becomes `(colour, texture, alpha, shown)`. The plain import passes nothing.
 - **Stored item data** (item id, name, body) goes on the object, through new read and write functions in `rs_layers.py`, because the architecture notes keep Blender storage conventions there. It names no vertex or face, so the "stored data survives edits" standard needs no index test. A test checks that it survives a mesh edit and that a plain import has none.
@@ -51,7 +51,7 @@ See `tasks/todo.md`. Five tasks and a close-out, three checkpoints.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| An enum with thousands of items (snapshot 430 has 2093 recoloured items and more worn ones) is slow, or its dropdown has no search | High | T3 is early. After it, the user opens the dialog against the real cache. If the dropdown is slow or unsearchable, the fallback is `invoke_search_popup` as in Player Appearance, with the body chosen first. That changes the spec's dialog decision, so ask the user. |
+| An enum with thousands of items (snapshot 430 has 3503 male worn items) is slow, or its dropdown has no search | High | Happened in T3: the dropdown opened at once but could not be searched. The user chose the fallback on 2026-11-11: a body dialog, then `invoke_search_popup` as in Player Appearance. |
 | A test passes because a face already showed the right colour | High | T2 checks a face with a recolour and a face without one in the same object, and the stored value of the recoloured face. A mutation check (recolour ignored) must fail them. |
 | Blender rejects an enum value that is not in the current list before `execute` runs, so the "no worn model for this body" refusal cannot be reached headless | Med | T4 first checks what Blender does. If it rejects the value, the test reaches the check through the shared function that `execute` calls, and the task result says so. |
 | Item and body stored on an object are stale after the user swaps its material or recolours it by hand | Low | The note says what the import showed, not what the object shows now. The wording is part of T5. |
@@ -59,4 +59,4 @@ See `tasks/todo.md`. Five tasks and a close-out, three checkpoints.
 ## Open questions
 
 - **Materials on refusal.** The spec says a refused import removes objects and meshes. The plan also removes the materials, so "adds nothing to the file" (story 9) is true. Say if the materials should stay.
-- **Dropdown search.** See the first risk. It is only answered by looking at it in Blender.
+- **Popup search.** Closed on 2026-11-11 by the user's choice of a search popup. Typing a name and an id into it still needs the user's check in Blender (T3 Verify).
