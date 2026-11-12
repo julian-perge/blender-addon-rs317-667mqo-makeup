@@ -12,7 +12,7 @@ from ..formats.appearance_preset import AppearancePreset, dumps_preset, loads_pr
 from ..formats.appearance_rig import Rig, derive_rig
 from ..formats.lighting import Shading
 from ..formats.model import Model
-from . import appearance_fades, appearance_preview, appearance_props, preferences
+from . import appearance_extras, appearance_fades, appearance_preview, appearance_props, preferences
 from .axes import game_to_blender
 from .face_materials import DEFAULT_BRIGHTNESS
 
@@ -115,8 +115,8 @@ def _actions(owner) -> list[bpy.types.Action | None]:
 
 def check_removable(collection: bpy.types.Collection) -> None:
     """Raise when the collection holds objects or collections the add-on did not make, which removal would delete."""
-    others = [obj.name for obj in collection.objects if obj.type not in ("MESH", "ARMATURE")]
-    others += [child.name for child in collection.children]
+    children, objects = appearance_extras.not_made_by_the_add_on(collection)
+    others = [obj.name for obj in objects] + [child.name for child in children]
     if others:
         raise ValueError(
             f"{collection.name} holds {', '.join(others)}, which the add-on did not make. "
@@ -495,6 +495,22 @@ def beside_players(body: Model) -> tuple[float, float, float]:
     return (right + PLAYER_GAP - left, 0.0, 0.0)
 
 
+def _counterparts(old: bpy.types.Collection, new: bpy.types.Collection) -> dict[str, bpy.types.Object | None]:
+    """Map the name of each mesh and rig object of the old player to the rebuilt object that replaces it.
+
+    The value is None for an object the rebuild does not make again. A held item is one, because a clip's bake adds
+    it later. A weapon or shield the new settings no longer wear is another.
+    """
+    pairs: dict[str, bpy.types.Object | None] = {
+        mesh_of(old).name: mesh_of(new),
+        armature_of(old).name: armature_of(new),
+    }
+    worn = {obj[PART_KEY]: obj for obj in parts(new)[1:] if obj[PART_KEY] != HELD}
+    for obj in parts(old)[1:]:
+        pairs[obj.name] = worn.get(obj[PART_KEY])
+    return pairs
+
+
 def _carry_placement(old_rig: bpy.types.Object, new_rig: bpy.types.Object) -> None:
     """Give the rebuilt rig the old rig's parent, constraints, location, rotation and scale.
 
@@ -605,8 +621,6 @@ class RSPS_OT_update_appearance_preview(bpy.types.Operator):
                 )
             edited = is_edited(old)
             lost_clip = None if edited else baked_clip(old)
-            if not edited:
-                check_removable(old)
             preset = appearance_props.to_preset(context.scene.rs_appearance)
             folder = appearance_preview.cache_folder(self.cache_folder)
             body, shading, slots = appearance_preview.assemble_parts(preset, folder)
@@ -636,7 +650,8 @@ def _replace(
     lost_clip: str | None,
     cache_folder: str = "",
 ) -> None:
-    """Swap the rebuilt player in for the old one: carry the user's animation over, then bake the old clips again.
+    """Swap the rebuilt player in for the old one: carry the user's animation and what the add-on did not make over,
+    then bake the old clips again.
 
     A player built before rigs had joint bones gets them; the user's keys on its label bones would fight the joints,
     so they are not carried, and that is reported. A clip whose bake fails, or one baked before bakes were recorded,
@@ -654,8 +669,25 @@ def _replace(
             f"{name} now has joint bones. Your own keys were on its old label bones and were not carried over",
         )
     _carry_placement(armature_of(old), armature_of(new))
-    remove_collection(old)
+    # Issue 27, decisions 1 to 4. Removal refuses a player that holds what the add-on did not make, so those
+    # collections and objects are lifted out of the old player before it is removed. The rebuilt player then takes
+    # the old player's parent collections and view layer settings, and links what was lifted.
+    counterparts = _counterparts(old, new)
+    appearance_extras.follow_to_counterparts(counterparts)
+    extras = appearance_extras.Extras.lift(old)
+    own_state = appearance_extras.ViewState.read([old], [])
+    parents = appearance_extras.parents_of(old)
+    old_name = old.name
+    try:
+        remove_collection(old)
+    except Exception:
+        if bpy.data.collections.get(old_name) is not None:
+            extras.link_into(old)
+        raise
+    extras.link_into(new)
+    appearance_extras.take_place(new, parents)
     _rename(new, name)
+    own_state.write()
     for clip, start in clips:
         try:
             appearance_clip.bake_recorded(new, clip, start, cache_folder)

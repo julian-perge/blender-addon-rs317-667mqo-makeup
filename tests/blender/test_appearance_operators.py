@@ -7,6 +7,7 @@ import bmesh
 import bpy
 import pytest
 from js5_builder import rewrite_cache
+from mathutils import Matrix
 
 from rsps_toolkit.blender import (
     appearance_clip,
@@ -651,21 +652,287 @@ def test_empty_equipment_cancels_with_a_message_and_creates_nothing(cache):
     assert not bpy.data.objects and not bpy.data.collections
 
 
-def test_update_refuses_a_player_holding_objects_the_add_on_did_not_make_and_changes_nothing(cache):
-    show(case(None, False, [0, 0, 0, 0, 0]))
-    create(cache_folder=str(cache))
-    (collection,) = players()
-    mesh = appearance_collection.mesh_data(collection)
-    collection.objects.link(bpy.data.objects.new("MyEmpty", None))
-    collection.objects.link(bpy.data.objects.new("MyCamera", bpy.data.cameras.new("MyCamera")))
-    cameras = len(bpy.data.cameras)
+def outer_with_extras(cache):
+    """An unedited player holding a nested player, a collection of the user's, an empty and a camera, as File >
+    Append and the user's own set-up leave one. Returns the names, since Update replaces the outer collection."""
+    seen.clear()
+    outer = make_player(cache, None)
+    inner = make_player(cache, "dragon_plate")
+    # Issue 27 found that File > Append links an appended player into the active collection, which this simulates.
+    scene_collection().children.unlink(inner)
+    outer.children.link(inner)
+    own = bpy.data.collections.new("MyCollection")
+    outer.children.link(own)
+    outer.objects.link(bpy.data.objects.new("MyEmpty", None))
+    outer.objects.link(bpy.data.objects.new("MyCamera", bpy.data.cameras.new("MyCamera")))
+    bpy.context.view_layer.objects.active = appearance_collection.mesh_of(outer)  # pyrefly: ignore[missing-attribute]
+    panel().source_player = outer.name
+    return outer.name, inner.name
+
+
+def scene_collection():
+    scene = bpy.context.scene
+    assert scene is not None
+    return scene.collection
+
+
+def held_by(name):
+    """The sorted names of what the player's collection links that the add-on did not make."""
+    collection = bpy.data.collections[name]
+    return sorted(
+        [child.name for child in collection.children]
+        + [obj.name for obj in collection.objects if obj.type not in ("MESH", "ARMATURE")]
+    )
+
+
+EXTRAS = ["MyCamera", "MyCollection", "MyEmpty"]
+
+
+def test_update_carries_what_the_add_on_did_not_make_into_the_rebuilt_player(cache):
+    # Issue 27, decisions 1 and 2: Update no longer refuses a player holding them, and links them into the rebuilt one.
+    outer, inner = outer_with_extras(cache)
+    cameras, meshes = len(bpy.data.cameras), len(bpy.data.meshes)
     show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
-    with pytest.raises(RuntimeError, match="MyEmpty, MyCamera"):
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+    assert len(bpy.data.cameras) == cameras and len(bpy.data.meshes) == meshes
+    # ADR 0015: the rebuilt player stores the settings it was built from.
+    assert stored(bpy.data.collections[outer]) == show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    assert not appearance_collection.is_edited(bpy.data.collections[outer])
+
+
+def test_the_nested_player_stays_a_working_unedited_player_after_update(cache):
+    # Issue 27, decision 2 (story 3): the nested player is neither rebuilt nor changed.
+    outer, inner = outer_with_extras(cache)
+    nested_mesh = appearance_collection.mesh_data(bpy.data.collections[inner])
+    nested_preset = stored(bpy.data.collections[inner])
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    update(cache_folder=str(cache))
+    nested = bpy.data.collections[inner]
+    assert appearance_collection.mesh_data(nested) is nested_mesh
+    assert stored(nested) == nested_preset
+    assert not appearance_collection.is_edited(nested)
+    assert [c.name for c in bpy.data.collections[outer].children if c.name == inner] == [inner]
+    assert inner not in [c.name for c in scene_collection().children]
+
+
+def test_a_carried_object_keeps_its_transform_parent_and_other_collections(cache):
+    # Issue 27, decisions 1 and 3 (story 6): objects are linked, not copied.
+    outer, _ = outer_with_extras(cache)
+    empty = bpy.data.objects["MyEmpty"]
+    empty.location = (1.0, 2.0, 3.0)
+    child = bpy.data.objects.new("MyChild", None)
+    child.parent = empty
+    bpy.data.collections[outer].objects.link(child)
+    elsewhere = bpy.data.collections.new("Elsewhere")
+    scene_collection().children.link(elsewhere)
+    elsewhere.objects.link(empty)
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    update(cache_folder=str(cache))
+    assert bpy.data.objects["MyEmpty"] is empty and empty.location.to_tuple() == (1.0, 2.0, 3.0)
+    assert child.parent is empty
+    assert {c.name for c in empty.users_collection} == {outer, "Elsewhere"}
+
+
+def test_update_of_an_edited_player_keeps_it_with_its_extras_and_builds_the_copy_without_them(cache):
+    # Issue 27, decision 4 (story 9).
+    outer, inner = outer_with_extras(cache)
+    appearance_collection.mesh_data(bpy.data.collections[outer]).vertices[0].co.x += 7
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+    (copy,) = [c for c in players() if c.name not in (outer, inner)]
+    assert held_by(copy.name) == []
+
+
+def test_duplicate_copies_only_the_player(cache):
+    # Issue 27, decision 4 (story 10).
+    outer, inner = outer_with_extras(cache)
+    assert duplicate(cache_folder=str(cache)) == {"FINISHED"}
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+    (copy,) = [c for c in players() if c.name not in (outer, inner)]
+    assert held_by(copy.name) == []
+
+
+def test_removing_a_player_still_refuses_while_it_holds_what_the_add_on_did_not_make(cache):
+    # Issue 27, decision 1 (story 11): removal, unlike Update, would take them away.
+    outer, inner = outer_with_extras(cache)
+    collection = bpy.data.collections[outer]
+    meshes, armatures = len(bpy.data.meshes), len(bpy.data.armatures)
+    with pytest.raises(ValueError, match="MyCollection.*MyCamera|MyCamera.*MyCollection"):
+        appearance_collection.remove_collection(collection)
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+    assert len(bpy.data.meshes) == meshes and len(bpy.data.armatures) == armatures
+
+
+def test_a_failed_update_leaves_the_extras_in_the_old_player(cache):
+    # Issue 27, decision 4 (story 12).
+    outer, inner = outer_with_extras(cache)
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    rewrite_cache(cache, lambda parts: parts["models"].pop(3379))
+    with pytest.raises(RuntimeError, match="Model 3379"):
         update(cache_folder=str(cache))
-    assert players() == [collection]
-    assert appearance_collection.mesh_data(collection) is mesh
-    assert sorted(obj.name for obj in collection.objects) == ["MyCamera", "MyEmpty", "Player", "Player_rig"]
-    assert len(bpy.data.meshes) == 1 and len(bpy.data.armatures) == 1 and len(bpy.data.cameras) == cameras
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+
+
+def test_one_undo_after_update_brings_the_extras_back_in_the_old_player(cache):
+    # The update-carries-extras spec, story 13: Undo brings the player back with its extras, as it does today.
+    outer, inner = outer_with_extras(cache)
+    before = stored(bpy.data.collections[outer])
+    vertices = len(appearance_collection.mesh_data(bpy.data.collections[outer]).vertices)
+    bpy.ops.ed.undo_push(message="Player set up")
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    update(cache_folder=str(cache))
+    bpy.ops.ed.undo_push(message="Player updated")
+    # Update changed the player, so the checks below can only hold for the player as it was.
+    assert len(appearance_collection.mesh_data(bpy.data.collections[outer]).vertices) != vertices
+    bpy.ops.ed.undo()
+    collection = bpy.data.collections[outer]
+    assert stored(collection) == before
+    assert len(appearance_collection.mesh_data(collection).vertices) == vertices
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+
+
+def view_layer():
+    layer = bpy.context.view_layer
+    assert layer is not None
+    return layer
+
+
+def layer_collection(name):
+    """The view layer's entry for the collection of that name; the test fails when there is none."""
+    found = _find_layer_collection(name, view_layer().layer_collection)
+    assert found is not None, f"No layer collection named {name}"
+    return found
+
+
+def _find_layer_collection(name, parent):
+    if parent.name == name:
+        return parent
+    return next((found for child in parent.children if (found := _find_layer_collection(name, child))), None)
+
+
+def world_difference(first, second):
+    return max(abs(first[row][column] - second[row][column]) for row in range(4) for column in range(4))
+
+
+def test_an_extra_parented_or_constrained_to_the_old_player_follows_to_the_rebuilt_one(cache):
+    # Spec story 6: the carried objects keep their parents, so ones parented to the old player's own objects move
+    # to the rebuilt ones and stay where they were.
+    outer, _ = outer_with_extras(cache)
+    collection = bpy.data.collections[outer]
+    on_rig, on_body, constrained = (
+        bpy.data.objects["MyEmpty"],
+        bpy.data.objects["MyCamera"],
+        bpy.data.objects.new("Follower", None),
+    )
+    collection.objects.link(constrained)
+    appearance_collection.armature_of(collection).location = (5.0, 0.0, 0.0)
+    on_rig.parent = appearance_collection.armature_of(collection)
+    on_rig.location = (0.0, 2.0, 1.0)
+    on_body.parent = appearance_collection.mesh_of(collection)
+    on_body.location = (1.0, 0.0, 3.0)
+    constrained.constraints.new("COPY_LOCATION").target = appearance_collection.armature_of(collection)  # pyrefly: ignore[missing-attribute]
+    view_layer().update()
+    rig_world, body_world = on_rig.matrix_world.copy(), on_body.matrix_world.copy()
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    update(cache_folder=str(cache))
+    rebuilt = bpy.data.collections[outer]
+    view_layer().update()
+    assert on_rig.parent is appearance_collection.armature_of(rebuilt)
+    assert on_body.parent is appearance_collection.mesh_of(rebuilt)
+    assert constrained.constraints[0].target is appearance_collection.armature_of(rebuilt)  # pyrefly: ignore[missing-attribute]
+    assert world_difference(on_rig.matrix_world, rig_world) < 1e-4
+    assert world_difference(on_body.matrix_world, body_world) < 1e-4
+
+
+def armed_player(armed_cache):
+    seen.clear()
+    appearance_props.from_preset(panel(), AppearancePreset(149, 430, False, ARMED, (0,) * 5))
+    create(cache_folder=str(armed_cache))
+    (collection,) = players()
+    empty = bpy.data.objects.new("OnWeapon", None)
+    collection.objects.link(empty)
+    (weapon,) = (obj for obj in collection.objects if obj.get(appearance_collection.PART_KEY) == "Weapon")
+    empty.parent = weapon
+    # Moving the weapon would be an edit, so the empty carries the offset in its parent inverse instead.
+    empty.matrix_parent_inverse = Matrix.Translation((4.0, 0.0, 0.0))
+    empty.location = (0.0, 1.0, 2.0)
+    view_layer().update()
+    return collection.name, empty, empty.matrix_world.copy()
+
+
+def test_an_extra_parented_to_a_weapon_the_rebuilt_player_still_wears_follows_the_new_weapon(armed_cache):
+    name, empty, world = armed_player(armed_cache)
+    assert update(cache_folder=str(armed_cache)) == {"FINISHED"}
+    (weapon,) = (
+        obj for obj in bpy.data.collections[name].objects if obj.get(appearance_collection.PART_KEY) == "Weapon"
+    )
+    view_layer().update()
+    assert empty.parent is weapon and world_difference(empty.matrix_world, world) < 1e-4
+
+
+def test_an_extra_parented_to_a_weapon_the_rebuilt_player_no_longer_wears_loses_its_parent_and_stays_put(armed_cache):
+    name, empty, world = armed_player(armed_cache)
+    show(case(None, False, [0, 0, 0, 0, 0]))
+    assert update(cache_folder=str(armed_cache)) == {"FINISHED"}
+    view_layer().update()
+    assert empty.parent is None and world_difference(empty.matrix_world, world) < 1e-4
+    assert "OnWeapon" in held_by(name)
+
+
+def test_update_keeps_the_view_layer_state_of_the_player_its_collections_and_its_objects(cache):
+    # Spec story 2: the Outliner looks as the user left it, so Update restores what linking again resets.
+    outer, inner = outer_with_extras(cache)
+    layer_collection(inner).hide_viewport = True
+    layer_collection("MyCollection").exclude = True
+    layer_collection(outer).holdout = True
+    bpy.data.objects["MyEmpty"].hide_set(True)
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    update(cache_folder=str(cache))
+    assert layer_collection(inner).hide_viewport
+    assert layer_collection("MyCollection").exclude
+    assert layer_collection(outer).holdout
+    assert bpy.data.objects["MyEmpty"].hide_get()
+    assert not layer_collection(inner).exclude and not bpy.data.objects["MyCamera"].hide_get()
+
+
+def test_updating_a_nested_player_keeps_it_inside_the_outer_player(cache):
+    # Spec story 3: the nested player stays a player the user can update, and stays nested.
+    outer, inner = outer_with_extras(cache)
+    bpy.context.view_layer.objects.active = appearance_collection.mesh_of(bpy.data.collections[inner])  # pyrefly: ignore[missing-attribute]
+    panel().source_player = inner
+    show(case(None, False, [0, 0, 0, 0, 0]))
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
+    assert inner in [child.name for child in bpy.data.collections[outer].children]
+    assert inner not in [child.name for child in scene_collection().children]
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+
+
+def test_a_removal_that_fails_puts_the_extras_back_in_the_old_player(cache, monkeypatch):
+    # Spec story 12, past the point where Update has lifted the extras out.
+    outer, inner = outer_with_extras(cache)
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+
+    def fail(collection):
+        raise RuntimeError("removal failed")
+
+    monkeypatch.setattr(appearance_collection, "remove_collection", fail)
+    with pytest.raises(RuntimeError, match="removal failed"):
+        update(cache_folder=str(cache))
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+
+
+def test_a_second_update_still_carries_the_extras_and_leaves_the_player_unedited(cache):
+    # Spec stories 7 and 8: the rebuilt player is a player like any other, so Update works on it again.
+    outer, inner = outer_with_extras(cache)
+    show(case("dragon_plate", False, [0, 0, 0, 0, 0]))
+    update(cache_folder=str(cache))
+    show(case(None, False, [0, 0, 0, 0, 0]))
+    update(cache_folder=str(cache))
+    assert held_by(outer) == sorted([inner, *EXTRAS])
+    assert not appearance_collection.is_edited(bpy.data.collections[outer])
+    assert len(players()) == 2
 
 
 def test_update_refuses_a_player_in_edit_mode_and_keeps_the_edit(cache):

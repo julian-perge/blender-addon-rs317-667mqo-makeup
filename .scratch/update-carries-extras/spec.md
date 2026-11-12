@@ -1,6 +1,6 @@
 # Update carries what the add-on did not make
 
-Status: ready-for-agent
+Status: resolved
 
 From [issue 27](../osrs-focus/issues/27-append-nests-a-player-in-the-active-player.md), whose Decisions block (decisions 1 to 5, chosen by the user on 2026-11-10) this spec follows. [ADR 0015](../../docs/adr/0015-a-player-collection-is-its-source-of-truth.md) sets how Update treats a player.
 
@@ -37,7 +37,10 @@ Update carries what the add-on did not make. When it rebuilds an unedited player
 - Duplicate Player builds the copy as today, without the original's extras.
 - A failed Update keeps today's promise of changing nothing, and the extras stay in the old player.
 - The edit fingerprint does not read child collections or objects that are neither meshes nor armatures, so carrying them leaves the rebuilt player unedited. If it turns out it does, that is a finding to raise, not to change silently.
-- ADR 0015's bullet on Update gains a sentence that Update carries what the add-on did not make.
+- Added on 2026-11-11, at the user's request after the first review: an object or constraint that points at one of the old player's meshes or its rig follows to the rebuilt counterpart and keeps its place in the world; with no counterpart (a weapon no longer worn, a held item) it loses that parent and keeps its place. A parent bone the rebuilt rig lacks becomes a plain object parent, and a constraint with no counterpart is left alone (agent's choices, needing the user's decision).
+- Also added then: the rebuilt player takes the old player's parent collections, so updating a nested player leaves it nested. The view layer settings (excluded, hidden, held out, indirect only; hidden objects) of the rebuilt player, the carried collections and the carried objects are written back after linking.
+- Also added then: if removing the old player fails, the lifted extras are linked into the old player again.
+- ADR 0015's bullet on Update gains sentences that Update carries what the add-on did not make, and how.
 
 ## Testing Decisions
 
