@@ -97,6 +97,29 @@ def build_cache(
     write_store(folder, stored)
 
 
+def item_definition(
+    name: str,
+    *,
+    male: tuple[int, int, int] = (-1, -1, -1),
+    female: tuple[int, int, int] = (-1, -1, -1),
+    recolours: tuple[tuple[int, int], ...] = (),
+    retextures: tuple[tuple[int, int], ...] = (),
+) -> bytes:
+    """An item definition holding only a name, worn models and recolours or retextures. The opcodes are the ones
+    `formats/item_definition.py` `decode_item` reads, which its docstring takes from RuneLite's ItemLoader; nothing
+    outside this repo's decoder checks them here. They are 2 name, 23 24 78 male models, 25 26 79 female models, 40
+    recolours and 41 retextures. A model id of -1 leaves its opcode out, and both offsets are 0."""
+    out = bytes([2]) + name.encode("cp1252") + b"\0"
+    for models, opcodes in ((male, (23, 24, 78)), (female, (25, 26, 79))):
+        for model, opcode in zip(models, opcodes, strict=True):
+            if model != -1:
+                out += bytes([opcode]) + struct.pack(">H", model) + (b"\0" if opcode in (23, 25) else b"")
+    for opcode, pairs in ((40, recolours), (41, retextures)):
+        if pairs:
+            out += bytes([opcode, len(pairs)]) + b"".join(struct.pack(">HH", find, to) for find, to in pairs)
+    return out + b"\0"
+
+
 def read_cache(folder: Path) -> dict[str, dict[int, bytes]]:
     """Read back the models, kits, items and enums of a cache that `build_cache` wrote, as its keyword arguments."""
     store = Js5Store(folder)

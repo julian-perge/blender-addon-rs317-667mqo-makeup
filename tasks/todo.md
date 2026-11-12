@@ -70,20 +70,23 @@ Spec: `spec/import-by-item.md`. Plan: `tasks/plan.md`. Each task ends with `prek
 
 ## Phase 3: Safety and the panel
 
-- [ ] **T4 Refusals that add nothing** (M)
+- [x] **T4 Refusals that add nothing** (M)
   - Description: Refuse with a message that names the cause, and leave no object, mesh or material behind. Refusals: no Cache folder or no item group (`MissingResourceError`), an item that lists retextures (names the item), an item with no worn model for the body, a model file not in the cache (names the model id). Checks that need no object run first. Anything made before a late failure is removed. `tests/js5_builder.py` gets a small item-definition encoder for the two refusals that no fixture item shows.
   - Accept:
-    - [ ] Each of the four refusals returns `CANCELLED`, reports the cause (the retexture message names the item, the missing model message names the model id), and leaves the counts of objects, meshes and materials as they were.
-    - [ ] A failure after the first object is made (the second model file is missing) leaves nothing, including the first object, its mesh and its materials.
-    - [ ] A test-built item with a retexture and a test-built item with a male model only (Female chosen) are built in the test, and the comments say so (spec: user choice of 2026-11-11). Expected messages come from the spec's Refusals decision.
-    - [ ] Before the test for "no worn model for the body" is written, check what Blender does with an enum value that is not in the list. If it rejects the value before `execute`, the test calls the function `execute` uses, and the task result says so.
+    - [x] Each of the four refusals returns `CANCELLED`, reports the cause (the retexture message names the item, the missing model message names the model id), and leaves the counts of objects, meshes and materials as they were.
+    - [x] A failure after the first object is made (the second model file is missing) leaves nothing, including the first object, its mesh and its materials.
+    - [x] A test-built item with a retexture and a test-built item with a male model only (Female chosen) are built in the test, and the comments say so (spec: user choice of 2026-11-11). Expected messages come from the spec's Refusals decision.
+    - [x] Before the test for "no worn model for the body" is written, check what Blender does with an enum value that is not in the list. If it rejects the value before `execute`, the test calls the function `execute` uses, and the task result says so.
   - Verify:
-    - [ ] Each refusal test failed before the code. A mutation check (cleanup removed) fails the late-failure test.
-    - [ ] `BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh tests/blender/test_import_item.py` passes, and `uv run pytest` passes (the encoder is used by unit tests only if added there).
-    - [ ] `prek run --all-files` passes.
-    - [ ] Commit review as in T1.
+    - [x] Each refusal test failed before the code. A mutation check (cleanup removed) fails the late-failure test.
+    - [x] `BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh tests/blender/test_import_item.py` passes, and `uv run pytest` passes (the encoder is used by unit tests only if added there).
+    - [x] `prek run --all-files` passes.
+    - [x] Commit review as in T1 (spec and standards sub-agents; findings fixed).
+  - Result (2026-11-11): `scripts/test-blender.sh` gives 813 passed, 3 skipped, `uv run pytest` gives 1335 passed, 24 skipped, `prek run --all-files` passes. Every refusal test failed before the code. Mutation check: with the cleanup never running, the late-failure test fails (before the reviews moved the model reads ahead of the first object, the missing-model test failed too).
+    - Blender rejects an item the list does not offer before `execute` runs (`TypeError: enum "9002" not found`), so the "no worn model for the body" test calls `_worn_models`, the function `execute` uses. The same holds for a stale `none` entry, which is tested by calling `execute` with a stand-in.
+    - Choices to report: (1) The retexture message is `<name> (<id>) lists retextures, which this import does not show.` and the no-worn-model message is `<name> (<id>) has no worn model for the <body> body.`; the spec names the content, not the text. (2) A set cache that lists no item for the body, or a stale `none`, reports `Pick an item that has a worn model for the <body> body.`; the spec does not cover it. (3) A cache without the item group shows its error as the one popup entry, as `appearance_items` does, and picking it is refused with that error. (4) Any other failure while building (such as a model that cannot be decoded) also removes what was made and then raises, so it shows as a Python error. (5) Materials are removed on a failure, as the plan says. (6) `tests/js5_builder.py` has `item_definition`, with a unit test that decodes what it writes. (7) Every model file is read and decoded before the first object is made, so a missing file makes nothing; the late-failure cleanup is tested with a failing `model_to_object`. (8) An item id the cache does not hold is refused with `Item <id> is not in the cache.` (9) Not handled: an image that a textured face loads stays in the file after a failure (no fixture model has textures, so it is untested).
   - Deps: T1, T3 (the no-cache message is shared with the dialog).
-  - Files: `src/rsps_toolkit/blender/import_item.py`, `tests/js5_builder.py`, `tests/blender/test_import_item.py`.
+  - Files: `src/rsps_toolkit/blender/import_item.py`, `tests/js5_builder.py`, `tests/blender/test_import_item.py`, `tests/unit/test_item_definition.py`.
 
 - [ ] **T5 Stored item data and the panel note** (M)
   - Description: Each imported object stores the item id, the item name and the body, through `rs_layers.py`. `ui.item_import_note(obj)` returns the note for an item import and None for any other object. The importer panel draws the note for the active object.
