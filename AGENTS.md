@@ -28,6 +28,7 @@ $B --command extension build --source-dir src/rsps_toolkit --output-dir dist
 - [Model format references](docs/research/model-formats.md): before deciding how a model field behaves.
 - [Tests and reference data](docs/agents/testing.md): before writing or running tests, or working with fixtures.
 - [Blender execution and packaging](docs/agents/blender.md): before running Blender or packaging, or working with the manifest or how tests reach Blender.
+- [Hand-made motion runbook](docs/hand-made-motion.md): before keying a motion on the joints of a player through the Blender MCP.
 
 ## Workflow
 
