@@ -48,18 +48,23 @@ class PosedPlayer:
     record: dict[str, list[int]]
     _pieces: Callable[[], list[appearance_held.Piece]]
 
-    def ensure_parts(self) -> list[PosedPart]:
+    def ensure_parts(
+        self, earlier_of: Callable[[list[bpy.types.Object]], appearance_fades.EarlierFades] | None = None
+    ) -> list[PosedPart]:
         """The player's objects that show the posed model, each with its own frames and fades.
+
+        `earlier_of` gives what the clips already baked on the rig do to each label group of the given objects, the
+        ones that show the clip (`fade_groups`).
 
         A held item the player has no object for gets one, bound to the rig, with the label bones only it carries.
         That changes the file, so a bake calls this after its own refusals.
         """
-        parts = []
-        for piece in self._pieces():
-            frames = piece.frames(self.frames)
-            fades = appearance_fades.fade_groups(*piece.faces, frames) if piece.faces else []
-            parts.append(PosedPart(piece.obj, frames, fades))
-        return parts
+        cut = [(piece, piece.frames(self.frames)) for piece in self._pieces()]
+        earlier = None if earlier_of is None else earlier_of([piece.obj for piece, _ in cut])
+        grouped = iter(
+            appearance_fades.fade_groups([(*piece.faces, frames) for piece, frames in cut if piece.faces], earlier)
+        )
+        return [PosedPart(piece.obj, frames, next(grouped) if piece.faces else []) for piece, frames in cut]
 
 
 def pose_player(

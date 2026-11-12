@@ -62,17 +62,19 @@ Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade
   Files: `tests/fixtures/animation149/<name>/*`, `tests/fixtures/animation149/README.md`.
   Scope: M (many data files, one README).
 
-- [ ] **T4: Several bone clips share only what matches in all** (ticket 03)
+- [x] **T4: Several bone clips share only what matches in all** (ticket 03)
 
   A bone bake works out its groups from the new clip and the earlier clips on the rig's clip track (earlier alphas read from stored fade curves, see the plan). It then re-keys the fade curves of every earlier action for the new groups, updates their key hashes, assigns polygons, and removes fade materials that no polygon uses.
 
+  Result (2026-11-12): done. `fade_groups` now joins over all of a player's mesh objects (this also settles the T1 finding on parts; no fixture checks a multi-part player, so that is by design only, not tested). `earlier_fades` reads the earlier actions' fade curves, `rekey_fades` rewrites them and their key hashes, `apply_fades` resets polygons a group no longer holds and removes fade materials no polygon uses, and the bake removes rig properties no group uses. Two tests: the two strips in both bake orders, and a replaced strip that merges the groups again. The full Blender suite passes (833 tests). Review found that objects the new clip does not show (held items of another clip) are outside the join. The bake keeps their fade properties and curves (`keep` in `rekey_fades`). No fixture fades a held item, so this is untested. A hidden object's property can still share a name with a new group's property, and then follows that group's curve. Not handled.
+
   Acceptance:
-  - [ ] Sequence 1994 and the T3 clip baked as two strips: each strip's frames match the client on the checked frames.
-  - [ ] The groups split where the T3 clip fades labels differently and stay shared elsewhere.
-  - [ ] The earlier strip is not baked again, and the player stays unedited.
-  - [ ] No fade material is left without polygons after the split.
-  - [ ] Baking a strip over the same start frame again merges groups that only the replaced strip kept apart, and leaves no orphan fade curve.
-  - [ ] Order of the two bakes does not change the frames shown (bake the T3 clip first, then sequence 1994).
+  - [x] Sequence 1994 and the T3 clip baked as two strips: each strip's frames match the client on the checked frames.
+  - [x] The groups split where the T3 clip fades labels differently and stay shared elsewhere.
+  - [x] The earlier strip is not baked again, and the player stays unedited.
+  - [x] No fade material is left without polygons after the split.
+  - [x] Baking a strip over the same start frame again merges groups that only the replaced strip kept apart, and leaves no orphan fade curve.
+  - [x] Order of the two bakes does not change the frames shown (bake the T3 clip first, then sequence 1994).
 
   Verify: `prek run --all-files`; Blender runner on `tests/blender/test_appearance_clip.py`.
   Depends on: T2, T3.

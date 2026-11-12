@@ -175,9 +175,22 @@ def bake_clip_to_rig(
                 f"The clip would cover frames {start} to {start + length}, over the strip {other.name!r}. "
                 "Move the current frame or the strip"
             )
+    # A fade group holds the faces that every clip on the track fades alike, so the new groups depend on the earlier
+    # clips' fades. The replaced strip does not count, since its action goes.
+    earlier_actions: list[bpy.types.Action] = [
+        strip.action
+        for strip in (() if track is None else track.strips)
+        if strip != replaced and strip.action is not None and appearance_collection.RIG_ACTION_KEY in strip.action
+    ]
+    read: list[appearance_fades.EarlierFades] = []
+
+    def earlier_of(shown: list[bpy.types.Object]) -> appearance_fades.EarlierFades:
+        read.append(appearance_bone_action.earlier_fades(earlier_actions, shown))
+        return read[0]
+
     with appearance_held.held_items_undone_on_failure(collection):
-        parts = posed.ensure_parts()
-        # A label and rest alpha fade alike on every part, so the rig keys one property for each.
+        parts = posed.ensure_parts(earlier_of)
+        # A fade group has one property on the rig, whichever objects hold its faces.
         fades = list({fade.prop: fade for part in parts for fade in part.fades}.values())
         name = f"{collection.name} {_title(source)}"
         record = json.dumps({**source.record(), "method": "BONES", "action": action, "smooth": smooth, **posed.record})
@@ -204,8 +217,26 @@ def bake_clip_to_rig(
             raise
     for pose_bone in rig.pose.bones:  # pyrefly: ignore[missing-attribute]
         pose_bone.rotation_mode = "QUATERNION"
+    # An earlier clip keeps what it showed: each action gets a curve for every group, with the group's alpha under it.
+    earlier = read[0]
+    # An object the clip does not show (the held items of another clip) keeps its fade materials and their properties.
+    shown = {part.obj for part in parts}
+    keep = {
+        material[appearance_fades.FADE_KEY]
+        for obj in objects
+        if obj not in shown
+        for material in obj.data.materials  # pyrefly: ignore[missing-attribute]
+        if material is not None and appearance_fades.FADE_KEY in material
+    }
+    for number, earlier_action in enumerate(earlier_actions):
+        appearance_bone_action.rekey_fades(
+            earlier_action, {fade.prop: earlier.of(fade.labels[0], fade.rest)[number] for fade in fades}, keep
+        )
     for part in parts:
         appearance_fades.apply_fades(part.obj, rig, part.fades)
+    for key in [k for k in rig.keys() if k.startswith(appearance_fades.PROPERTY_PREFIX)]:
+        if key not in keep and key not in {fade.prop for fade in fades}:
+            del rig[key]
     appearance_held.key_visibility(collection, _strip_spans(collection, track))
     # Another rig can still use the replaced action, for example one the user assigned it to, so only an unused one is
     # removed (the owner's choice, issue 20).
