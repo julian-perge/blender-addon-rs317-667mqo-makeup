@@ -129,5 +129,5 @@ Spec: `spec/import-by-item.md`. Plan: `plan.md` in this folder. Each task ends w
   - Files: `.scratch/osrs-focus/issues/07-imported-worn-items-show-stored-colours.md`, `GLOSSARY.md` (optional), `tasks/`.
 
 ### Checkpoint: complete
-- [ ] All nine success criteria in the spec met (criteria 1 and 8 by eye with the user). Open: the user has not yet typed a name and an id into the item popup in Blender.
+- [x] All nine success criteria in the spec met (criteria 1 and 8 by eye with the user). The user searched the item popup in Blender on 2026-11-11 and imported Boxing gloves (7671), and the panel showed the note.
 - [ ] Ready for review in a new session (`/agent-skills:review`)
