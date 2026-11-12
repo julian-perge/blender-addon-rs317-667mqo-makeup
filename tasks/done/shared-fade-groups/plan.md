@@ -1,4 +1,4 @@
-Spec: spec/shared-fade-groups.md (issue 14, tickets in .scratch/shared-fade-groups/issues/)
+Spec: spec/shared-fade-groups.md (issue 14)
 
 # Implementation Plan: Faces that fade alike share one fade material
 
@@ -41,27 +41,27 @@ T1 and T3 are independent. Do T3 early: it is the unknown that T4 depends on (th
 
 ### Phase 1: One clip merges
 
-- [ ] T1: A shape-key bake of sequence 1994 makes one fade material
-- [ ] T2: A single bone clip of sequence 1994 makes one fade material
+- [x] T1: A shape-key bake of sequence 1994 makes one fade material
+- [x] T2: A single bone clip of sequence 1994 makes one fade material
 
 ### Checkpoint: One clip
 
-- [ ] `prek run --all-files` and the Blender suite pass
-- [ ] Existing fade tests (shape key, bone, Duplicate Player, no-fade clip, remove player) pass unchanged
-- [ ] Review with the user before T4
+- [x] `prek run --all-files` and the Blender suite pass
+- [x] Existing fade tests (shape key, bone, Duplicate Player, no-fade clip, remove player) pass unchanged
+- [x] Review with the user before T4
 
 ### Phase 2: Several clips
 
-- [ ] T3: Record a clip whose fades differ by label (can run before or beside T1)
-- [ ] T4: Several bone clips share only what matches in all
-- [ ] T5: Update and Duplicate Player keep the merged fade materials
+- [x] T3: Record a clip whose fades differ by label (can run before or beside T1)
+- [x] T4: Several bone clips share only what matches in all
+- [x] T5: Update and Duplicate Player keep the merged fade materials
 
 ### Checkpoint: Complete
 
-- [ ] All success criteria of the spec are met
-- [ ] `prek run --all-files` and the Blender suite pass
-- [ ] Review session (new session, `/agent-skills:review`) on the branch
-- [ ] Move `tasks/plan.md` and `tasks/todo.md` to `tasks/done/shared-fade-groups/`
+- [x] All success criteria of the spec are met
+- [x] `prek run --all-files` and the Blender suite pass
+- [x] Review session (new session, `/agent-skills:review`) on the branch
+- [x] Move `tasks/plan.md` and `tasks/todo.md` to `tasks/done/shared-fade-groups/`
 
 ## Risks and mitigations
 

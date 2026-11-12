@@ -310,7 +310,7 @@ def test_a_textured_face_keeps_its_texture_and_shows_no_colour_instead():
     assert shown_rgb(mesh.materials[1]) == face_colour_to_rgb(2000, 0.8)  # pyrefly: ignore[bad-argument-type]
 
 
-# The message is the example in the spec's Code style section and the text in the T3 accept line of tasks/todo.md.
+# The message is the example in the spec's Code style section and the text in the T3 accept line of tasks/done/import-by-item/todo.md.
 NO_CACHE_MESSAGE = "Set the Cache folder in the add-on preferences."
 
 
@@ -618,7 +618,7 @@ def test_the_stored_item_data_survives_moving_vertices_in_edit_mode_and_duplicat
     ids=["not-json", "wrong-type", "unknown-body", "missing-field"],
 )
 def test_unreadable_item_data_gives_no_note(stored):
-    # The note shows only what it can read. How damaged data should show is open (see the T5 result in tasks/todo.md).
+    # The note shows only what it can read. How damaged data should show is open (see the T5 result in tasks/done/import-by-item/todo.md).
     run_import(2653)
     obj = objects_by_name()["3379"]
 

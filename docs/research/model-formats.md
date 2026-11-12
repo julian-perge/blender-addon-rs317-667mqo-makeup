@@ -171,7 +171,7 @@ Measured against cache 430 and the Gate 0 fixtures; see [the OSRS cache workflow
 - Two rules write the footer of a hand-built model or of an edit that contradicts a source footer flag (unedited
   models replay their source flags). The client citations are bytecode offsets in the revision 149 jar, with
   obfuscated names. The reading is in
-  [client-rules.md](../../.scratch/codec-rules-cited/evidence/client-rules.md).
+  [osrs-149-codec-client-rules.md](osrs-149-codec-client-rules.md).
 - One shared priority is stored once in the footer (0 for no faces). Confirmed, except the 0. Client rev 149, class
   `dv`, method `j`, offsets 2235 to 2240 and 965 to 969: a footer priority byte of 255 means that one priority byte
   follows for every face, and any other value is the one priority of all faces. The client has no case for a model

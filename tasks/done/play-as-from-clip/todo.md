@@ -1,6 +1,6 @@
 # Tasks
 
-Spec: `spec/play-as-from-clip.md`. Plan: `tasks/plan.md`. Each task ends with `prek run --all-files`, a commit review, and one commit. Tick a task and write its result under it.
+Spec: `spec/play-as-from-clip.md`. Plan: `tasks/done/play-as-from-clip/plan.md`. Each task ends with `prek run --all-files`, a commit review, and one commit. Tick a task and write its result under it.
 
 ## Phase 1: The behavior
 
@@ -31,7 +31,7 @@ Spec: `spec/play-as-from-clip.md`. Plan: `tasks/plan.md`. Each task ends with `p
   - Accept:
     - [x] `RSPS_OT_pick_clip.bl_description` says that it also sets Play As, in plain ASCII and short sentences.
     - [x] `GLOSSARY.md` has a "Play as" term only if the glossary lacks one and the user agrees (it has none today). The definition follows the spec's words: Pose for a stance clip, Action for any other.
-    - [x] Issue 01 and issue 21 are ticked, with a dated comment that names the commit. `.scratch/osrs-focus/issues/21-play-as-defaults-to-pose.md` links `spec/play-as-from-clip.md` (it still links the old `.scratch/play-as-from-clip/spec.md`).
+    - [x]Issue 01 and issue 21 are ticked, with a dated comment that names the commit. `.scratch/osrs-focus/issues/21-play-as-defaults-to-pose.md` links `spec/play-as-from-clip.md` (it linked the old scratch spec, since deleted).
     - [x] ADR 0014 gets one sentence on the pick rule only if the user agrees.
     - [x] `tasks/plan.md` and `tasks/todo.md` move to `tasks/done/play-as-from-clip/`.
   - Verify:
@@ -44,4 +44,4 @@ Spec: `spec/play-as-from-clip.md`. Plan: `tasks/plan.md`. Each task ends with `p
 ### Checkpoint: complete
 - [x] Every spec user story (1 to 8) has a test or an unchanged existing test behind it
 - [x] Spec "Out of Scope" untouched: default Play As, cache reads, Stance and Attack buttons
-- [ ] Pull request opened from `feat/play-as-from-clip`; the user merges
+- [x] Pull request opened from `feat/play-as-from-clip`; the user merges

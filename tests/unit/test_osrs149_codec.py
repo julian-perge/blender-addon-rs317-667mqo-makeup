@@ -203,7 +203,7 @@ def test_new_encoding_still_refuses_unrepresentable_face_index_deltas():
 def test_encoder_rule_for_texture_coordinate_byte_limit():
     # The file byte holds the index plus 1, so 254 is the highest index. A model has at most 255 texture triangles, so
     # index 255 is refused as a missing triangle, and a 256th triangle is refused by the count.
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 3.
+    # Evidence: docs/research/osrs-149-codec-client-rules.md, rule 3.
     model = decode((FIXTURES / "28954.dat").read_bytes(), profile="osrs-149")
     source = model.new_data
     assert source is not None
@@ -364,7 +364,7 @@ def _round_trip(model):
 
 def test_hand_built_faces_with_one_priority_store_it_once_in_the_footer():
     # A footer priority byte below 255 is the one priority of all faces. Evidence:
-    # .scratch/codec-rules-cited/evidence/client-rules.md, rule 1.
+    # docs/research/osrs-149-codec-client-rules.md, rule 1.
     shared_data, (_, priority, *_) = _round_trip(_hand_built(priority=lambda i: 7))
     assert priority == 7
     mixed = _hand_built(priority=lambda i: 7 if i else 8)
@@ -379,7 +379,7 @@ def test_hand_built_faces_with_one_priority_store_it_once_in_the_footer():
 
 def test_hand_built_model_without_faces_stores_priority_zero():
     # The client has no case for a model with no faces, so writing 0 there is our choice. Evidence:
-    # .scratch/codec-rules-cited/evidence/client-rules.md, rule 1.
+    # docs/research/osrs-149-codec-client-rules.md, rule 1.
     empty = Model(
         vertices=[(0, 0, 0), (1, 2, 3)],
         encoding=ModelEncoding.OSRS_FFFF,
@@ -394,7 +394,7 @@ def test_hand_built_model_without_faces_stores_priority_zero():
 
 def test_hand_built_model_leaves_out_all_zero_render_type_and_alpha_sections():
     # The client reads a section only when its footer flag is 1, and a missing section reads as 0. Evidence:
-    # .scratch/codec-rules-cited/evidence/client-rules.md, rule 2.
+    # docs/research/osrs-149-codec-client-rules.md, rule 2.
     plain_data, (render, _, alpha, *_) = _round_trip(_hand_built())
     assert (render, alpha) == (0, 0)
     alpha_model = _hand_built(alpha=lambda i: 9 if i == 0 else 0)
@@ -419,7 +419,7 @@ def test_hand_built_model_leaves_out_all_zero_render_type_and_alpha_sections():
 )
 def test_opaque_tail_with_a_nonzero_first_byte_needs_11_bytes(tail, accepted):
     # The 11 is the client's number, but the client checks no length. Refusing a shorter tail is our own stricter
-    # rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
+    # rule, kept by the owner. Evidence: docs/research/osrs-149-codec-client-rules.md, rule 4.
     original = (FIXTURES / "28634.dat").read_bytes()
     model = decode(original, profile="osrs-149")
     assert model.new_data is not None
@@ -457,7 +457,7 @@ def _model_with_texture_kinds(kinds):
 
 def test_texture_kinds_0_to_3_are_accepted_and_kind_4_is_refused():
     # The kinds 0 to 3 are the client's. The client reads no bytes for a larger kind, so refusing it is our own
-    # stricter rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
+    # stricter rule, kept by the owner. Evidence: docs/research/osrs-149-codec-client-rules.md, rule 5.
     kinds = (0, 1, 2, 3)
     data, _ = _round_trip(_model_with_texture_kinds(kinds))
     refused = bytearray(data)
@@ -484,7 +484,7 @@ def test_texture_kinds_0_to_3_are_accepted_and_kind_4_is_refused():
 def test_decode_refuses_a_footer_flag_of_2_but_not_any_priority_byte(position, name):
     # The client treats any flag other than 1 as an absent section and refuses nothing. Refusing 2 to 255 is our own
     # stricter rule, kept by the owner. The priority byte is not a flag: any value below 255 is one shared priority.
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 6.
+    # Evidence: docs/research/osrs-149-codec-client-rules.md, rule 6.
     data, _ = _round_trip(_hand_built(priority=lambda i: 7))
     footer = len(data) - FOOTER_SIZE
     flagged = bytearray(data)
@@ -501,7 +501,7 @@ def test_decode_refuses_a_footer_flag_of_2_but_not_any_priority_byte(position, n
 def test_encode_writes_only_0_or_1_for_the_footer_flags_even_for_a_larger_source_flag():
     # Read from the add-on code, not from the client: `check` takes source flags of 0 to 255, and `encode` builds the
     # five flags from the data, so a source flag of 2 gives 0 or 1 in the file, and the client reads both.
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, the encode side of rule 6.
+    # Evidence: docs/research/osrs-149-codec-client-rules.md, the encode side of rule 6.
     model = _hand_built()
     assert model.new_data is not None
     model.new_data = replace(model.new_data, section_flags=(2, 7, 2, 2, 2, 2))

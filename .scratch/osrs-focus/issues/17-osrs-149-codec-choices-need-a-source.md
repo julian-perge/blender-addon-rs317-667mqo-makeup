@@ -19,7 +19,7 @@ The user chose on 2026-11-11, when the client result was in:
 
 ## Results
 
-The evidence is in [client-rules.md](../../codec-rules-cited/evidence/client-rules.md). It reads the jar from `runetech/osrs-gamepacks`, commit `2e92962075cfbc0df227cc783c37633d5e92f297`, with SHA-256 `19c492cc2dc20e9fcb0399215fc32a47cd4605b01a30d963dac7a0c863ebcbdd`. The reading uses `javap` bytecode offsets, because no decompiler was on the machine.
+The evidence is in [osrs-149-codec-client-rules.md](../../../docs/research/osrs-149-codec-client-rules.md). It reads the jar from `runetech/osrs-gamepacks`, commit `2e92962075cfbc0df227cc783c37633d5e92f297`, with SHA-256 `19c492cc2dc20e9fcb0399215fc32a47cd4605b01a30d963dac7a0c863ebcbdd`. The reading uses `javap` bytecode offsets, because no decompiler was on the machine.
 
 | # | Rule | Result |
 | --- | --- | --- |
@@ -37,5 +37,5 @@ The existing test case `bad-footer-flag` set the priority byte, not a flag, so i
 ## Comments
 
 - 2026-11-10, design interview with the user: decisions 1 to 3, ready-for-agent.
-- 2026-11-10, agent: the spec is [.scratch/codec-rules-cited/spec.md](../../codec-rules-cited/spec.md) (ready-for-agent). The user agreed one test seam, the codec's decode and encode.
+- 2026-11-10, agent: the spec is the scratch spec (deleted after the merge) (ready-for-agent). The user agreed one test seam, the codec's decode and encode.
 - 2026-11-11, agent: resolved by [spec/codec-rules-cited.md](../../../spec/codec-rules-cited.md) on branch `docs/codec-rules-cited`. Results and decisions 4 and 5 are above.

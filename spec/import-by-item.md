@@ -1,8 +1,8 @@
 # Spec: Import worn models by item
 
-Status: ready-for-agent
+Status: done on 2026-11-12 (import by item built and merged).
 
-Written on 2026-11-11 from [.scratch/import-by-item/spec.md](../.scratch/import-by-item/spec.md), which follows the decisions 1 to 11 in [issue 07](../.scratch/osrs-focus/issues/07-imported-worn-items-show-stored-colours.md) (the user chose them on 2026-11-10). The scratch spec was written before [ADR 0017](../docs/adr/0017-read-caches-directly-without-317-and-667-code.md). This spec reads the cache, not a dump.
+Written on 2026-11-11 from the scratch spec (deleted after the merge), which followed the decisions 1 to 11 in [issue 07](../.scratch/osrs-focus/issues/07-imported-worn-items-show-stored-colours.md) (the user chose them on 2026-11-10). The scratch spec was written before [ADR 0017](../docs/adr/0017-read-caches-directly-without-317-and-667-code.md). This spec reads the cache, not a dump.
 
 ## Objective
 

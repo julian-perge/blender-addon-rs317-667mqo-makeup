@@ -2,7 +2,7 @@ Spec: spec/play-as-from-clip.md
 
 # Implementation Plan: Picking a clip sets Play As
 
-Branch: `feat/play-as-from-clip`. One commit per task. Tasks are in `tasks/todo.md`. Issue: `.scratch/play-as-from-clip/issues/01-picking-a-clip-sets-play-as.md`, from issue 21 of `.scratch/osrs-focus/`.
+Branch: `feat/play-as-from-clip`. One commit per task. Tasks are in `tasks/done/play-as-from-clip/todo.md`. Issue: issue 21 of `.scratch/osrs-focus/`.
 
 ## Overview
 
@@ -38,7 +38,7 @@ There is one behavior, so T1 is one slice. A separate task for the lookup would 
 
 ## Task list
 
-See `tasks/todo.md`. Two tasks, one checkpoint.
+See `tasks/done/play-as-from-clip/todo.md`. Two tasks, one checkpoint.
 
 ## Risks and mitigations
 

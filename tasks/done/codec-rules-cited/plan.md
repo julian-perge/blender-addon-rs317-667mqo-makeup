@@ -2,7 +2,7 @@ Spec: spec/codec-rules-cited.md
 
 # Implementation Plan: Cite the revision 149 client for the six OSRS-149 codec rules
 
-Branch: `docs/codec-rules-cited`. One commit per task. Tasks are in `tasks/todo.md`. Issue: [issue 17](../../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md).
+Branch: `docs/codec-rules-cited`. One commit per task. Tasks are in `tasks/done/codec-rules-cited/todo.md`. Issue: [issue 17](../../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md).
 
 ## Overview
 
@@ -23,7 +23,7 @@ Six rules of the new-format (`FF FF`) codec are marked "unverified". Two rules w
   - Rules 1, 2 and 4: a search for "priorit", "shared" and "tail" found no test of the rule itself. `test_unused_texture_records_and_tails_survive_decode_and_encode` only checks that a long tail survives. T2 and T3 add these tests.
 - The client evidence exists in part. `.scratch/osrs-focus/evidence/reference-source-findings.md` shows that class `dv` is the model data class and `dv.j(byte[])` is the `FF FF` decoder. It records offsets 1613 to 1665 of `dv.j` (the texture byte and `dv.u`). It does not read the footer flags, the priority byte, the render-type and alpha sections, the tail or the texture kinds. T1 reads those.
 - The research copy of the jar is gone (`/private/tmp` no longer holds it). The findings file gives the source, the commit, the SHA-256 and the `javap` commands. T1 downloads it again (about 1.9 MB) and checks the SHA-256 before it reads anything. The download needs the user's yes. `javap` is on the machine. No other decompiler was found on PATH, so the evidence is bytecode offsets, as in the earlier findings.
-- The two scratch tickets in `.scratch/codec-rules-cited/issues/` (writing rules, refusals) are older than the workflow. This plan keeps their split for T2 and T3, and it puts the shared reading first, because both tickets need the same decoder.
+- The two scratch tickets in the scratch folder of this spec (deleted after the merge) (writing rules, refusals) are older than the workflow. This plan keeps their split for T2 and T3, and it puts the shared reading first, because both tickets need the same decoder.
 
 ## Dependency graph
 
@@ -43,7 +43,7 @@ T2, T3 and T4 depend on T1 only. They touch different rules but share `new_forma
 
 ## Architecture decisions
 
-- **One evidence file** for all six rules: `.scratch/codec-rules-cited/evidence/client-rules.md`. It links the earlier findings and does not repeat them. Each rule has a heading with: the client class and method, the offsets, what the client does, and one verdict (confirmed, contradicted, or not settled).
+- **One evidence file** for all six rules: `docs/research/osrs-149-codec-client-rules.md`. It links the earlier findings and does not repeat them. Each rule has a heading with: the client class and method, the offsets, what the client does, and one verdict (confirmed, contradicted, or not settled).
 - **Three verdicts, not two.** The spec names two results. The client may be silent on a rule (for example a size check that the client never makes). Then the rule stays, and the plan reports it to the user, as the spec's "Ask first" says.
 - **Citation form** is the spec's form: obfuscated class, method, offsets, and one sentence of what the client does. The same text goes into the note, the code comment and the test comment.
 - **No decompiled source in the repo.** The `javap` output stays in the scratchpad. The evidence file holds only offsets, short descriptions and the jar identity. No local path appears in it.
@@ -53,7 +53,7 @@ T2, T3 and T4 depend on T1 only. They touch different rules but share `new_forma
 
 ## Task list
 
-See `tasks/todo.md`. Five tasks and one checkpoint.
+See `tasks/done/codec-rules-cited/todo.md`. Five tasks and one checkpoint.
 
 ## Risks and mitigations
 

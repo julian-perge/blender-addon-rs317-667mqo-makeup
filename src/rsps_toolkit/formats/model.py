@@ -115,13 +115,13 @@ def check(model: Model) -> None:
             "OSRS-149 section flags must be six bytes",
         )
         # The 11 is the client's number, but the client checks no length. Refusing a shorter tail is our own stricter
-        # rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
+        # rule, kept by the owner. Evidence: docs/research/osrs-149-codec-client-rules.md, rule 4.
         _require(source.tail[0] == 0 or len(source.tail) >= 11, "OSRS-149 source tail is truncated")
         for i, (kind, parameters) in enumerate(
             zip(source.texture_render_types, source.texture_parameters, strict=True)
         ):
             # The kinds 0 to 3 are the client's. The client reads no bytes for a larger kind, so refusing it is our own
-            # stricter rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
+            # stricter rule, kept by the owner. Evidence: docs/research/osrs-149-codec-client-rules.md, rule 5.
             _require(kind in (0, 1, 2, 3), f"Texture record {i} has unsupported kind {kind}")
             size = 0 if kind == 0 else 13 if kind == 2 else 11
             _require(len(parameters) == size, f"Texture record {i} needs {size} parameter bytes")
@@ -153,7 +153,7 @@ def check(model: Model) -> None:
             _require(0 <= triangle < len(model.texture_triangles), f"face {i} uses missing texture triangle {triangle}")
             # A new-format model has no limit test here. The file byte holds the index plus 1, so 254 is the highest
             # index, and the count test above allows at most 255 texture triangles. That already refuses index 255.
-            # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 3.
+            # Evidence: docs/research/osrs-149-codec-client-rules.md, rule 3.
             if not newer:
                 _require(
                     triangle <= MAX_TEXTURE_TRIANGLE_INDEX,

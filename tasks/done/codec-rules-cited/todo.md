@@ -5,19 +5,19 @@ Spec: `spec/codec-rules-cited.md`. Plan: `plan.md` in this folder. Each task end
 ## Phase 1: Read the client
 
 - [x] **T1 Settle the six rules against the client decoder** (S, no code change)
-  - Result: [client-rules.md](../../../.scratch/codec-rules-cited/evidence/client-rules.md). The jar SHA-256 matched before reading. Rules 1, 2 and 3: confirmed. Rules 4, 5 and 6: not settled. The client has no refusal for them, and the add-on is stricter. The rule 6 encode gap does not exist for written files: `_encode` writes 0 or 1 for the five flags. Only `check` accepts flags that `decode` refuses. No decompiler was on the machine, so the reading uses `javap`. Two reviewers checked the offsets and the style, and their findings are fixed.
-  - Description: Download the revision 149 client jar named in `.scratch/osrs-focus/evidence/reference-source-findings.md` (ask the user first), check its SHA-256, and run `javap -c -p` on `dv` (and the classes `dv.j` calls) into the scratchpad. Read the `FF FF` decoder `dv.j` for each rule. Write `.scratch/codec-rules-cited/evidence/client-rules.md` with one entry per rule: class, method, offsets, what the client does, and a verdict (confirmed, contradicted, not settled).
+  - Result: [client-rules.md](../../../docs/research/osrs-149-codec-client-rules.md). The jar SHA-256 matched before reading. Rules 1, 2 and 3: confirmed. Rules 4, 5 and 6: not settled. The client has no refusal for them, and the add-on is stricter. The rule 6 encode gap does not exist for written files: `_encode` writes 0 or 1 for the five flags. Only `check` accepts flags that `decode` refuses. No decompiler was on the machine, so the reading uses `javap`. Two reviewers checked the offsets and the style, and their findings are fixed.
+  - Description: Download the revision 149 client jar named in `.scratch/osrs-focus/evidence/reference-source-findings.md` (ask the user first), check its SHA-256, and run `javap -c -p` on `dv` (and the classes `dv.j` calls) into the scratchpad. Read the `FF FF` decoder `dv.j` for each rule. Write `docs/research/osrs-149-codec-client-rules.md` with one entry per rule: class, method, offsets, what the client does, and a verdict (confirmed, contradicted, not settled).
   - Accept:
     - [x] The jar's SHA-256 equals `19c492cc2dc20e9fcb0399215fc32a47cd4605b01a30d963dac7a0c863ebcbdd` before any reading.
     - [x] Each of the six rules has an entry with offsets and a verdict. Rule 1 and 2: how the client reads the priority byte (255 versus a value) and the render-type and alpha flags. Rule 3: what the client does with a texture coordinate byte of 255. Rule 4: what the client reads from the tail, and how many bytes. Rule 5: what the client does with a texture kind above 3. Rule 6: what the client does with a flag byte other than 0 or 1 (per flag byte; the priority byte is separate).
     - [x] The file names the jar by repository, commit and SHA-256. It holds no local path and no pasted decompiled source.
     - [x] The result for rule 6 says whether the encode side gap (flags 2 to 254 accepted by `check`) matters.
   - Verify:
-    - [x] `rg -n "/Users|/private|/tmp" .scratch/codec-rules-cited/evidence/` finds nothing.
+    - [x] `rg -n "/Users|/private|/tmp" docs/research/osrs-149-codec-client-rules.md` finds nothing.
     - [x] `prek run --all-files` passes.
     - [x] Commit review with fixed point `HEAD`, spec `spec/codec-rules-cited.md`, standards `CODING_STANDARDS.md`.
   - Deps: none.
-  - Files: `.scratch/codec-rules-cited/evidence/client-rules.md` (new).
+  - Files: `docs/research/osrs-149-codec-client-rules.md` (new).
 
 ## Checkpoint: Verdicts
 
@@ -45,7 +45,7 @@ Each task does only the rules that T1 confirmed and the user approved. For a ski
     - [x] `prek run --all-files` passes.
     - [x] Commit review as in T1.
   - Deps: T1 and the checkpoint.
-  - Files: `src/rsps_toolkit/formats/new_format.py`, `docs/research/model-formats.md`, `tests/unit/test_osrs149_codec.py`, `.scratch/codec-rules-cited/evidence/client-rules.md`.
+  - Files: `src/rsps_toolkit/formats/new_format.py`, `docs/research/model-formats.md`, `tests/unit/test_osrs149_codec.py`, `docs/research/osrs-149-codec-client-rules.md`.
 
 - [x] **T3 Cite the texture index and opaque tail refusals (3 and 4)** (M)
   - Result: rule 3 is cited as confirmed. Rule 4 is cited as decided at the checkpoint: the 11 is the client's number and the refusal is our own stricter rule. The citation is in `model.py` (limit and tail), `new_format.py` (tail), the note, the evidence file and the tests. New test: `test_opaque_tail_with_a_nonzero_first_byte_needs_11_bytes` (four tails, at `decode` and `encode`). `test_encoder_rule_for_texture_coordinate_byte_limit` now cites the client, and it also pins the 255-triangle cap. Mutation checks: `>= 10` in `model.py` fails the encode case, `>= 10` and `< 10` together fail the decode case, and `0x100` for the triangle cap fails the index test. Two mutations survive because their guards cannot be reached alone: `< 10` in `new_format.py` (the `Model` check refuses the same tail) and `limit = 255` (index 255 is already a missing triangle). Both are reported in the evidence file. No code change.
@@ -61,7 +61,7 @@ Each task does only the rules that T1 confirmed and the user approved. For a ski
     - [x] `prek run --all-files` passes.
     - [x] Commit review as in T1.
   - Deps: T1 and the checkpoint.
-  - Files: `src/rsps_toolkit/formats/model.py`, `src/rsps_toolkit/formats/new_format.py`, `docs/research/model-formats.md`, `tests/unit/test_osrs149_codec.py`, `.scratch/codec-rules-cited/evidence/client-rules.md`.
+  - Files: `src/rsps_toolkit/formats/model.py`, `src/rsps_toolkit/formats/new_format.py`, `docs/research/model-formats.md`, `tests/unit/test_osrs149_codec.py`, `docs/research/osrs-149-codec-client-rules.md`.
 
 - [x] **T4 Cite the texture kind and footer flag refusals (5 and 6)** (M)
   - Result: both rules are cited as decided at the checkpoint: the constants (kinds 0 to 3, flags 0 and 1) are the client's, and the refusal is our own stricter rule. The citation is in `new_format.py` (kind and flag checks), `model.py` (kind check), the note, the evidence file and three new tests (kinds 0 to 3 accepted and kind 4 refused at `decode` and `encode`; a flag of 2 refused in each of the five flag bytes while the priority byte is read as a shared priority; `encode` writes only 0 or 1 for the flags). The rule 6 gap is stated in the note: `check` is unchanged by decision. Finding: the existing case `bad-footer-flag` sets the priority byte, not a flag, so it never tested rule 6. Mutation checks: `kind > 4`, `(0, 1, 2, 3, 4)`, `(0, 1, 2)` for the flags and `render_flag >= 1` each fail the matching test, and the files were restored. `git diff HEAD -- src` shows comment changes only.
@@ -77,7 +77,7 @@ Each task does only the rules that T1 confirmed and the user approved. For a ski
     - [x] `prek run --all-files` passes.
     - [x] Commit review as in T1.
   - Deps: T1 and the checkpoint.
-  - Files: `src/rsps_toolkit/formats/new_format.py`, `src/rsps_toolkit/formats/model.py`, `docs/research/model-formats.md`, `tests/unit/test_osrs149_codec.py`, `.scratch/codec-rules-cited/evidence/client-rules.md`.
+  - Files: `src/rsps_toolkit/formats/new_format.py`, `src/rsps_toolkit/formats/model.py`, `docs/research/model-formats.md`, `tests/unit/test_osrs149_codec.py`, `docs/research/osrs-149-codec-client-rules.md`.
 
 ## Checkpoint: Rules cited
 
@@ -90,7 +90,7 @@ Each task does only the rules that T1 confirmed and the user approved. For a ski
 
 - [x] **T5 Close issue 17 and archive the plan** (S)
   - Result: issue 17 is resolved, with decisions 4 and 5 and a results table. The two scratch tickets and the scratch spec are resolved, and the spec status says done. This plan moved to `tasks/done/codec-rules-cited/`. Remaining "unverified" marks in the note and in `formats/` are out of scope: render types 1 and 3, the texture tools' rules, kind-zero vertex records, the preview of other record kinds in `texture_triangles.py`, and the kit name order. Skipped rules: none. Rules 4, 5 and 6 are cited as stricter rules by decision.
-  - Description: Write the results into issue 17 and mark it closed, as the earlier issues in `.scratch/osrs-focus/issues/` were. Update the two scratch tickets in `.scratch/codec-rules-cited/issues/` and the scratch spec status. Move `tasks/plan.md` and `tasks/todo.md` to `tasks/done/codec-rules-cited/`.
+  - Description: Write the results into issue 17 and mark it closed, as the earlier issues in `.scratch/osrs-focus/issues/` were. Update the two scratch tickets in `(deleted) scratch ticket ` and the scratch spec status. Move `tasks/plan.md` and `tasks/todo.md` to `tasks/done/codec-rules-cited/`.
   - Accept:
     - [x] Issue 17 lists the six rules with their verdicts and links the evidence file. A rule left open says so and names the decision it waits for.
     - [x] The scratch tickets and spec carry the new status.
@@ -100,4 +100,4 @@ Each task does only the rules that T1 confirmed and the user approved. For a ski
     - [x] Commit review as in T1.
     - [ ] Open the pull request and stop. The user merges.
   - Deps: T2, T3, T4.
-  - Files: `.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md`, `.scratch/codec-rules-cited/issues/01-cite-the-client-for-the-two-writing-rules.md`, `.scratch/codec-rules-cited/issues/02-cite-the-client-for-the-four-refusals.md`, `.scratch/codec-rules-cited/spec.md`, `tasks/plan.md`, `tasks/todo.md`.
+  - Files: `.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md`, the two scratch tickets and the scratch spec of `codec-rules-cited` (deleted after the merge), `tasks/done/codec-rules-cited/plan.md`, `tasks/done/codec-rules-cited/todo.md`.

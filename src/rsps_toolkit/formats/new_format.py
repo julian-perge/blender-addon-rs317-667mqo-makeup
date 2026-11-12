@@ -44,7 +44,7 @@ def _decode(data: bytes) -> Model:
         raise InvalidModelError("Missing OSRS FFFF marker")
     # The client treats any flag other than 1 as an absent section and refuses nothing. Refusing 2 to 255 is our own
     # stricter rule, kept by the owner. The priority byte is not one of these flags.
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 6.
+    # Evidence: docs/research/osrs-149-codec-client-rules.md, rule 6.
     if any(flag not in (0, 1) for flag in (render, alpha, face_skin, textures, vertex_skin)):
         raise InvalidModelError("Unsupported OSRS-149 footer flags")
     offset = 0
@@ -60,7 +60,7 @@ def _decode(data: bytes) -> Model:
 
     kinds = section(texture_count)
     # The kinds 0 to 3 are the client's. The client reads no bytes for a larger kind, so refusing it is our own
-    # stricter rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
+    # stricter rule, kept by the owner. Evidence: docs/research/osrs-149-codec-client-rules.md, rule 5.
     if any(kind > 3 for kind in kinds):
         raise InvalidModelError("Unsupported texture record kind")
     vertex_flags = section(vertex_count)
@@ -97,7 +97,7 @@ def _decode(data: bytes) -> Model:
             else scales.take(6) + rotations.take(2) + directions.take(1) + speeds.take(4 if kind == 2 else 2)
         )
     # The 11 is the client's number, but the client checks no length. Refusing a shorter tail is our own stricter
-    # rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
+    # rule, kept by the owner. Evidence: docs/research/osrs-149-codec-client-rules.md, rule 4.
     tail = data[offset:footer_at]
     if not tail or (tail[0] != 0 and len(tail) < 11):
         raise InvalidModelError("Truncated OSRS-149 opaque tail")
@@ -218,7 +218,7 @@ def _encode(model: Model) -> bytes:
     # does, or for a hand-built model, are the choices computed: a single shared priority is stored once in the
     # footer (0 for no faces), and the render type and alpha sections are omitted when every value is 0.
     # The client reads both: a priority byte below 255 is one shared priority, and a section whose flag is not 1 reads
-    # as 0. The 0 for no faces is our own choice. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md,
+    # as 0. The 0 for no faces is our own choice. Evidence: docs/research/osrs-149-codec-client-rules.md,
     # rules 1 and 2.
     flags = source.section_flags
     priorities = set(model.render_priorities)

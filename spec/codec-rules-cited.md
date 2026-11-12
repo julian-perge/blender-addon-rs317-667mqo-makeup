@@ -2,7 +2,7 @@
 
 Status: done on 2026-11-11 on branch `docs/codec-rules-cited`. Results are in issue 17.
 
-Written on 2026-11-11 from [.scratch/codec-rules-cited/spec.md](../.scratch/codec-rules-cited/spec.md) (now only a pointer to this spec), which followed the decisions 1 to 3 in [issue 17](../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md) (the user chose them on 2026-11-10). The scratch spec was written before the workflow in [docs/agents/workflow.md](../docs/agents/workflow.md). This spec keeps its content and adds the six areas that the workflow needs. The code and test sites below were checked on 2026-11-11.
+Written on 2026-11-11 from the scratch spec (deleted after the merge), which followed the decisions 1 to 3 in [issue 17](../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md) (the user chose them on 2026-11-10). The scratch spec was written before the workflow in [docs/agents/workflow.md](../docs/agents/workflow.md). This spec keeps its content and adds the six areas that the workflow needs. The code and test sites below were checked on 2026-11-11.
 
 ## Objective
 
@@ -53,7 +53,7 @@ From issue 17 (user, 2026-11-10), unchanged:
 
 Changed or added on 2026-11-11 to fit the current layout (the user approved the spec with these on 2026-11-11):
 
-- **Evidence folder.** New evidence goes in `.scratch/codec-rules-cited/evidence/`, as [docs/agents/workflow.md](../docs/agents/workflow.md) says. The earlier findings stay where they are, and the new file links to them.
+- **Evidence folder.** The evidence is in [docs/research/osrs-149-codec-client-rules.md](../docs/research/osrs-149-codec-client-rules.md), as [docs/agents/workflow.md](../docs/agents/workflow.md) says. The earlier findings stay where they are, and the new file links to them.
 - **Review.** The commit review in the workflow replaces the "two-axis review" in the scratch tickets.
 
 ## Tech stack
@@ -77,7 +77,7 @@ uv run pytest tests/unit/test_osrs149_codec.py
 | `src/rsps_toolkit/formats/model.py` | Encode validation. Comments of rules 3, 4 and 5 change. |
 | `tests/unit/test_osrs149_codec.py` | The test seam. Test comments get the citation. A rule without a test gets one. |
 | `docs/research/model-formats.md` | Section "Old School revision 149 in this add-on". Each confirmed rule gets its citation. |
-| `.scratch/codec-rules-cited/evidence/` | The decompiled methods and the lines read. |
+| `docs/research/osrs-149-codec-client-rules.md` | The decompiled methods and the lines read. |
 | `.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md` | Closed with the results. |
 
 ## Code style

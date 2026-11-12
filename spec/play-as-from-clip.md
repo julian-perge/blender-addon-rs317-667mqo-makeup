@@ -1,6 +1,6 @@
 # Picking a clip sets Play As
 
-Status: ready-for-agent
+Status: done (picking a clip sets Play As; see tasks/done/play-as-from-clip/).
 
 From [issue 21](../.scratch/osrs-focus/issues/21-play-as-defaults-to-pose.md), whose Decisions block (decisions 1 and 2, chosen by the user on 2026-11-10) this spec follows, and [ADR 0014](../docs/adr/0014-weapon-clips-come-from-alter-then-the-plugin.md).
 

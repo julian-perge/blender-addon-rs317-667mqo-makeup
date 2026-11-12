@@ -2,7 +2,7 @@
 
 Status: resolved on 2026-11-12 (merged in pull request 7). Approved by the user on 2026-11-12.
 
-Written on 2026-11-12 from [.scratch/shared-fade-groups/spec.md](../.scratch/shared-fade-groups/spec.md) (now only a pointer to this spec), which followed the decisions 1 to 5 in [issue 14](../.scratch/osrs-focus/issues/14-a-clip-fading-every-label-makes-23-materials.md) (the user chose them on 2026-11-10). The scratch spec was written before the workflow in [docs/agents/workflow.md](../docs/agents/workflow.md). This spec keeps its content and adds the areas that the workflow needs. The code sites below were checked on 2026-11-12.
+Written on 2026-11-12 from the scratch spec (deleted after the merge), which followed the decisions 1 to 5 in [issue 14](../.scratch/osrs-focus/issues/14-a-clip-fading-every-label-makes-23-materials.md) (the user chose them on 2026-11-10). The scratch spec was written before the workflow in [docs/agents/workflow.md](../docs/agents/workflow.md). This spec keeps its content and adds the areas that the workflow needs. The code sites below were checked on 2026-11-12.
 
 ## Objective
 
@@ -103,7 +103,7 @@ Follow [CODING_STANDARDS.md](../CODING_STANDARDS.md) and the existing style of `
 ## Further Notes
 
 - Of the three alpha fixtures, only sequence 1994 changes any face: 23 label groups on both bodies, all with one curve. Sequences 1697 and 3182 have alpha transforms that change no face, so they make no fade materials.
-- The work is split in three tickets in [.scratch/shared-fade-groups/issues/](../.scratch/shared-fade-groups/issues/): 01 one clip merges, 02 the new fixture, 03 several bone clips. 01 and 02 are independent. 03 needs both.
+- The work was split in three tickets (deleted after the merge): 01 one clip merges, 02 the new fixture, 03 several bone clips. 01 and 02 are independent. 03 needs both.
 
 ## Open Questions
 

@@ -2,7 +2,7 @@ Spec: spec/remove-dumper-and-legacy-revisions.md
 
 # Implementation Plan: Read caches directly, remove the dumper and the 317 and 667 code
 
-Branch: `refactor/remove-dumper-and-legacy-revisions`. One commit per task. Tasks are in `tasks/todo.md`.
+Branch: `refactor/remove-dumper-and-legacy-revisions`. One commit per task. Tasks are in `tasks/done/remove-dumper-and-legacy-revisions/todo.md`.
 
 ## Overview
 

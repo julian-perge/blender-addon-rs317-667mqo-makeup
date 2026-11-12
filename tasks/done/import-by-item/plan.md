@@ -2,7 +2,7 @@ Spec: spec/import-by-item.md
 
 # Implementation Plan: Import worn models by item
 
-Branch: `feat/import-by-item`. One commit per task. Tasks are in `tasks/todo.md`. Issue: [issue 07](../../../.scratch/osrs-focus/issues/07-imported-worn-items-show-stored-colours.md).
+Branch: `feat/import-by-item`. One commit per task. Tasks are in `tasks/done/import-by-item/todo.md`. Issue: [issue 07](../../../.scratch/osrs-focus/issues/07-imported-worn-items-show-stored-colours.md).
 
 ## Overview
 
@@ -45,7 +45,7 @@ T2, T3 and T4 depend only on T1. They touch `import_item.py` or `mesh.py`, so th
 
 ## Task list
 
-See `tasks/todo.md`. Five tasks and a close-out, three checkpoints.
+See `tasks/done/import-by-item/todo.md`. Five tasks and a close-out, three checkpoints.
 
 ## Risks and mitigations
 

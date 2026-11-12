@@ -62,7 +62,7 @@ Spec: `spec/import-by-item.md`. Plan: `plan.md` in this folder. Each task ends w
     - [ ] The user types a name and an id into the popup in Blender and confirms the search.
     - [x] Commit review as in T1 (spec and standards sub-agents; findings fixed).
   - Deps: T1.
-  - Files: `src/rsps_toolkit/blender/import_item.py`, `src/rsps_toolkit/blender/__init__.py`, `tests/blender/test_import_item.py`, `tests/blender/test_register.py`, `spec/import-by-item.md`, `tasks/plan.md`.
+  - Files: `src/rsps_toolkit/blender/import_item.py`, `src/rsps_toolkit/blender/__init__.py`, `tests/blender/test_import_item.py`, `tests/blender/test_register.py`, `spec/import-by-item.md`, `tasks/done/import-by-item/plan.md`.
 
 ### Checkpoint: after T3
 - [x] The user has seen the entry and dialog, or has said to continue without (the user chose to build T4 next)

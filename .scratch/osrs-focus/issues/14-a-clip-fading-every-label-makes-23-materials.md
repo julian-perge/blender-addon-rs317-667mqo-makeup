@@ -18,5 +18,5 @@ The user chose on 2026-11-10, in a design interview:
 
 - 2026-11-10, triage with the user: needs-info. Whether labels with identical fades should share one material is the owner's call.
 - 2026-11-10, design interview with the user: decisions 1 to 5, ready-for-agent. GLOSSARY.md gained Fade group. The implementation agrees its test seams with the user first.
-- 2026-11-10, agent: the spec is [.scratch/shared-fade-groups/spec.md](../../shared-fade-groups/spec.md) (ready-for-agent). The user agreed one test seam, the two bake functions, plus a newly recorded clip fixture with label-specific fades for the split case.
-- 2026-11-12, agent: resolved. The three tickets of [.scratch/shared-fade-groups/](../../shared-fade-groups/spec.md) were built and merged (pull request 7). The plan is in `tasks/done/shared-fade-groups/`.
+- 2026-11-10, agent: the spec is the scratch spec (deleted after the merge) (ready-for-agent). The user agreed one test seam, the two bake functions, plus a newly recorded clip fixture with label-specific fades for the split case.
+- 2026-11-12, agent: resolved. The three tickets of the scratch folder (deleted after the merge) were built and merged (pull request 7). The plan is in `tasks/done/shared-fade-groups/`.

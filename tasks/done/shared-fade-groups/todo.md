@@ -1,6 +1,6 @@
 # Todo: shared fade groups
 
-Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade-groups`. Commit per task after `prek run --all-files` and the commit review. Write the failing test first. Check alphas against the client recordings only. Use the term "fade group".
+Spec: spec/shared-fade-groups.md. Plan: tasks/done/shared-fade-groups/plan.md. Branch: `feat/shared-fade-groups`. Commit per task after `prek run --all-files` and the commit review. Write the failing test first. Check alphas against the client recordings only. Use the term "fade group".
 
 ## Phase 1: One clip merges
 

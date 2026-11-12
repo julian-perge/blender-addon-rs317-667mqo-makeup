@@ -20,4 +20,4 @@ The user chose on 2026-11-10, in a design interview:
 
 - 2026-11-10, triage with the user: needs-info. Whether to fix it in code (for example by moving an appended player out of another player's collection) or to document making the Scene Collection active first is the owner's call.
 - 2026-11-10, design interview with the user: decisions 1 to 5. Next step: the user runs /to-spec.
-- 2026-11-10, agent: the spec is [.scratch/update-carries-extras/spec.md](../../update-carries-extras/spec.md) (ready-for-agent). The user agreed one test seam, the player operators.
+- 2026-11-10, agent: the spec is the scratch spec (deleted after the merge) (ready-for-agent). The user agreed one test seam, the player operators.
