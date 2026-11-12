@@ -23,11 +23,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from rsps_toolkit.formats.cache_profile import CONFIG_INDEX, ITEM_GROUP  # noqa: E402
 from rsps_toolkit.formats.item_definition import ItemDefinition, decode_item  # noqa: E402
 from rsps_toolkit.formats.js5 import Js5Store  # noqa: E402
 
 OUTPUT = Path(__file__).parent.parent / "src/rsps_toolkit/data/item_wear.json"
-CONFIG_INDEX, ITEM_GROUP = 2, 10
 
 
 def load_items(folder: Path) -> dict[int, ItemDefinition]:

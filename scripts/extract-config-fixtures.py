@@ -17,11 +17,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from rsps_toolkit.formats.cache_profile import CONFIG_INDEX, ENUM_GROUP, KIT_GROUP  # noqa: E402
 from rsps_toolkit.formats.js5 import Js5Store  # noqa: E402
 from rsps_toolkit.formats.kit_names import STYLE_ENUMS  # noqa: E402
 
 OUTPUT = Path(__file__).resolve().parent.parent / "tests/fixtures/appearance"
-CONFIG_INDEX, KIT_GROUP, ENUM_GROUP = 2, 3, 8
 
 
 def write(folder: Path, files: dict[int, bytes]) -> None:

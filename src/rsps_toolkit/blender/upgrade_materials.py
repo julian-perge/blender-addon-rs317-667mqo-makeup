@@ -1,7 +1,7 @@
 """Upgrade RS Materials: store the game values of the materials the PMN tool made, which stored none on them.
 
-The texture ID from the material's name and the alpha from its shader go on each material, as face_materials stores them for imports. The material's faces also
-get the texture triangle the original exporter wrote for them (ADR 0008).
+The texture ID from the material's name and the alpha from its shader go on each material, as face_materials stores
+them for imports. The material's faces also get the texture triangle the original exporter wrote for them (ADR 0008).
 """
 
 import re
