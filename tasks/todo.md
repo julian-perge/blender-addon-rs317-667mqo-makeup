@@ -4,7 +4,8 @@ Spec: `spec/codec-rules-cited.md`. Plan: `plan.md` in this folder. Each task end
 
 ## Phase 1: Read the client
 
-- [ ] **T1 Settle the six rules against the client decoder** (S, no code change)
+- [x] **T1 Settle the six rules against the client decoder** (S, no code change)
+  - Result: [client-rules.md](../.scratch/codec-rules-cited/evidence/client-rules.md). The jar SHA-256 matched before reading. Rules 1, 2 and 3: confirmed. Rules 4, 5 and 6: not settled. The client has no refusal for them, and the add-on is stricter. The rule 6 encode gap does not exist for written files: `_encode` writes 0 or 1 for the five flags. Only `check` accepts flags that `decode` refuses. No decompiler was on the machine, so the reading uses `javap`. Two reviewers checked the offsets and the style, and their findings are fixed.
   - Description: Download the revision 149 client jar named in `.scratch/osrs-focus/evidence/reference-source-findings.md` (ask the user first), check its SHA-256, and run `javap -c -p` on `dv` (and the classes `dv.j` calls) into the scratchpad. Read the `FF FF` decoder `dv.j` for each rule. Write `.scratch/codec-rules-cited/evidence/client-rules.md` with one entry per rule: class, method, offsets, what the client does, and a verdict (confirmed, contradicted, not settled).
   - Accept:
     - [ ] The jar's SHA-256 equals `19c492cc2dc20e9fcb0399215fc32a47cd4605b01a30d963dac7a0c863ebcbdd` before any reading.
