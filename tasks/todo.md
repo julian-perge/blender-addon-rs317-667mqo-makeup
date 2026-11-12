@@ -21,16 +21,17 @@ Spec: `spec/codec-rules-cited.md`. Plan: `plan.md` in this folder. Each task end
 
 ## Checkpoint: Verdicts
 
-- [ ] The user has read `client-rules.md`.
-- [ ] Every contradicted or not-settled rule is put to the user with the client's behaviour and the options. T2 to T4 skip those rules until the user decides.
-- [ ] The rule 6 gap (decode refuses what encode accepts) is put to the user as a separate decision.
-- [ ] The user has answered the open questions in `plan.md` (branch type).
+- [x] The user has read `client-rules.md`.
+- [x] Every contradicted or not-settled rule is put to the user with the client's behaviour and the options. Decision on 2026-11-11: rules 4, 5 and 6 are kept and cited as "the constants are the client's, the refusal is the add-on's own, because the client reads such input differently". No code change. T3 and T4 use this wording for those rules.
+- [x] The rule 6 gap is put to the user as a separate decision. Decision: only note it. `check` does not change. The gap is smaller than planned: `encode` writes 0 or 1 for the five flags, so only `check` accepts flags that `decode` refuses.
+- [x] The user has answered the open questions in `plan.md`: branch `docs/`, jar download allowed.
 
 ## Phase 2: Cite the confirmed rules
 
 Each task does only the rules that T1 confirmed and the user approved. For a skipped rule, write "skipped, see checkpoint" under the task.
 
-- [ ] **T2 Cite the two writing rules (1 and 2)** (M)
+- [x] **T2 Cite the two writing rules (1 and 2)** (M)
+  - Result: both rules were confirmed in T1, except the value 0 for a model with no faces: the client accepts any byte below 255, so 0 is the add-on's choice, and the comment and note say so. The citation is in the encode comment block, in the note and in three new tests (shared, mixed and all-255 priorities; no faces; all-zero, alpha-only and render-type-only sections). The tests passed on their first run. Five mutation checks (shared-priority condition, 255 guard, no-face value, alpha omission, render type omission) each failed the matching test, and the file was restored. `git diff HEAD -- src` shows comment changes only. `prek run --all-files` passes.
   - Description: Replace "unverified" for the shared priority rule and the omitted render-type and alpha sections with the T1 citation: in the comment block in `formats/new_format.py` (`encode`) and in the model formats note. Add tests at `encode` and `decode` for the two rules, with the citation in the test comment.
   - Accept:
     - [ ] A hand-built model (source `section_flags=None`) whose faces share one priority encodes with that priority in the footer and no priority section. The same model with two priorities writes a priority section and the footer byte 255. A model with no faces writes priority 0. (Each case only for a rule that T1 confirmed.)

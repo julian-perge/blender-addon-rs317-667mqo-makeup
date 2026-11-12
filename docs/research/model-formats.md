@@ -168,9 +168,19 @@ Measured against cache 430 and the Gate 0 fixtures; see [the OSRS cache workflow
 - A shading change on a newer model is refused, because what a render type does in the client is not established
   ([ADR 0012](../adr/0012-newer-models-refuse-unestablished-edits.md)). Render types 1 and 3 are taken to be flat,
   unverified.
-- Unverified, for hand-built models or edits that contradict a source footer flag (unedited models replay their
-  source flags): one shared priority is stored in the footer (0 for no faces), and the render-type and alpha sections
-  are left out when all their values are 0. Also unverified, and marked so in the code, these reject input: a texture
+- Two rules write the footer of a hand-built model or of an edit that contradicts a source footer flag (unedited
+  models replay their source flags). The client citations are bytecode offsets in the revision 149 jar, with
+  obfuscated names. The reading is in
+  [client-rules.md](../../.scratch/codec-rules-cited/evidence/client-rules.md).
+- One shared priority is stored once in the footer (0 for no faces). Confirmed, except the 0. Client rev 149, class
+  `dv`, method `j`, offsets 2235 to 2240 and 965 to 969: a footer priority byte of 255 means that one priority byte
+  follows for every face, and any other value is the one priority of all faces. The client has no case for a model
+  with no faces, so writing 0 there is our choice.
+- The render-type and alpha sections are left out when all their values are 0. Confirmed. Client rev 149, class
+  `dv`, method `ae`, offsets 563 to 570, 1192 to 1199, 1488 to 1491 and 1706 to 1709: a missing render type or alpha
+  array reads as 0. Class `dv`, method `j`, offsets 1516 to 1522 and 1559 to 1562: each of those sections is read
+  only when its footer flag is 1.
+- Unverified, and marked so in the code, these reject input: a texture
   index above 254, an opaque tail whose first byte is nonzero and that holds fewer than 11 bytes, texture kinds above
   3, and footer flags other than 0 or 1. Each needs a client citation or the user's decision
   ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)).
