@@ -8,7 +8,7 @@ import bpy
 from ..formats import decode
 from ..formats.appearance import WornItem, items_with_worn_model, recolour
 from ..formats.cache_profile import SET_CACHE_FOLDER, CacheProfile, MissingResourceError
-from . import appearance_props, model_source
+from . import appearance_props, model_source, rs_layers
 from .mesh import model_to_object
 from .preferences import brightness, first_texture, texture_folders
 
@@ -67,7 +67,7 @@ class RS_OT_import_item(bpy.types.Operator):
             if int(self.item) not in items:
                 raise RefusalError(f"Item {self.item} is not in the cache.")
             item = items[int(self.item)]
-            imported = _import_models(cache, item, _worn_models(item, female))
+            imported = _import_models(cache, item, _worn_models(item, female), self.body)
         except (RefusalError, MissingResourceError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
@@ -90,7 +90,7 @@ def _worn_models(item: WornItem, female: bool) -> list[int]:
     return models
 
 
-def _import_models(cache: CacheProfile, item: WornItem, models: list[int]) -> list[bpy.types.Object]:
+def _import_models(cache: CacheProfile, item: WornItem, models: list[int], body: str) -> list[bpy.types.Object]:
     """One object per model file. Every file is read first, so a missing one makes nothing. A failure while building
     removes every object, mesh and material made so far and passes on."""
     files = [
@@ -117,6 +117,7 @@ def _import_models(cache: CacheProfile, item: WornItem, models: list[int]) -> li
             )
             if isinstance(obj.data, bpy.types.Mesh):
                 model_source.record_source_hash(obj.data, hashlib.sha256(data).hexdigest())
+            rs_layers.write_item_import(obj, rs_layers.ItemImport(item.id, item.name, body))
             imported.append(obj)
     except Exception:
         for obj in set(bpy.data.objects) - objects:

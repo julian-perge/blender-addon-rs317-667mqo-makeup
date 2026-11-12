@@ -3,12 +3,22 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import bmesh
 import bpy
 import pytest
 from js5_builder import build_cache, item_definition, read_cache
 from runelite_json import load_items
 
-from rsps_toolkit.blender import appearance_props, face_materials, import_item, import_model, model_source, preferences
+from rsps_toolkit.blender import (
+    appearance_props,
+    face_materials,
+    import_item,
+    import_model,
+    model_source,
+    preferences,
+    rs_layers,
+    ui,
+)
 from rsps_toolkit.blender.export_model import PRESERVE_SOURCE, prepare_exports
 from rsps_toolkit.blender.mesh import model_to_object, object_to_model
 from rsps_toolkit.formats import Model, cache_profile, decode, face_colour_to_rgb
@@ -481,3 +491,137 @@ def test_an_empty_or_stale_item_choice_with_a_valid_cache_asks_for_an_item_and_a
         assert result == {"CANCELLED"}
         assert reports == ["Pick an item that has a worn model for the male body."]
     assert counts() == before
+
+
+# Spec, Decisions "Stored data" and user story 8 (user, 2026-11-10, issue 07 decision 9): each object stores the item and
+# body, and the panel note names them and says that export writes the model's own colours. The item is the Zamorak
+# platebody (2653) of ItemDefinitions.json.
+def test_the_note_of_an_item_import_names_the_item_and_body_and_says_export_writes_the_models_own_colours():
+    run_import(2653)
+
+    for model_id in (3379, 164, 3381):
+        note = ui.item_import_note(objects_by_name()[str(model_id)])
+        assert note is not None
+        assert "Zamorak platebody (2653)" in note
+        assert ", male body." in note
+        assert "Shown colours follow the item's recolours." in note
+        assert "Export writes the model's own colours." in note
+
+
+def test_the_note_names_the_female_body_for_a_female_import():
+    run_import(2653, "FEMALE")
+
+    note = ui.item_import_note(objects_by_name()["3383"])
+
+    assert note is not None
+    assert ", female body." in note
+
+
+def test_a_plain_import_an_object_with_no_data_and_no_object_have_no_note():
+    plain = import_model._import(
+        APPEARANCE / "3379.dat", lambda texture: None, preferences.brightness(), profile="osrs-149"
+    )
+    assert isinstance(plain, bpy.types.Object)
+    empty = bpy.data.objects.new("empty", None)
+
+    assert ui.item_import_note(plain) is None
+    assert ui.item_import_note(empty) is None
+    assert ui.item_import_note(None) is None
+
+
+def test_the_note_is_plain_ascii_in_short_sentences():
+    run_import(2653)
+
+    note = ui.item_import_note(objects_by_name()["3379"])
+
+    assert note is not None
+    assert note.isascii()
+    assert all(len(sentence.split()) <= 12 for sentence in note.split(". "))
+
+
+class RecordingLayout:
+    """Stands in for a panel layout: a box is the layout itself, and each label is recorded."""
+
+    def __init__(self):
+        self.labels: list[str] = []
+        self.icons: list[str] = []
+
+    def box(self):
+        return self
+
+    def label(self, text, icon="NONE"):
+        self.labels.append(text)
+        self.icons.append(icon)
+
+
+def test_the_panel_draws_the_note_in_lines_that_fit_its_width_and_nothing_for_a_plain_model():
+    run_import(2653)
+    layout = RecordingLayout()
+
+    ui.draw_item_import_note(layout, objects_by_name()["3379"])
+
+    assert layout.labels
+    assert layout.icons[0] == "INFO"
+    assert all(len(line) <= 30 for line in layout.labels)
+    assert " ".join(layout.labels[1:]).count("Zamorak platebody (2653)") == 1
+    nothing = RecordingLayout()
+    ui.draw_item_import_note(nothing, bpy.data.objects.new("empty", None))
+    assert nothing.labels == []
+
+
+def edit_first_vertex(obj: bpy.types.Object) -> None:
+    view_layer = bpy.context.view_layer
+    assert view_layer is not None
+    view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    bm = bmesh.from_edit_mesh(mesh_of(obj))
+    bm.verts.ensure_lookup_table()
+    bm.verts[0].co.x += 5
+    bmesh.update_edit_mesh(mesh_of(obj))
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def test_the_stored_item_data_survives_moving_vertices_in_edit_mode_and_duplicating_the_object():
+    # The stored data names no vertex or face, so these two edits are the ones that could lose it (CODING_STANDARDS,
+    # "Stored data survives the user's edits"). The stored game values and the Preserve Source export do not change.
+    run_import(2653)
+    obj = objects_by_name()["3379"]
+    expected = decode(model_file(3379), profile="osrs-149")
+
+    edit_first_vertex(obj)
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.ops.object.duplicate()
+    copy = bpy.context.active_object
+    assert copy is not None and copy is not obj
+
+    for survivor in (obj, copy):
+        # The data is on the object, so a duplicate keeps it whether or not it shares the mesh.
+        assert rs_layers.ITEM_IMPORT in survivor
+        assert rs_layers.ITEM_IMPORT not in mesh_of(survivor)
+        note = ui.item_import_note(survivor)
+        assert note is not None and "Zamorak platebody (2653)" in note
+        (exported,) = prepare_exports([survivor], PRESERVE_SOURCE, auto_detect=False)
+        written = decode(exported.payload, profile="osrs-149")
+        assert written.face_colours == expected.face_colours
+        assert written.vertices[0] == (expected.vertices[0][0] + 5, *expected.vertices[0][1:])
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [
+        "not json",
+        '{"item_id": "2653", "item_name": "Zamorak platebody", "body": "MALE"}',
+        '{"item_id": 2653, "item_name": "Zamorak platebody", "body": "OTHER"}',
+        '{"item_id": 2653}',
+    ],
+    ids=["not-json", "wrong-type", "unknown-body", "missing-field"],
+)
+def test_unreadable_item_data_gives_no_note(stored):
+    # The note shows only what it can read. How damaged data should show is open (see the T5 result in tasks/todo.md).
+    run_import(2653)
+    obj = objects_by_name()["3379"]
+
+    obj[rs_layers.ITEM_IMPORT] = stored
+
+    assert ui.item_import_note(obj) is None
