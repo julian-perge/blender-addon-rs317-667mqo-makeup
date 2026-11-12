@@ -4,7 +4,9 @@ The opcodes follow RuneLite's KitLoader (cache/src/main/java/net/runelite/cache/
 commit bb0fa42b3). RuneLite's ConfigType gives IDENTKIT as config group 3, which holds these definitions. RuneLite
 skips an opcode that it does not know. This decoder refuses it, and it also refuses bytes after the closing opcode 0,
 so a wrong parse cannot pass without notice. RuneLite's opcodes 5 and 70 to 74, which store model ids in four bytes,
-are left out on purpose: no snapshot 430 kit uses them, so they are refused like any unknown opcode.
+are left out on purpose: no snapshot 430 kit uses them, so they are refused like any unknown opcode. RuneLite reads
+opcodes 60 to 69 as chathead models, but its KitDefinition holds only five, so opcodes 65 to 69 fail there too. This
+decoder refuses them.
 """
 
 from ._stream import Reader

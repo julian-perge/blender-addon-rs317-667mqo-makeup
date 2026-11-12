@@ -17,7 +17,7 @@ from js5_builder import (
     write_store,
 )
 
-from rsps_toolkit.formats.js5 import Js5Store, reference_table, split
+from rsps_toolkit.formats.js5 import Js5Store, NotInCacheError, reference_table, split
 
 SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
 HAS_SNAPSHOT_430 = "RSPS_SNAPSHOT_430_CACHE" in os.environ and SNAPSHOT_430.is_dir()
@@ -57,7 +57,7 @@ def test_a_compressed_group_of_several_files_splits_by_its_chunk_table(store):
 
 def test_a_missing_group_or_folder_is_named(store, tmp_path):
     js5, _ = store
-    with pytest.raises(LookupError, match="no group 4"):
+    with pytest.raises(NotInCacheError, match="no group 4"):
         js5.container(0, 4)
     with pytest.raises(FileNotFoundError, match="main_file_cache.dat2"):
         Js5Store(tmp_path / "elsewhere")

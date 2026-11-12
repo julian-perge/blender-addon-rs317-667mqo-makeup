@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from js5_builder import build_cache, rewrite_cache
 
+from rsps_toolkit.formats import cache_profile
 from rsps_toolkit.formats.appearance import assemble_body, default_equipment
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.cache_profile import CacheProfile, MissingResourceError
@@ -82,6 +83,17 @@ def test_a_missing_style_enum_is_named(cache):
 def test_a_cut_short_kit_is_a_decoding_error_not_a_missing_resource(cache):
     rewrite_cache(cache, lambda parts: parts["kits"].update({0: parts["kits"][0][:3]}))
     with pytest.raises(IndexError):
+        CacheProfile(cache).kits
+
+
+def test_a_key_error_while_reading_is_not_reported_as_a_missing_resource(cache, monkeypatch):
+    # Only a group or definition that the cache lacks names the preference. Another lookup that fails is a fault in
+    # the toolkit, and setting another folder would not fix it.
+    def fail(_store):
+        raise KeyError("body part")
+
+    monkeypatch.setattr(cache_profile, "read_kits", fail)
+    with pytest.raises(KeyError, match="body part"):
         CacheProfile(cache).kits
 
 

@@ -16,7 +16,7 @@ from .appearance import Kit, Palette, WornItem, assemble_body, assemble_slots, l
 from .appearance_preset import AppearancePreset
 from .enum_definition import EnumDefinition, decode_enum
 from .item_definition import decode_item
-from .js5 import DATA_FILE, REFERENCE_INDEX, Js5Store
+from .js5 import DATA_FILE, REFERENCE_INDEX, Js5Store, NotInCacheError
 from .kit_definition import decode_kit
 from .kit_names import STYLE_ENUMS, load_kit_names
 from .model import Model
@@ -47,7 +47,7 @@ def read_style_enums(store: Js5Store) -> dict[int, EnumDefinition]:
     enums = {}
     for enum_id in (enum_id for pair in STYLE_ENUMS.values() for enum_id in pair):
         if enum_id not in files:
-            raise LookupError(f"Group {ENUM_GROUP} of the cache has no enum {enum_id}")
+            raise NotInCacheError(f"Group {ENUM_GROUP} of the cache has no enum {enum_id}")
         enums[enum_id] = decode_enum(enum_id, files[enum_id])
     return enums
 
@@ -79,17 +79,15 @@ class CacheProfile:
     def _kept_unless_changed[T](self, name: str, load: Callable[[Js5Store], T]) -> T:
         """The catalog parsed from a new store, which reads the cache's reference tables again, whenever the files'
         modified times change. A group or definition the cache lacks becomes a MissingResourceError that names the
-        preference. A definition cut short stays an IndexError."""
+        preference. Every other error passes unchanged, such as the IndexError of a definition cut short, because
+        setting another folder would not fix it."""
         times = tuple(path.stat().st_mtime_ns for path in self._config_files())
         kept = self._kept.get(name)
         if kept is not None and kept.times == times:
             return kept.catalog
         try:
             catalog = load(Js5Store(self.cache_folder))
-        except IndexError:
-            # A definition cut short is a decoding error. Setting another folder would not fix it.
-            raise
-        except LookupError as error:
+        except NotInCacheError as error:
             raise MissingResourceError(f"{error} in {self.cache_folder}. {SET_CACHE_FOLDER}") from error
         self._kept[name] = _Kept(times, catalog)
         return catalog
@@ -123,7 +121,7 @@ class CacheProfile:
             raise MissingResourceError(f"{error}. {SET_CACHE_FOLDER}") from error
         try:
             data = store.container(MODEL_INDEX, model_id)
-        except (LookupError, FileNotFoundError) as error:
+        except (NotInCacheError, FileNotFoundError) as error:
             raise MissingResourceError(f"Model {model_id} is not in {self.cache_folder}. {SET_CACHE_FOLDER}") from error
         return decode(data, profile="osrs-149")
 

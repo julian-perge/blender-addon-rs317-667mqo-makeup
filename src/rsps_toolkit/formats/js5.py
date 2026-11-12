@@ -15,6 +15,10 @@ REFERENCE_INDEX = 255
 DATA_FILE = "main_file_cache.dat2"
 
 
+class NotInCacheError(LookupError):
+    """The cache has no such group, or its group has no such file."""
+
+
 class Js5Store:
     def __init__(self, folder: Path) -> None:
         self.folder = folder
@@ -32,7 +36,7 @@ class Js5Store:
             entry = entries.read(6)
         size = int.from_bytes(entry[0:3], "big") if len(entry) == 6 else 0
         if size == 0:
-            raise LookupError(f"Index {index} of the cache has no group {group}")
+            raise NotInCacheError(f"Index {index} of the cache has no group {group}")
         sector = int.from_bytes(entry[3:6], "big")
         head = 10 if group > 0xFFFF else 8
         out = bytearray()
@@ -67,7 +71,7 @@ class Js5Store:
         """The files of one group, by file id."""
         ids = self.groups(index).get(group)
         if ids is None:
-            raise LookupError(f"Index {index} of the cache has no group {group}")
+            raise NotInCacheError(f"Index {index} of the cache has no group {group}")
         return split(self.container(index, group), ids)
 
 
