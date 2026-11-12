@@ -114,16 +114,20 @@ class CacheProfile:
         return load_palette(PALETTE_PATH)
 
     def load_model(self, model_id: int) -> Model:
-        """Read one model. This needs no reference table, so it reads the cache files each time and keeps nothing."""
+        """Read and decode one model with the revision 149 profile."""
+        return decode(self.model_bytes(model_id), profile="osrs-149")
+
+    def model_bytes(self, model_id: int) -> bytes:
+        """Return the model file exactly as the cache stores it. This needs no reference table, so it reads the cache
+        files each time and keeps nothing."""
         try:
             store = Js5Store(self.cache_folder)
         except FileNotFoundError as error:
             raise MissingResourceError(f"{error}. {SET_CACHE_FOLDER}") from error
         try:
-            data = store.container(MODEL_INDEX, model_id)
+            return store.container(MODEL_INDEX, model_id)
         except (NotInCacheError, FileNotFoundError) as error:
             raise MissingResourceError(f"Model {model_id} is not in {self.cache_folder}. {SET_CACHE_FOLDER}") from error
-        return decode(data, profile="osrs-149")
 
     def assemble(self, preset: AppearancePreset) -> Model:
         """The preset's unlit body. A kit, item or model that the cache lacks is an error."""

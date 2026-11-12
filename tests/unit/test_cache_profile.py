@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from js5_builder import build_cache, rewrite_cache
 
-from rsps_toolkit.formats import cache_profile
+from rsps_toolkit.formats import cache_profile, decode
 from rsps_toolkit.formats.appearance import assemble_body, default_equipment
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.cache_profile import (
@@ -67,6 +67,21 @@ def test_a_missing_model_names_the_model_and_the_preference(tmp_path):
     cache = write_cache(tmp_path, models=models)
     with pytest.raises(MissingResourceError, match="Model 230.*Set the Cache folder in the add-on"):
         CacheProfile(cache).load_model(230)
+
+
+def test_model_bytes_are_the_model_file_as_the_cache_holds_it(cache):
+    # The fixture files are the raw model files the test cache was built from.
+    profile = CacheProfile(cache)
+    assert profile.model_bytes(3379) == (FIXTURES / "3379.dat").read_bytes()
+    assert profile.load_model(3379) == decode((FIXTURES / "3379.dat").read_bytes(), profile="osrs-149")
+
+
+def test_missing_model_bytes_name_the_model_and_the_preference(tmp_path):
+    models = raw_files(FIXTURES)
+    del models[230]
+    cache = write_cache(tmp_path, models=models)
+    with pytest.raises(MissingResourceError, match="Model 230.*Set the Cache folder in the add-on"):
+        CacheProfile(cache).model_bytes(230)
 
 
 def test_items_come_from_the_cache(cache):

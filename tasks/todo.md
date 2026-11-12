@@ -4,21 +4,24 @@ Spec: `spec/import-by-item.md`. Plan: `tasks/plan.md`. Each task ends with `prek
 
 ## Phase 1: The import
 
-- [ ] **T1 Import an item's worn model by item id** (M)
+- [x] **T1 Import an item's worn model by item id** (M)
   - Description: New operator `import_scene.rs_item` in `blender/import_item.py`, with `body` (Male default, Female) and `item` (list of items with a worn model for the body). `execute` loads each model file of the worn model, makes one object per file named by model id at its stored position (no offset, no joining), writes the source record and the source hash (from one read of the model bytes through a new `CacheProfile.model_bytes`, which `load_model` now uses too), and selects the objects with the last one active. Faces show their stored colours (recolours come in T2). The class is registered in `blender/__init__.py`. No menu entry yet.
   - Accept:
-    - [ ] Item 2653 male gives objects 3379, 164 and 3381. Female gives 3383, 344 and 3381. Vertex positions equal the decoded model files' (no offset).
-    - [ ] The stored game values of each object equal the decoded model file's (`object_to_model(obj)` equals `decode(file, profile="osrs-149")`), and exporting an object writes a model whose face colours equal the file's.
-    - [ ] The objects are selected, earlier selections are cleared, and the last model of the worn model is active.
-    - [ ] Each mesh has the same source record as a plain import of the same model, and `stored_hash` equals the SHA-256 of the model's bytes in the cache.
-    - [ ] The item list for Male is the fixture items with a first male model other than -1, sorted by name then id, labelled `<name> (<id>)`. The list for Female follows the female models. The list function is in `formats/appearance.py` and has a unit test.
+    - [x] Item 2653 male gives objects 3379, 164 and 3381. Female gives 3383, 344 and 3381. Vertex positions equal the decoded model files' (no offset).
+    - [x] The stored game values of each object equal the decoded model file's (`object_to_model(obj)` equals `decode(file, profile="osrs-149")`), and exporting an object writes a model whose face colours equal the file's.
+    - [x] The objects are selected, earlier selections are cleared, and the last model of the worn model is active.
+    - [x] Each mesh has the same source record as a plain import of the same model, and `stored_hash` equals the SHA-256 of the model's bytes in the cache.
+    - [x] The item list for Male is the fixture items with a first male model other than -1, sorted by name then id, labelled `<name> (<id>)`. The list for Female follows the female models. The list function is in `formats/appearance.py` and has a unit test.
   - Verify:
     - [ ] `BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh tests/blender/test_import_item.py` passes, and each case failed before its code.
     - [ ] `uv run pytest` passes (the list function).
     - [ ] `prek run --all-files` passes.
     - [ ] Commit review with fixed point `HEAD`, spec `spec/import-by-item.md`, standards `CODING_STANDARDS.md`.
+  - Result (2026-11-11): `BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh` gives 789 passed, 3 skipped (9 cases in `test_import_item.py`, each red on the missing module before the code). `uv run pytest` gives 1334 passed, 24 skipped. `prek run --all-files` passes.
+    - Choices to report: (1) The operator imports every model id of the body's worn model that is not -1, as the spec says. `item_model` skips a third model when the second is -1; the importer does not. (2) `object_to_model(obj)` equals the decoded file except `profile`: a model in the old encoding has no source fields, so a mesh does not keep `osrs-149`. A plain RS Model import with the OSRS149 format gives the same (checked by hand), so the test expects `profile=None` for such models. (3) The import passes the same texture lookup as the plain import. (4) The operator reports `Imported <n> models of <name> (<id>)`; T3 or T5 may change the wording.
+    - Not yet handled, by task: no Cache folder or an empty list (T3, T4), refusals and cleanup (T4), recolours (T2), menu entry and dialog (T3).
   - Deps: none.
-  - Files: `src/rsps_toolkit/blender/import_item.py` (new), `src/rsps_toolkit/blender/__init__.py`, `src/rsps_toolkit/formats/appearance.py`, `src/rsps_toolkit/formats/cache_profile.py`, `tests/blender/test_import_item.py` (new), `tests/unit/test_appearance.py`.
+  - Files: `src/rsps_toolkit/blender/import_item.py` (new), `src/rsps_toolkit/blender/__init__.py`, `src/rsps_toolkit/formats/appearance.py`, `src/rsps_toolkit/formats/cache_profile.py`, `tests/blender/test_import_item.py` (new), `tests/unit/test_appearance.py`, `tests/unit/test_cache_profile.py`.
 
 - [ ] **T2 Faces show the item's recolours** (M)
   - Description: `model_to_object` takes an optional per-face shown colour. `face_materials.face_material` shows it and keeps the stored values. The import builds the shown colours from a copy of the model run through the item's recolours in list order (`formats.appearance.recolour`), and passes them at the Brightness setting. The plain import is unchanged.
