@@ -12,6 +12,7 @@ from rsps_toolkit.formats.appearance import (
     default_equipment,
     item_model,
     items_for_slot,
+    items_with_worn_model,
     kit_model,
     load_palette,
     merge,
@@ -266,6 +267,20 @@ def test_the_items_of_a_slot_need_a_worn_model_for_the_body_type():
     male_only = {**ITEMS, 3140: replace(ITEMS[3140], female_models=(-1, -1, -1))}
     assert [i.id for i in items_for_slot(male_only, True, SLOT_OF, 4)] == [2653]
     assert [i.id for i in items_for_slot(male_only, False, SLOT_OF, 4)] == [3140, 2653]
+
+
+def test_the_items_with_a_worn_model_are_every_slot_by_name_then_id():
+    # Spec import-by-item, Decisions "Body and item choice": sorted by name then id, whatever the slot.
+    assert [i.id for i in items_with_worn_model(ITEMS, False)] == [3140, 1149, 4087, 35, 2653]
+    twin = replace(ITEMS[35], id=36)
+    assert [i.id for i in items_with_worn_model({**ITEMS, 36: twin}, False)][-3:] == [35, 36, 2653]
+
+
+def test_the_items_with_a_worn_model_follow_the_chosen_body_models():
+    male_only = {**ITEMS, 3140: replace(ITEMS[3140], female_models=(-1, -1, -1))}
+    assert [i.id for i in items_with_worn_model(male_only, True)] == [1149, 4087, 35, 2653]
+    female_only = {**ITEMS, 1149: replace(ITEMS[1149], male_models=(-1, -1, -1))}
+    assert 1149 not in [i.id for i in items_with_worn_model(female_only, False)]
 
 
 def test_an_equipment_array_with_no_kit_or_item_is_refused_not_assembled_empty():

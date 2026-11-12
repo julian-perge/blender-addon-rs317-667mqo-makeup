@@ -72,6 +72,12 @@ def items_for_slot(
     return sorted(found, key=lambda item: (item.name.casefold(), item.id))
 
 
+def items_with_worn_model(items: Mapping[int, WornItem], female: bool) -> list[WornItem]:
+    """Every item that has a worn model for the body type, whatever slot it fills, by name then id."""
+    found = [item for item in items.values() if (item.female_models if female else item.male_models)[0] != -1]
+    return sorted(found, key=lambda item: (item.name.casefold(), item.id))
+
+
 def load_palette(path: Path) -> Palette:
     """Read the revision 149 palette JSON recorded from client class `hv`."""
     tables = json.loads(path.read_text())["tables"]
