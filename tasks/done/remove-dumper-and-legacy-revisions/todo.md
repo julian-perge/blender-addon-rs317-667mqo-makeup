@@ -132,5 +132,5 @@ Spec: `spec/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each 
     - Criterion 8: the kit, item and enum decoders are checked against the RuneLite JSON in `tests/fixtures/appearance/` and the `held-*` folders.
 
 ### Checkpoint: complete
-- [ ] All eight success criteria met, with command output
-- [ ] Ready for review in a new session (`/agent-skills:review`)
+- [x] All eight success criteria met, with command output
+- [x] Ready for review in a new session (`/agent-skills:review`)
