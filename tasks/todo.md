@@ -1,0 +1,96 @@
+# Todo: shared fade groups
+
+Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade-groups`. Commit per task after `prek run --all-files` and the commit review. Write the failing test first. Check alphas against the client recordings only. Use the term "fade group".
+
+## Phase 1: One clip merges
+
+- [ ] **T1: A shape-key bake of sequence 1994 makes one fade material** (ticket 01, part 1)
+
+  Make `FadeGroup` hold several labels, join label groups with equal rest alpha and equal values in `fade_groups`, and let `apply_fades` give polygons of several labels one slot. Name a group after its lowest label and rest alpha.
+
+  Acceptance:
+  - [ ] Sequence 1994 shape-key bake makes one fade material, and every polygon matches the client on the checked frames, on both bodies.
+  - [ ] A group of one label keeps `rs_fade_<label>_<rest>` and "<mesh> fade <label>".
+  - [ ] A fade material left with no polygon is removed.
+  - [ ] The player stays unedited.
+
+  Verify: `prek run --all-files`; Blender runner on `tests/blender/test_appearance_clip.py` (docs/agents/blender.md).
+  Depends on: none.
+  Files: `blender/appearance_fades.py`, `blender/appearance_pose.py`, `blender/appearance_shape_keys.py`, `tests/blender/test_appearance_clip.py`.
+  Scope: M.
+
+- [ ] **T2: A single bone clip of sequence 1994 makes one fade material** (ticket 01, part 2)
+
+  The bone bake keys one curve per shared group (`_fill_action`) and assigns shared materials. This may need no source change after T1. Then the commit adds only the test.
+
+  Acceptance:
+  - [ ] Sequence 1994 bone bake makes one fade material on both bodies, with one fade property on the rig, and every polygon matches the client on the checked frames.
+  - [ ] Duplicate Player, removing a player and a clip without fades pass their existing tests.
+  - [ ] The player stays unedited.
+
+  Verify: `prek run --all-files`; Blender runner on `tests/blender/test_appearance_clip.py`.
+  Depends on: T1.
+  Files: `blender/appearance_clip.py`, `blender/appearance_bone_action.py`, `tests/blender/test_appearance_clip.py`.
+  Scope: S.
+
+### Checkpoint: One clip
+
+- [ ] `prek run --all-files` and the Blender suite pass.
+- [ ] Existing fade tests pass unchanged.
+- [ ] Review with the user before T4.
+
+## Phase 2: Several clips
+
+- [ ] **T3: Record a clip whose fades differ by label** (ticket 02)
+
+  Pick a snapshot 430 player clip (frame map 0) with an alpha transform that changes faces of some labels and not others. Use a seeded sample as for the three alpha fixtures. Export it and record the poses for both bodies with the fixture scripts. Add the README entry.
+
+  Acceptance:
+  - [ ] The README says how the clip was picked (seed and sample).
+  - [ ] `tests/fixtures/animation149/<name>/` holds the exported clip files, the manifest with hashes, and `pose-male.json` and `pose-female.json` with face alphas `o`.
+  - [ ] A short script shows more than one distinct alpha curve across labels. Its result is in the README entry.
+  - [ ] No published fixture is changed.
+
+  Verify: `prek run --all-files`; the fixture manifest check that the existing fixtures use.
+  Depends on: none.
+  Files: `tests/fixtures/animation149/<name>/*`, `tests/fixtures/animation149/README.md`.
+  Scope: M (many data files, one README).
+
+- [ ] **T4: Several bone clips share only what matches in all** (ticket 03)
+
+  A bone bake works out its groups from the new clip and the earlier clips on the rig's clip track (earlier alphas read from stored fade curves, see the plan). It then re-keys the fade curves of every earlier action for the new groups, updates their key hashes, assigns polygons, and removes fade materials that no polygon uses.
+
+  Acceptance:
+  - [ ] Sequence 1994 and the T3 clip baked as two strips: each strip's frames match the client on the checked frames.
+  - [ ] The groups split where the T3 clip fades labels differently and stay shared elsewhere.
+  - [ ] The earlier strip is not baked again, and the player stays unedited.
+  - [ ] No fade material is left without polygons after the split.
+  - [ ] Baking a strip over the same start frame again merges groups that only the replaced strip kept apart, and leaves no orphan fade curve.
+  - [ ] Order of the two bakes does not change the frames shown (bake the T3 clip first, then sequence 1994).
+
+  Verify: `prek run --all-files`; Blender runner on `tests/blender/test_appearance_clip.py`.
+  Depends on: T2, T3.
+  Files: `blender/appearance_clip.py`, `blender/appearance_bone_action.py`, `blender/appearance_fades.py`, `tests/blender/test_appearance_clip.py`.
+  Scope: M. Split it if it passes 5 files.
+
+- [ ] **T5: Update and Duplicate Player keep the merged fade materials**
+
+  `bake_recorded` bakes strips again in track order. Check that a player with a split group updates and duplicates to the same groups, driven by its own rig. Players baked before this change are out of scope: no test and no code for them.
+
+  Acceptance:
+  - [ ] Duplicate Player of the two-strip player gives the copy its own merged materials driven by its own rig, and the copy shows the same alphas on every checked frame.
+  - [ ] Update Player of the two-strip player ends with the same groups.
+  - [ ] Removing the player removes all its fade materials.
+  - [ ] The edit check reads a merged fade material by its base name.
+
+  Verify: `prek run --all-files`; Blender runner on `tests/blender/test_appearance_clip.py`.
+  Depends on: T4.
+  Files: `tests/blender/test_appearance_clip.py`, plus source only if a test fails (`blender/appearance_collection.py`).
+  Scope: S.
+
+### Checkpoint: Complete
+
+- [ ] All success criteria of the spec are met.
+- [ ] `prek run --all-files` and the Blender suite pass.
+- [ ] Review in a new session, with the spec and `CODING_STANDARDS.md`.
+- [ ] Move `tasks/plan.md` and `tasks/todo.md` to `tasks/done/shared-fade-groups/`.
