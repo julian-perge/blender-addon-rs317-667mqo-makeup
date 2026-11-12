@@ -3,7 +3,7 @@
 On 2026-11-12 the sword flourish test of issue 12 passed on the first review ([ADR 0018](0018-a-claude-made-motion-is-tested-before-toolkit-code.md)). The owner then settled what the pass turns into toolkit code and what it does not. The spec is `spec/12-contact-sheet-and-runbook.md`.
 
 - Only the contact sheet becomes an operator, `rsps.contact_sheet`. The review video stays a script in `docs/research/sword-flourish-test/feedback.py`. The alternative was to ship both as operators. The owner rejected it: Claude needs the sheet after every round of keys, and the video only once for each review.
-- The operator has no panel button. Claude calls it through the Blender MCP, and a user finds it in the operator search. The alternative was a button in the player panel with fields for the frames and the views.
+- The operator has no panel button. Claude calls it through the Blender MCP, and a user finds it in the operator search. The alternative was a button in the player panel with fields for the frames and the views. [ADR 0020](0020-the-contact-sheet-operator-is-hidden-from-the-operator-search.md) replaces the part about the operator search.
 - The operator writes a PNG at a path that the caller gives and leaves nothing in the .blend. The alternative was to keep the sheet as an image datablock also.
 - The caller gives the frames as an explicit list. The alternative was to take the first frame of each held pose from the keys on the Your motion track by default. That needs a rule for what counts as the start of a pose, and the test did not need one.
 - The defaults are the layout that the owner accepted in the test: the front view and the right view, and cells of 320 x 480.

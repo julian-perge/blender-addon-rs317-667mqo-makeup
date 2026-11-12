@@ -8,7 +8,7 @@ This spec follows the design comment and the result comment on issue 12, [the sp
 
 1. The spec covers the contact sheet operator and the runbook. Step 2 (the motion text file and its clip source) gets its own Design stage.
 2. Only the contact sheet becomes an operator. The review video stays a script.
-3. The operator has no panel button. Claude calls it through the Blender MCP, and a user finds it in the operator search.
+3. The operator has no panel button. Only Claude calls it, through the Blender MCP. It is hidden from the operator search. The first answer was that a user finds it in the operator search. [ADR 0020](../docs/adr/0020-the-contact-sheet-operator-is-hidden-from-the-operator-search.md) replaced it.
 4. A reference script goes in `docs/research/`. It holds the pose solver, the builder of the action and its strip, and the scene checks, with the flourish poses as an example.
 5. The runbook is `docs/hand-made-motion.md`.
 6. The operator writes a PNG at a given path and leaves nothing in the .blend.
@@ -132,6 +132,7 @@ Blender tests in `tests/blender/test_appearance_contact_sheet.py`, with the `cac
 | A failed render restores its changes. | The same check after a render that fails. |
 | The player still reads as unedited. | Update Player's edit check passes after the call. |
 | Each refusal. | The operator is cancelled, the message names the value, and no file exists. |
+| The operator is not in the operator search. | The options of the operator hold `INTERNAL`. |
 
 The runbook and the reference script have no automated test. Their check is the acceptance run below.
 

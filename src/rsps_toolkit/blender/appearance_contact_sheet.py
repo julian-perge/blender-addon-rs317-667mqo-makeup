@@ -216,7 +216,8 @@ class RSPS_OT_contact_sheet(bpy.types.Operator):
         "with one column per frame and one row per view"
     )
     # The operator puts back everything it changes in the scene, so it is not an undo step.
-    bl_options = {"REGISTER"}
+    # Only a Python call can give the frames and the file path, so the operator is hidden from the operator search.
+    bl_options = {"REGISTER", "INTERNAL"}
 
     filepath: bpy.props.StringProperty(name="File Path", description="Where the PNG goes", subtype="FILE_PATH")  # pyrefly: ignore[bad-assignment]
     frames: bpy.props.StringProperty(name="Frames", description="Scene frames, separated by commas, such as 1,6,11")  # pyrefly: ignore[bad-assignment]
