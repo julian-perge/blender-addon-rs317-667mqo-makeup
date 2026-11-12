@@ -130,6 +130,14 @@ _Avoid_: TSKIN, RSTSKIN, triangle skin
 A conventional vertex skin value for a part of the player body, such as 8 for torso or 28 for gloves, which worn equipment must match to animate with the player.
 _Avoid_: preset weight, weight value
 
+**Joint**:
+One of the 15 bones of a player's rig that the user animates, such as `spine` or `hand`. Each comes from a rotate transform of frame map 0 with its pivot (`data/player_joints.json`), and moves the vertices of the vertex skin labels under it rigidly.
+_Avoid_: bone (the rig also has hidden label bones), control
+
+**Your motion**:
+The NLA track of a player's rig that holds the user's own keys on the joints, layered over the baked clips on the "RS clips" track.
+_Avoid_: user track, custom animation
+
 **Export preset**:
 A named mapping, per kind of equipment, from body-part labels to the render priorities and face skins that faces carrying those labels receive on export.
 _Avoid_: model type, template
