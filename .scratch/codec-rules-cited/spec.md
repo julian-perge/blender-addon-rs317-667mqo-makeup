@@ -1,6 +1,6 @@
 # Cite the revision 149 client for the six OSRS-149 codec rules
 
-Status: ready-for-agent
+Status: resolved
 
 From [issue 17](../osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md), whose Decisions block (decisions 1 to 3, chosen by the user on 2026-11-10) this spec follows.
 

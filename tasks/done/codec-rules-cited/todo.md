@@ -5,7 +5,7 @@ Spec: `spec/codec-rules-cited.md`. Plan: `plan.md` in this folder. Each task end
 ## Phase 1: Read the client
 
 - [x] **T1 Settle the six rules against the client decoder** (S, no code change)
-  - Result: [client-rules.md](../.scratch/codec-rules-cited/evidence/client-rules.md). The jar SHA-256 matched before reading. Rules 1, 2 and 3: confirmed. Rules 4, 5 and 6: not settled. The client has no refusal for them, and the add-on is stricter. The rule 6 encode gap does not exist for written files: `_encode` writes 0 or 1 for the five flags. Only `check` accepts flags that `decode` refuses. No decompiler was on the machine, so the reading uses `javap`. Two reviewers checked the offsets and the style, and their findings are fixed.
+  - Result: [client-rules.md](../../../.scratch/codec-rules-cited/evidence/client-rules.md). The jar SHA-256 matched before reading. Rules 1, 2 and 3: confirmed. Rules 4, 5 and 6: not settled. The client has no refusal for them, and the add-on is stricter. The rule 6 encode gap does not exist for written files: `_encode` writes 0 or 1 for the five flags. Only `check` accepts flags that `decode` refuses. No decompiler was on the machine, so the reading uses `javap`. Two reviewers checked the offsets and the style, and their findings are fixed.
   - Description: Download the revision 149 client jar named in `.scratch/osrs-focus/evidence/reference-source-findings.md` (ask the user first), check its SHA-256, and run `javap -c -p` on `dv` (and the classes `dv.j` calls) into the scratchpad. Read the `FF FF` decoder `dv.j` for each rule. Write `.scratch/codec-rules-cited/evidence/client-rules.md` with one entry per rule: class, method, offsets, what the client does, and a verdict (confirmed, contradicted, not settled).
   - Accept:
     - [x] The jar's SHA-256 equals `19c492cc2dc20e9fcb0399215fc32a47cd4605b01a30d963dac7a0c863ebcbdd` before any reading.
@@ -81,22 +81,23 @@ Each task does only the rules that T1 confirmed and the user approved. For a ski
 
 ## Checkpoint: Rules cited
 
-- [ ] `prek run --all-files` passes on the branch.
-- [ ] `git diff main -- src` shows comment changes only (success criterion 4).
-- [ ] `rg -n -i unverified docs/research/model-formats.md src/rsps_toolkit/formats` shows the word only for rules that the checkpoint left open, and for the unrelated claims named as out of scope.
-- [ ] Every skipped rule is listed for the user with the client's behaviour.
+- [x] `prek run --all-files` passes on the branch.
+- [x] `git diff main -- src` shows comment changes only (success criterion 4).
+- [x] `rg -n -i unverified docs/research/model-formats.md src/rsps_toolkit/formats` shows the word only for rules that the checkpoint left open, and for the unrelated claims named as out of scope.
+- [x] Every skipped rule is listed for the user with the client's behaviour.
 
 ## Phase 3: Close
 
-- [ ] **T5 Close issue 17 and archive the plan** (S)
+- [x] **T5 Close issue 17 and archive the plan** (S)
+  - Result: issue 17 is resolved, with decisions 4 and 5 and a results table. The two scratch tickets and the scratch spec are resolved, and the spec status says done. This plan moved to `tasks/done/codec-rules-cited/`. Remaining "unverified" marks in the note and in `formats/` are out of scope: render types 1 and 3, the texture tools' rules, kind-zero vertex records, the preview of other record kinds in `texture_triangles.py`, and the kit name order. Skipped rules: none. Rules 4, 5 and 6 are cited as stricter rules by decision.
   - Description: Write the results into issue 17 and mark it closed, as the earlier issues in `.scratch/osrs-focus/issues/` were. Update the two scratch tickets in `.scratch/codec-rules-cited/issues/` and the scratch spec status. Move `tasks/plan.md` and `tasks/todo.md` to `tasks/done/codec-rules-cited/`.
   - Accept:
-    - [ ] Issue 17 lists the six rules with their verdicts and links the evidence file. A rule left open says so and names the decision it waits for.
-    - [ ] The scratch tickets and spec carry the new status.
-    - [ ] `tasks/` holds only `done/` after the move.
+    - [x] Issue 17 lists the six rules with their verdicts and links the evidence file. A rule left open says so and names the decision it waits for.
+    - [x] The scratch tickets and spec carry the new status.
+    - [x] `tasks/` holds only `done/` after the move.
   - Verify:
-    - [ ] `prek run --all-files` passes.
-    - [ ] Commit review as in T1.
+    - [x] `prek run --all-files` passes.
+    - [x] Commit review as in T1.
     - [ ] Open the pull request and stop. The user merges.
   - Deps: T2, T3, T4.
   - Files: `.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md`, `.scratch/codec-rules-cited/issues/01-cite-the-client-for-the-two-writing-rules.md`, `.scratch/codec-rules-cited/issues/02-cite-the-client-for-the-four-refusals.md`, `.scratch/codec-rules-cited/spec.md`, `tasks/plan.md`, `tasks/todo.md`.

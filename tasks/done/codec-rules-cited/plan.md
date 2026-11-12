@@ -2,7 +2,7 @@ Spec: spec/codec-rules-cited.md
 
 # Implementation Plan: Cite the revision 149 client for the six OSRS-149 codec rules
 
-Branch: `docs/codec-rules-cited`. One commit per task. Tasks are in `tasks/todo.md`. Issue: [issue 17](../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md).
+Branch: `docs/codec-rules-cited`. One commit per task. Tasks are in `tasks/todo.md`. Issue: [issue 17](../../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md).
 
 ## Overview
 

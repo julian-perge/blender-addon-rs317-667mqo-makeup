@@ -4,11 +4,13 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Agree the test seam with the user first: the codec's decode and encode in the existing OSRS-149 codec unit tests.
-- [ ] The reference-source findings record, for each refusal, the client's method and line or bytecode offset and whether it matches.
-- [ ] A confirmed refusal's "unverified" marks in the model formats note and the codec's comments are replaced with the citation.
-- [ ] Each confirmed refusal has a test whose comment cites the client line; a refusal without one gets a test.
-- [ ] A contradicted refusal is reported to the user with the client's behaviour, and nothing changes for it.
-- [ ] prek and the unit tests pass; the work gets the two-axis review before its commit.
+- [x] Agree the test seam with the user first: the codec's decode and encode in the existing OSRS-149 codec unit tests.
+- [x] The reference-source findings record, for each refusal, the client's method and line or bytecode offset and whether it matches.
+- [x] A confirmed refusal's "unverified" marks in the model formats note and the codec's comments are replaced with the citation.
+- [x] Each confirmed refusal has a test whose comment cites the client line; a refusal without one gets a test.
+- [x] A contradicted refusal is reported to the user with the client's behaviour, and nothing changes for it.
+- [x] prek and the unit tests pass; the work gets the two-axis review before its commit.
+
+**Result (2026-11-11):** done. Rule 3 is confirmed by the client. Rules 4, 5 and 6 have no refusal in the client, and the owner kept them as stricter rules. See [issue 17](../../osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md) and the [evidence](../evidence/client-rules.md).
