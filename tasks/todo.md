@@ -81,15 +81,17 @@ Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade
   Files: `blender/appearance_clip.py`, `blender/appearance_bone_action.py`, `blender/appearance_fades.py`, `tests/blender/test_appearance_clip.py`.
   Scope: M. Split it if it passes 5 files.
 
-- [ ] **T5: Update and Duplicate Player keep the merged fade materials**
+- [x] **T5: Update and Duplicate Player keep the merged fade materials**
 
   `bake_recorded` bakes strips again in track order. Check that a player with a split group updates and duplicates to the same groups, driven by its own rig. Players baked before this change are out of scope: no test and no code for them.
 
+  Result (2026-11-12): test-only commit, no source change was needed. Duplicate Player and Update Player of the two-strip player (sequences 1994 and 3364) end with the same two fade groups, the same fade curves in each strip and, on checked frames, the same alphas. The duplicate was also checked against the client recordings. Removing the copy removes its fade materials. The full Blender suite passes.
+
   Acceptance:
-  - [ ] Duplicate Player of the two-strip player gives the copy its own merged materials driven by its own rig, and the copy shows the same alphas on every checked frame.
-  - [ ] Update Player of the two-strip player ends with the same groups.
-  - [ ] Removing the player removes all its fade materials.
-  - [ ] The edit check reads a merged fade material by its base name.
+  - [x] Duplicate Player of the two-strip player gives the copy its own merged materials driven by its own rig, and the copy shows the same alphas on every checked frame.
+  - [x] Update Player of the two-strip player ends with the same groups.
+  - [x] Removing the player removes all its fade materials.
+  - [x] The edit check reads a merged fade material by its base name.
 
   Verify: `prek run --all-files`; Blender runner on `tests/blender/test_appearance_clip.py`.
   Depends on: T4.

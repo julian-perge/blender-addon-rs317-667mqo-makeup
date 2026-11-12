@@ -958,6 +958,41 @@ def test_a_bone_clip_that_fades_labels_differently_splits_the_fade_group_of_an_e
     assert fade_slots(mesh) <= {p.material_index for p in mesh.polygons}
 
 
+def two_strip_player(cache):
+    """A player with sequence 1994 on frame 1 and sequence 3364 after it, so its fade groups are split in two."""
+    collection = player(cache, FADE_POSE)
+    second_start = 1 + len(shown_frames(FADE_CLIP)) + 5
+    appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=1)
+    appearance_clip.bake_clip_to_rig(collection, SPLIT_CLIP, start=second_start)
+    return collection, second_start
+
+
+def assert_two_strips_show_the_client_alphas(cache, collection, second_start):
+    rig = appearance_collection.armature_of(collection)
+    assert sorted(m[appearance_fades.FADE_KEY] for m in fade_materials(collection)) == ["rs_fade_0_0", "rs_fade_18_0"]
+    assert fade_properties(rig) == {m[appearance_fades.FADE_KEY] for m in fade_materials(collection)}
+    for strip in rig_clip_strips(rig):
+        assert keyed_fade_properties(strip.action) == fade_properties(rig)
+    assert_strip_shows_the_client_alphas(cache, collection, rig, FADE_CLIP, FADE_POSE, 1)
+    assert_strip_shows_the_client_alphas(cache, collection, rig, SPLIT_CLIP, SPLIT_POSE, second_start)
+    assert not appearance_collection.is_edited(collection)
+
+
+def test_a_duplicated_player_with_split_fade_groups_gets_its_own_split_groups_driven_by_its_own_rig(cache):
+    collection, second_start = two_strip_player(cache)
+    copy = appearance_collection.duplicate_player(collection, str(cache))
+    copy_rig = appearance_collection.armature_of(copy)
+    ours, theirs = set(fade_materials(copy)), set(fade_materials(collection))
+    assert len(ours) == 2 and not ours & theirs
+    targets = {c.driver.variables[0].targets[0].id for m in ours for c in m.node_tree.animation_data.drivers}  # pyrefly: ignore[missing-attribute]
+    assert targets == {copy_rig}
+    assert_two_strips_show_the_client_alphas(cache, copy, second_start)
+    assert_two_strips_show_the_client_alphas(cache, collection, second_start)
+    appearance_collection.remove_collection(copy)
+    assert not ours & set(all_fade_materials())
+    assert set(fade_materials(collection)) == theirs
+
+
 def test_baking_over_the_clip_that_kept_two_fade_groups_apart_merges_them_again(cache):
     before = all_fade_materials()
     collection = player(cache, FADE_POSE)
