@@ -180,9 +180,17 @@ Measured against cache 430 and the Gate 0 fixtures; see [the OSRS cache workflow
   `dv`, method `ae`, offsets 563 to 570, 1192 to 1199, 1488 to 1491 and 1706 to 1709: a missing render type or alpha
   array reads as 0. Class `dv`, method `j`, offsets 1516 to 1522 and 1559 to 1562: each of those sections is read
   only when its footer flag is 1.
-- Unverified, and marked so in the code, these reject input: a texture
-  index above 254, an opaque tail whose first byte is nonzero and that holds fewer than 11 bytes, texture kinds above
-  3, and footer flags other than 0 or 1. Each needs a client citation or the user's decision
+- A texture index above 254 is refused. Confirmed. Client rev 149, class `dv`, method `j`, offsets 1632 to 1665: a
+  face's texture coordinate is one file byte that holds the index plus 1. Class `dv`, method `ae`, offsets 428 to 436
+  and 449 to 459: file byte 0 means no texture triangle, and any other byte is used as an unsigned index, so 254 is
+  the highest index. The client has no check of its own. We refuse 255 because it does not fit in the byte.
+- An opaque tail whose first byte is nonzero and that holds fewer than 11 bytes is refused. The 11 is the client's
+  number. Refusing a shorter tail is our own stricter rule, and the owner decided on 2026-11-11 to keep it
+  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)). Client rev 149, class `dv`, method `j`, offsets 2689 to 2694, 1901 to
+  1903, 2709 to 2725, 2423 to 2431, 2740 to 2748 and 172 to 180: when the first tail byte is nonzero, the client reads
+  11 bytes (1, 2, 2, 2 and 4) and ignores them. It checks no length, so a shorter tail makes it read the footer.
+- Unverified, and marked so in the code, these reject input: texture kinds above 3, and footer flags other than 0
+  or 1. Each needs a client citation or the user's decision
   ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)).
 - The texture tools' rules for new-format models ([ADR 0012](../adr/0012-newer-models-refuse-unestablished-edits.md))
   are conservative choices; how the client treats such edits is unverified.

@@ -63,6 +63,7 @@ Verdict: **confirmed**. The limit is the size of the field. The client has no ch
 - Anchor: class `dv`, method `j`, offsets 1632 to 1665. For a face that has a texture, the method reads one unsigned byte with `fe.z`, subtracts 1 and stores the result in `dv.u` as a byte.
 - Also: the method reads this byte only when `dv.u` exists (the texture flag is 1 and the texture count is above 0, offsets 975 to 981, 2143 to 2148 and 994 to 999). Class `dv`, method `ae`, offsets 428 to 436: a stored -1 (file byte 0) means no texture triangle. Offsets 449 to 459 and 1618 to 1630 use the stored byte as an index after `& 255`.
 - A file byte of 255 reads as index 254. This is the highest index. An index of 255 needs a file byte of 256, which does not fit in one byte. The add-on refuses it because it cannot write it.
+- Read from the add-on code: a model has at most 255 texture triangles (`check`, the count test), so index 255 is refused as a missing triangle before the `limit = 254` test is reached. The `limit` test is a second guard. No input reaches it.
 
 ## Rule 4: an opaque tail with a nonzero first byte and fewer than 11 bytes is refused
 
@@ -72,6 +73,7 @@ Verdict: **not settled**. The number 11 is the client's. The refusal is the add-
 - Also: otherwise (offsets 2709 to 2725, 2423 to 2431, 2740 to 2748, 172 to 180) the method creates an `el` object, reads 2, 2 and 2 bytes with `fe.d` and 4 bytes with `fe.au`, and does not use the values. The total is 1 + 2 + 2 + 2 + 4 = 11 bytes.
 - The method does not check how many bytes remain. For a tail shorter than 11 bytes, the reads cover the footer bytes that follow, and no error occurs. For an empty tail, the first footer byte is read as the tail flag.
 - `decode` refuses a tail that is empty (`not tail`) or that has a nonzero first byte and fewer than 11 bytes. This is stricter than the client.
+- Read from the add-on code: `decode` builds a `Model`, and its `check` refuses the same short tail. The test at `decode` therefore fails only when both guards change.
 - The reason for the refusal is a guess, not evidence: it probably stops a tail from overlapping the footer. The client states no reason.
 
 ## Rule 5: texture kinds above 3 are refused
@@ -113,4 +115,4 @@ So no written file can fail to read in `decode`. The only gap is that `check` ac
 | 5 | Texture kinds above 3 refused | not settled | handles 0 to 3, skips any other kind |
 | 6 | Footer flags other than 0 or 1 refused | not settled | tests `== 1`, treats any other value as absent |
 
-For rules 4 to 6, the client reads bad input without an error, and it reads it in a different way from the add-on. The add-on is stricter than the client. The user decides whether to keep the stricter refusal and to cite it in that form.
+For rules 4 to 6, the client reads bad input without an error, and it reads it in a different way from the add-on. The add-on is stricter than the client. The owner decided on 2026-11-11 to keep the stricter refusals and to cite them in that form: the constants are the client's, and the refusal is the add-on's own.

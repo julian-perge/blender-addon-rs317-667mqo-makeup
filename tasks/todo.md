@@ -47,7 +47,8 @@ Each task does only the rules that T1 confirmed and the user approved. For a ski
   - Deps: T1 and the checkpoint.
   - Files: `src/rsps_toolkit/formats/new_format.py`, `docs/research/model-formats.md`, `tests/unit/test_osrs149_codec.py`, `.scratch/codec-rules-cited/evidence/client-rules.md`.
 
-- [ ] **T3 Cite the texture index and opaque tail refusals (3 and 4)** (M)
+- [x] **T3 Cite the texture index and opaque tail refusals (3 and 4)** (M)
+  - Result: rule 3 is cited as confirmed. Rule 4 is cited as decided at the checkpoint: the 11 is the client's number and the refusal is our own stricter rule. The citation is in `model.py` (limit and tail), `new_format.py` (tail), the note, the evidence file and the tests. New test: `test_opaque_tail_with_a_nonzero_first_byte_needs_11_bytes` (four tails, at `decode` and `encode`). `test_encoder_rule_for_texture_coordinate_byte_limit` now cites the client, and it also pins the 255-triangle cap. Mutation checks: `>= 10` in `model.py` fails the encode case, `>= 10` and `< 10` together fail the decode case, and `0x100` for the triangle cap fails the index test. Two mutations survive because their guards cannot be reached alone: `< 10` in `new_format.py` (the `Model` check refuses the same tail) and `limit = 255` (index 255 is already a missing triangle). Both are reported in the evidence file. No code change.
   - Description: Replace the "Unverified" comments at the texture index limit (`formats/model.py`, `check`; the test `test_encoder_rule_for_texture_coordinate_byte_limit`) and at the two opaque tail checks (`formats/new_format.py` decode, `formats/model.py` encode validation) with the T1 citation. Update the note. Add a test for the tail rule at `decode` and `encode`.
   - Accept:
     - [ ] The comment of `test_encoder_rule_for_texture_coordinate_byte_limit` cites the client instead of saying "Unverified", and the test still passes unchanged in what it checks (254 stores, 255 is refused).
