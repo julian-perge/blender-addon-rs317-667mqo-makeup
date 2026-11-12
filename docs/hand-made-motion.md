@@ -13,7 +13,7 @@ It is not for these:
 - NPC models. They need joints from other frame maps.
 - Bundle presentation copies. They have no rig.
 - Export to a cache. The motion stays in the .blend and its renders.
-- A motion over a moving clip such as walk. The motion goes over a clip that holds one pose, such as stand.
+- A motion over a moving clip such as walk. The motion goes over a clip that stays near one pose, such as stand. A stand clip can move the joints a little. That is not a problem, because the reference script reads the first and the last pose from the clip on those frames.
 
 Do not add IK, a pose library, constraints, smooth weights or extra bones. Do not change the baked clips, the meshes or the weights.
 
@@ -24,6 +24,15 @@ If the described motion cannot fit in its time, say so before you set a key. The
 The Blender must have the extension loaded and the Blender MCP connected. Each operator here, except Create Player, works on the active player, so make an object of that player active before each call (for example, its rig `Player_rig`).
 
 1. **The player.** Use the player that the user names, or make one with Create Player (`rsps.create_appearance_preview`). The reference script needs a worn weapon. Its rig is `<player>_rig`. Its weapon mesh is `<player> Weapon`.
+
+   Create Player makes a player with no weapon. Put an item in the weapon slot (slot 3), then call Update Player. Ask the user for the item, or find its id in the item search of the panel. The acceptance run used item 4587, a scimitar.
+
+   ```python
+   bpy.ops.rsps.create_appearance_preview()
+   bpy.context.view_layer.objects.active = bpy.data.objects["Player_rig"]
+   bpy.ops.rsps.pick_item(slot=3, item="4587")
+   bpy.ops.rsps.update_appearance_preview()
+   ```
 2. **The clip under the motion.** Bake the stand clip of the worn weapon with the Bones method. A Bones bake starts on the current frame, so go to frame 1 first.
 
    ```python
@@ -36,8 +45,28 @@ The Blender must have the extension loaded and the Blender MCP connected. Each o
 
    The bake makes a strip on the RS clips track. The strip holds its last pose after its end. Use the Bones method, because the reference script reads the stand pose from the joints.
 3. **The comparison player.** A review shows your motion beside a real clip. Make the copy with Duplicate Player (`rsps.duplicate_player`) before the first key, because the copy also gets copies of the user's own keys. Duplicate Player makes the copy active. Go to frame 1, and bake an attack clip of the weapon on it (`choice="ATTACK_1"`, then the same `rsps.bake_clip` call). A bake replaces a strip that starts on the same frame, so the attack clip replaces the stand clip of the copy. The copy stands beside the player, under the same camera and lights. Its rig is `Player.001_rig` for a player named `Player`. After that, make the first player active again.
-4. **The camera.** The review video renders from the scene camera. The scene needs a camera that sees both players.
-5. Save the .blend before the first key. Keep the .blend, the sheets and the videos outside the repo, because they hold game assets.
+4. **The camera and the light.** The review video renders from the scene camera, with the scene's lights. The scene needs a camera that sees both players through the whole motion, and a light. The camera and the point light of a new Blender file do not fit, because a player is about 200 units high. This setup worked for two players of a new file, where the copy stands 102 units to the left of the player (+X):
+
+   ```python
+   import math
+
+   scene = bpy.context.scene
+   camera = scene.camera
+   camera.data.type = "ORTHO"
+   camera.data.clip_end = 5000
+   # 300 units of height hold a sword over the head. The scale of an orthographic camera is its width.
+   camera.data.ortho_scale = 300 * scene.render.resolution_x / scene.render.resolution_y
+   camera.location = (51, -1000, 125)
+   camera.rotation_euler = (math.radians(90), 0, 0)
+   sun = bpy.data.objects.new("Review Sun", bpy.data.lights.new("Review Sun", "SUN"))
+   sun.data.energy = 3
+   sun.rotation_euler = (math.radians(55), 0, math.radians(-25))
+   scene.collection.objects.link(sun)
+   ```
+
+   The review video shows every mesh of the scene. Hide other meshes for the render, such as the cube of a new file (`hide_render`).
+5. **A scene that already has a motion.** `build()` removes only the strip of its own `ACTION`, and two strips on the Your motion track cannot share a frame. If the track already holds a strip on the frames of your motion, save the scene as a new .blend and remove that strip there, or start your motion after the strip ends (`build(start=<frame>)`). Do not remove a strip from the user's own file.
+6. Save the .blend before the first key. Keep the .blend, the sheets and the videos outside the repo, because they hold game assets.
 
 A bake sets the scene to 50 fps, so one frame is one client tick.
 
@@ -45,10 +74,14 @@ A bake sets the scene to 50 fps, so one frame is one client tick.
 
 1. **The rest frame.** Every joint has the same rest frame: local X is the player's left, local Y is up, local Z is forward. The player faces -Y in the world. All bones use quaternions. The 15 joints are `root`, `spine`, `head`, and the left and right `upper_arm`, `forearm`, `hand`, `thigh`, `shin` and `foot` (for example `forearm.R`). The rig also has label bones (`label_<number>`). Do not key them.
 2. **Poses as directions.** Give each pose as directions in the frame of the torso: the upper arm, the forearm, the blade, the edge of the blade, and the turn of the root and the spine. A script solves the joint rotations from them. Do not set joint angles by hand.
+   - The frame of the torso leans with the spine. When the spine leans forward by an angle, straight down in the world is `mix(D=cos(angle), F=sin(angle))`, not `D`. In the acceptance run, `blade: D` with a lean of 30 degrees put the point of the sword back between the feet.
+   - The solver has no target for a hand. To put the left hand on the hilt, change `LU` and `LF` until `left_wrist` in the report is beside `hilt`.
+   - A `dip` of the root below -5 bends the knees, and the ankles stay where the stand pose has them. Use it for a crouch. A smaller dip keeps the legs straight.
 3. **The action and its strip.** Make them with the data API: an action, a slot for the rig, a layer, a keyframe strip and the channelbag of the slot. Then make a strip of that action on the Your motion track. Give the strip the blend type Replace and no extrapolation. Push Down and the panel are not necessary.
 4. **What is keyed.** Key rotations on the 15 joints, and locations on `root` only. The stand clip keeps the joint locations and the label bones. Take the first and the last pose from the stand clip's own values on those frames, so the motion starts and ends at the stand pose.
 5. **Stepped keys.** Set constant interpolation on every key. Put every key on a whole frame. Each pose is held for a whole number of frames.
-6. **Numbers, then the sheet.** After each round of keys, read the world positions of the wrist, the hilt and the tip for each pose, and read a contact sheet. The numbers find where the weapon passes through the body. The sheet confirms it.
+6. **Numbers, then the sheet.** After each round of keys, read the world positions of the wrist, the hilt and the tip for each pose, and read a contact sheet. The numbers find where the weapon passes through the body. The sheet confirms it. The report also holds the head, the knees and the ankles.
+   - Read the sizes from the first report before you set a pose, because players and weapons differ. The first pose is the stand pose. Its ankles give the level of the ground, its head gives the height of the neck, and the distance from the hilt to the tip gives the length of the weapon. `dip` is in the same units. In the acceptance run, the player was about 194 units high, the ground was near z 0, and the sword was about 126 units long.
 7. **The scene checks.** Run them before each review. Every F-curve is on a joint. Every key is constant. The first and the last pose equal the stand pose. The strips on the RS clips track are unchanged. The player reads as unedited.
 8. **The scene range.** Set the scene range for each render that uses it. A bake sets it back to the range of the baked clip.
 
@@ -90,12 +123,12 @@ Read each sheet against the pass criteria of part 6.
 | `ACTION` | The name of the action that the script makes. |
 | `POSES` | The pose list. Each pose is the number of frames it is held, then the parts that differ from the stand pose. A pose with no parts is the stand pose. |
 | `mix` | A unit direction from named parts, for example `mix(R=0.8, D=0.5)`. The names are L, R, F, B, U and D in the frame of the torso. |
-| `build(poses, start)` | Deletes the strip and the action of `ACTION`, solves the joint rotations, and makes the action and its strip again on the Your motion track. It returns the first frame of each pose, and the world positions of the wrist, the hilt and the tip for each pose. |
+| `build(poses, start)` | Deletes the strip and the action of `ACTION`, solves the joint rotations, and makes the action and its strip again on the Your motion track. It returns the first frame of each pose, and the world positions of the wrist, the hilt, the tip, the left wrist, the head, the knees and the ankles for each pose. |
 | `scene_checks(baseline_path)` | The scene checks of part 3. It writes the baseline file when the file does not exist, and compares with the file when it exists. Make the first call after the bakes on both players and before the first key, with a path that has no file from an older scene. |
 
-The parts of a pose are `yaw` and `dip` of the root, `spine`, `head`, the directions `RU`, `RF`, `LU` and `LF` of the upper arms and the forearms, and `blade` and `edge` of a weapon in the right hand. The script finds the blade as the long axis of the weapon mesh, so it fits a weapon with one long axis, such as a sword. The comment above `POSES` explains them. A pose with `blade` must also have `edge`.
+The parts of a pose are `yaw` and `dip` of the root (a `dip` below `KNEES_BEND_BELOW` bends the knees), `spine`, `head`, the directions `RU`, `RF`, `LU` and `LF` of the upper arms and the forearms, and `blade` and `edge` of a weapon in the right hand. The script finds the blade as the long axis of the weapon mesh, so it fits a weapon with one long axis, such as a sword. The comment above `POSES` explains them. A pose with `blade` must also have `edge`.
 
-**What you change:** copy the file to a folder outside the repo. Change `POSES` and `ACTION`. Change `RIG` and `WEAPON` if the scene has other names. Do not change the solver, the builder or the checks, unless the motion needs a part that the solver does not have (for example a leg direction). If you change them, tell the user.
+**What you change:** copy the file to a folder outside the repo. Change `POSES` and `ACTION`. Change `RIG` and `WEAPON` if the scene has other names. Do not change the solver, the builder or the checks, unless the motion needs a part that the solver does not have (for example a step of a foot). If you change them, tell the user.
 
 Load the copy in Blender and call it. A script result through the Blender MCP must be a dict.
 
@@ -131,7 +164,7 @@ Show a video only after a sheet passes your own check and the scene checks pass.
 
 - The right hand cannot reach past the left hip, because each arm part is one joint. In the test, the twirl on the left side is in front of the left hip.
 - The feet turn in place when the body turns. The reference script keys no steps.
-- The user judged one flourish of one player with one sword. Other motions are not tested.
+- The user judged two motions of one player with one sword: the flourish of the test and a ground stab with a crouch. Other motions are not tested.
 - The test ran on Blender 5.3.0, not 5.2.
 
 ## 8. Known problems

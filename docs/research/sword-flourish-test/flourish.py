@@ -29,6 +29,8 @@ USER_TRACK = "Your motion"
 ARM_JOINTS = [f"{name}.{side}" for side in "LR" for name in ("upper_arm", "forearm", "hand")]
 LEG_JOINTS = [f"{name}.{side}" for side in "LR" for name in ("thigh", "shin", "foot")]
 JOINTS = ["root", "spine", "head", *ARM_JOINTS, *LEG_JOINTS]
+# A dip below this value bends the knees. The flourish dips by 2 to 4 with straight legs, and its keys must not change.
+KNEES_BEND_BELOW = -5
 
 L, R = Vector((1, 0, 0)), Vector((-1, 0, 0))
 F, B = Vector((0, -1, 0)), Vector((0, 1, 0))
@@ -47,7 +49,8 @@ def mix(**parts):
 HIP_L = {"LU": mix(L=0.5, D=0.8, B=0.3), "LF": mix(R=0.35, F=0.2, D=0.9)}
 
 # Each pose: the number of frames it is held, then the parts that differ from the stand pose.
-#   yaw: turn of the root to the player's left, in degrees.   dip: root height change.
+#   yaw: turn of the root to the player's left, in degrees.
+#   dip: root height change, in the units of the report. Below KNEES_BEND_BELOW, the knees bend and the feet stay.
 #   spine: (yaw, lean forward, lean to the left) on top of the root.   head: (yaw, nod forward) on top of the spine.
 #   RU, RF, LU, LF: directions of the upper arms and the forearms.   blade, edge: directions of the sword.
 POSES = [
@@ -310,7 +313,7 @@ def _local(stand, child, parent):
     return stand[parent]["world"].inverted() @ stand[child]["world"]
 
 
-def _solve(spec, stand, sword_rest):
+def _solve(spec, stand, sword_rest, legs):
     """The rotation of each joint from its rest, in the space of the rig, for one pose."""
     world = {}
     world["root"] = _rot("Z", spec.get("yaw", 0)) @ stand["root"]["world"]
@@ -336,10 +339,48 @@ def _solve(spec, stand, sword_rest):
         else:
             world[hand] = world[fore] @ _local(stand, hand, fore)
         thigh, shin, foot = f"thigh.{side}", f"shin.{side}", f"foot.{side}"
-        world[thigh] = world["root"] @ _local(stand, thigh, "root")
-        world[shin] = world[thigh] @ _local(stand, shin, thigh)
-        world[foot] = world[shin] @ _local(stand, foot, shin)
+        dip = spec.get("dip", 0)
+        if dip < KNEES_BEND_BELOW:
+            world[thigh], world[shin] = (world["root"] @ part for part in _knee_bend(dip, stand, legs[side]))
+            world[foot] = world["root"] @ _local(stand, foot, "root")
+        else:
+            world[thigh] = world["root"] @ _local(stand, thigh, "root")
+            world[shin] = world[thigh] @ _local(stand, shin, thigh)
+            world[foot] = world[shin] @ _local(stand, foot, shin)
     return world
+
+
+def _leg(rig, side):
+    """The hip, the knee and the ankle of one leg on the current frame, and the rest directions of its two parts."""
+    bones, pose = rig.data.bones, rig.pose.bones
+    thigh, shin, foot = f"thigh.{side}", f"shin.{side}", f"foot.{side}"
+    return {
+        "root": pose["root"].head.copy(),
+        "hip": pose[thigh].head.copy(),
+        "knee": pose[shin].head.copy(),
+        "ankle": pose[foot].head.copy(),
+        "thigh_rest": (bones[shin].head_local - bones[thigh].head_local).normalized(),
+        "shin_rest": (bones[foot].head_local - bones[shin].head_local).normalized(),
+    }
+
+
+def _knee_bend(dip, stand, leg):
+    """The rotations of the thigh and the shin, in the frame of the root, that keep the ankle where the stand pose
+    has it while the root is `dip` lower. The knee goes forward."""
+    to_root = stand["root"]["world"].inverted()
+    hip = to_root @ (leg["hip"] - leg["root"])
+    ankle = to_root @ (leg["ankle"] - leg["root"]) - to_root @ Vector((0, 0, dip))
+    upper, lower = (leg["knee"] - leg["hip"]).length, (leg["ankle"] - leg["knee"]).length
+    reach = ankle - hip
+    distance = min(reach.length, upper + lower - 1e-6)
+    along = (upper**2 - lower**2 + distance**2) / (2 * distance)
+    out = math.sqrt(max(upper**2 - along**2, 0))
+    axis = reach.normalized()
+    forward = (F - axis * F.dot(axis)).normalized()
+    knee = hip + axis * along + forward * out
+    thigh = leg["thigh_rest"].rotation_difference((knee - hip).normalized()).to_matrix()
+    shin = leg["shin_rest"].rotation_difference((ankle - knee).normalized()).to_matrix()
+    return thigh, shin
 
 
 def build(poses=POSES, start=1):
@@ -363,6 +404,7 @@ def build(poses=POSES, start=1):
     edge = second if second.dot(mix(F=1, D=1)) > 0 else -second
     # The sword's basis as it would be with the hand at rest.
     sword_rest = stand_first["hand.R"]["world"].inverted() @ _frame(blade, edge)
+    legs = {side: _leg(rig, side) for side in "LR"}
     stand_last = _stand(rig, end)
 
     action = bpy.data.actions.new(ACTION)
@@ -392,7 +434,7 @@ def build(poses=POSES, start=1):
             for i in range(3):
                 key(location_curves[i], frame, stand["root"]["location"][i])
         else:
-            world = _solve(spec, stand_first, sword_rest)
+            world = _solve(spec, stand_first, sword_rest, legs)
             for name in JOINTS:
                 bone = rig.data.bones[name]
                 rest = bone.matrix_local.to_3x3()
@@ -428,6 +470,11 @@ def build(poses=POSES, start=1):
                 "hilt": [round(x) for x in hilt],
                 "tip": [round(x) for x in tip],
                 "left_wrist": [round(x) for x in rig.pose.bones["hand.L"].head],
+                "head": [round(x) for x in rig.pose.bones["head"].head],
+                "knee_L": [round(x) for x in rig.pose.bones["shin.L"].head],
+                "knee_R": [round(x) for x in rig.pose.bones["shin.R"].head],
+                "ankle_L": [round(x) for x in rig.pose.bones["foot.L"].head],
+                "ankle_R": [round(x) for x in rig.pose.bones["foot.R"].head],
             }
         )
     return {"frames": [start, end], "pose_starts": starts, "poses": report}
