@@ -441,7 +441,11 @@ class RSPS_OT_pick_clip(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.rs_appearance.clip_sequence = int(self.clip)
+        props = context.scene.rs_appearance
+        props.clip_sequence = int(self.clip)
+        # Issue 21 decision 1: a stance clip of the weapon clip table is a Pose and any other clip is an Action. The
+        # animator can still change Play As after the pick.
+        props.clip_play_as = "POSE" if weapon_clip_table().is_stance_clip(props.clip_sequence) else "ACTION"
         return {"FINISHED"}
 
 

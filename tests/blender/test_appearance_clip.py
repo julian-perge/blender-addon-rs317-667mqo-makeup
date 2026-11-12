@@ -679,6 +679,55 @@ def test_picking_a_clip_stores_its_sequence_and_the_panel_names_it(cache):
     assert appearance_clip_cache.clip_label(808) == "HUMAN_READY (808)"
 
 
+def test_picking_a_stance_clip_sets_play_as_to_pose(cache):
+    # Stand 808 is the unarmed stand clip in data/weapon_clips.json, so by issue 21 decision 1 it is a Pose.
+    props = bpy.context.scene.rs_appearance  # pyrefly: ignore[missing-attribute]
+    props.clip_play_as = "ACTION"
+    assert bpy.ops.rsps.pick_clip(clip="808") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    assert props.clip_play_as == "POSE"
+
+
+def test_picking_an_emote_sets_play_as_to_action(cache):
+    # Emote wave 863 is in no stance list of data/weapon_clips.json, so by issue 21 decision 1 it is an Action.
+    props = bpy.context.scene.rs_appearance  # pyrefly: ignore[missing-attribute]
+    props.clip_play_as = "POSE"
+    assert bpy.ops.rsps.pick_clip(clip="863") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    assert props.clip_play_as == "ACTION"
+
+
+def test_picking_a_weapons_walk_sets_play_as_to_pose(cache):
+    # The whip's walk 1660 is in the whip's set of data/weapon_clips.json, not the unarmed one (issue 21 decision 1).
+    props = bpy.context.scene.rs_appearance  # pyrefly: ignore[missing-attribute]
+    props.clip_play_as = "ACTION"
+    assert bpy.ops.rsps.pick_clip(clip="1660") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    assert props.clip_play_as == "POSE"
+
+
+def test_picking_a_clip_that_holds_items_sets_play_as_to_action(cache):
+    # Woodcutting 1365 is in no stance list of data/weapon_clips.json, so by issue 21 decision 1 it is an Action. The
+    # panel warns when a clip that holds items is set to Pose (appearance_panel.py).
+    props = bpy.context.scene.rs_appearance  # pyrefly: ignore[missing-attribute]
+    props.clip_play_as = "POSE"
+    assert bpy.ops.rsps.pick_clip(clip="1365") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    assert props.clip_play_as == "ACTION"
+
+
+def test_play_as_changed_after_a_pick_is_kept(cache):
+    props = bpy.context.scene.rs_appearance  # pyrefly: ignore[missing-attribute]
+    assert bpy.ops.rsps.pick_clip(clip="808") == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    props.clip_play_as = "ACTION"
+    assert props.clip_play_as == "ACTION"
+    assert props.clip_sequence == 808
+
+
+def test_play_as_is_pose_in_a_new_scene_before_any_pick():
+    scene = bpy.data.scenes.new("fresh")
+    try:
+        assert scene.rs_appearance.clip_play_as == "POSE"  # pyrefly: ignore[missing-attribute]
+    finally:
+        bpy.data.scenes.remove(scene)
+
+
 def wielding(collection, item_id):
     """Store the item in the player's weapon slot, which is all the weapon clip buttons read, and make it active."""
     preset = loads_preset(collection[appearance_preview.PRESET_KEY])
