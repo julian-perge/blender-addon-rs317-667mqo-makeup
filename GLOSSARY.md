@@ -138,6 +138,10 @@ _Avoid_: bone (the rig also has hidden label bones), control
 The NLA track of a player's rig that holds the user's own keys on the joints, layered over the baked clips on the "RS clips" track.
 _Avoid_: user track, custom animation
 
+**Contact sheet**:
+One image of one player on several frames of a motion, with one column per frame and one row per view. Each row has one camera for all its frames, so a change between two cells is a pose change.
+_Avoid_: storyboard, sprite sheet, thumbnail grid
+
 **Export preset**:
 A named mapping, per kind of equipment, from body-part labels to the render priorities and face skins that faces carrying those labels receive on export.
 _Avoid_: model type, template

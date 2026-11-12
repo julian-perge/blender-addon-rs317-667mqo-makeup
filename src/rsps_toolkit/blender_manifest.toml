@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "rsps_toolkit"
-version = "7.7.0"
+version = "7.8.0"
 name = "RSPS Toolkit"
 tagline = "Import, edit and export Old School RuneScape models"
 maintainer = "Julian Perge"
