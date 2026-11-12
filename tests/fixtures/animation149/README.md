@@ -15,9 +15,13 @@ and `JAR=<reference work folder>/gamepack-149.jar`.
 | `alpha-1697` | 1697 `HUMAN_DODGE_RF_B` | 22 frames, face alpha transforms that change no face | male, female |
 | `alpha-1994` | 1994 `IC_PIT_FALL` | 8 frames; the last four fade every face | male, female |
 | `alpha-3182` | 3182 `SPIT_END_ANIM_PLAYER` | 19 frames, face alpha transforms that change no face | male, female |
+| `alpha-3364` | 3364 | 20 frames; frame 10 fades the player's labels 18 to 21 and 23 to 26 to 255 and the other labels to 32 | male, female |
 
-The three `alpha-` sequences were picked with `random.Random(149).sample` from the 217 player clips (frame map 0) that
-have a face alpha transform. Their recordings include the face alphas `o`, copied at the face count, because the
+The first three `alpha-` sequences were picked with `random.Random(149).sample` from the 217 player clips (frame map 0)
+that have a face alpha transform. `alpha-3364` was found by scanning all 217: it is the only one whose alpha transforms
+give the player's face labels (0 to 2, 4 and 9 to 27) more than one curve. The other 216 move no player label, or move
+all of them with one curve. Its labels form two groups, and the groups differ on frame 10 (counting from 0) only. The
+recordings of all four include the face alphas `o`, copied at the face count, because the
 client reuses the alpha buffer of animated models for the next frame; it keeps them as signed bytes.
 
 Every frame uses frame map 0. Sequences 819, 808 and 824 hold only their frame list (opcode 1): no held items. That

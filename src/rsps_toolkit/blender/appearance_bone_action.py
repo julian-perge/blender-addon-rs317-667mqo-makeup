@@ -5,7 +5,7 @@ from mathutils import Matrix, Quaternion, Vector
 
 from ..animation.label_fit import LabelTransform, fit_frame, fit_label
 from . import appearance_collection
-from .appearance_fades import FadeGroup
+from .appearance_fades import FADE_KEY, PROPERTY_PREFIX, EarlierFades, FadeGroup, face_inputs
 from .appearance_pose import PosedPlayer
 from .axes import GAME_TO_BLENDER
 
@@ -36,6 +36,69 @@ def write(
         bpy.data.actions.remove(new)
         raise
     return new, slot
+
+
+def earlier_fades(actions: list[bpy.types.Action], objects: list[bpy.types.Object]) -> EarlierFades:
+    """What the earlier bake actions do to each label group of the player's meshes, read from their fade curves.
+
+    A polygon's alpha under an earlier clip is the curve of the property of its fade material, or its rest alpha when
+    it has none. Every earlier action holds a curve for each property in use, which `rekey_fades` keeps true.
+    """
+    curves = [_fade_curves(action) for action in actions]
+    lengths = tuple(len(_frames(action)) for action in actions)
+    series: dict[tuple[int, int], tuple[tuple[float, ...], ...]] = {}
+    for obj in objects:
+        mesh = obj.data
+        assert isinstance(mesh, bpy.types.Mesh)
+        faces = face_inputs(mesh)
+        if faces is None:
+            continue
+        for polygon, (label, rest) in zip(mesh.polygons, zip(*faces, strict=True), strict=True):
+            slot = polygon.material_index
+            material = mesh.materials[slot] if slot < len(mesh.materials) else None
+            if material is not None and FADE_KEY in material and (label, rest) not in series:
+                prop = material[FADE_KEY]
+                series[(label, rest)] = tuple(
+                    found.get(prop, (float(rest),) * length) for found, length in zip(curves, lengths, strict=True)
+                )
+    return EarlierFades(lengths, series)
+
+
+def rekey_fades(action: bpy.types.Action, fades: dict[str, tuple[float, ...]], keep: set[str]) -> None:
+    """Replace the fade curves of an earlier bake action with one per property in `fades`, on the frames of its bone
+    curves, and store the new hash of its keys, so the player stays unedited and the clip is not baked again.
+
+    The curves of the properties in `keep` stay as they are, unless `fades` names them.
+    """
+    bag = action.layers[0].strips[0].channelbags[0]  # pyrefly: ignore[missing-attribute]
+    frames = _frames(action)
+    for curve in [c for c in bag.fcurves if _is_fade(c) and _prop(c) not in keep or _prop(c) in fades]:
+        bag.fcurves.remove(curve)
+    for prop, values in fades.items():
+        _write_channel(bag, f'["{prop}"]', 0, "Fades", frames, list(values), ["CONSTANT"] * len(frames))
+    action[appearance_collection.RIG_ACTION_KEY] = appearance_collection.keys_hash(action)
+
+
+def _is_fade(curve: bpy.types.FCurve) -> bool:
+    return curve.data_path.startswith(f'["{PROPERTY_PREFIX}')
+
+
+def _prop(curve: bpy.types.FCurve) -> str:
+    return curve.data_path.removeprefix('["').removesuffix('"]')
+
+
+def _fade_curves(action: bpy.types.Action) -> dict[str, tuple[float, ...]]:
+    bag = action.layers[0].strips[0].channelbags[0]  # pyrefly: ignore[missing-attribute]
+    return {_prop(curve): tuple(p.co[1] for p in curve.keyframe_points) for curve in bag.fcurves if _is_fade(curve)}
+
+
+def _frames(action: bpy.types.Action) -> list[int]:
+    """The frames every curve of a bake action is keyed on, read from its first bone curve."""
+    bag = action.layers[0].strips[0].channelbags[0]  # pyrefly: ignore[missing-attribute]
+    curve = next((c for c in bag.fcurves if not _is_fade(c)), None)
+    if curve is None:
+        raise ValueError(f"The action {action.name!r} has no bone curve to read its frames from")
+    return [round(p.co[0]) for p in curve.keyframe_points]
 
 
 def _bone_rows(armature: bpy.types.Armature, rig_name: str, vertices, labels, posed) -> list[tuple[str, list]]:

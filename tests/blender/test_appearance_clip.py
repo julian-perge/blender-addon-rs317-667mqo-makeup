@@ -839,6 +839,181 @@ def test_a_shape_key_bake_fades_faces_as_the_client_does(cache):
     assert not appearance_collection.is_edited(collection)
 
 
+@pytest.mark.parametrize("body", ["male", "female"])
+def test_a_shape_key_bake_of_a_clip_that_fades_every_label_alike_makes_one_fade_material(cache, body):
+    # Sequence 1994 fades all 23 skin labels with one curve (issue 14, decision 1, 2026-11-10).
+    pose = json.loads((FADE_CLIP / f"pose-{body}.json").read_text())
+    collection = player(cache, pose)
+    appearance_clip.bake_clip(collection, FADE_CLIP)
+    (material,) = fade_materials(collection)
+    # A shared group is named after its lowest label and its rest alpha.
+    assert material[appearance_fades.FADE_KEY].startswith("rs_fade_0_") and material.name.startswith("Player fade 0")
+    kept = kept_faces(cache, pose)
+    key = appearance_collection.mesh_data(collection).shape_keys
+    shown = shown_frames(FADE_CLIP)
+    for frame in (1, len(shown) - 30, len(shown) - 1, len(shown)):
+        bpy.context.scene.frame_set(frame)  # pyrefly: ignore[missing-attribute]
+        recorded = pose["frames"][shown[frame - 1]]["o"]
+        assert polygon_alphas(collection, key) == [0 if recorded is None else recorded[i] & 255 for i in kept]
+    assert not appearance_collection.is_edited(collection)
+
+
+@pytest.mark.parametrize("body", ["male", "female"])
+def test_a_bone_bake_of_a_clip_that_fades_every_label_alike_makes_one_fade_material(cache, body):
+    # Sequence 1994 fades all 23 skin labels with one curve (issue 14, decision 1, 2026-11-10).
+    pose = json.loads((FADE_CLIP / f"pose-{body}.json").read_text())
+    collection = player(cache, pose)
+    appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=10)
+    rig = appearance_collection.armature_of(collection)
+    (material,) = fade_materials(collection)
+    assert material[appearance_fades.FADE_KEY].startswith("rs_fade_0_") and material.name.startswith("Player fade 0")
+    assert [key for key in rig.keys() if key.startswith(appearance_fades.PROPERTY_PREFIX)] == [
+        material[appearance_fades.FADE_KEY]
+    ]
+    kept = kept_faces(cache, pose)
+    shown = shown_frames(FADE_CLIP)
+    for index in (0, len(shown) - 30, len(shown) - 1):
+        bpy.context.scene.frame_set(10 + index)  # pyrefly: ignore[missing-attribute]
+        recorded = pose["frames"][shown[index]]["o"]
+        assert polygon_alphas(collection, rig) == [0 if recorded is None else recorded[i] & 255 for i in kept]
+    assert not appearance_collection.is_edited(collection)
+
+
+SPLIT_CLIP = CLIPS / "alpha-3364"
+SPLIT_POSE = json.loads((SPLIT_CLIP / "pose-male.json").read_text())
+
+
+def rig_clip_strips(rig):
+    return list(rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips)
+
+
+def assert_strip_shows_the_client_alphas(cache, collection, rig, clip, pose, start):
+    """The first frame, the frame where the sequence's alphas differ by label (for 3364) and the last frame of the
+    strip show the alphas the client recorded."""
+    kept = kept_faces(cache, FADE_POSE)
+    shown = shown_frames(clip)
+    for index in sorted({0, len(shown) // 2, shown.index(10) if clip == SPLIT_CLIP else 0, len(shown) - 1}):
+        bpy.context.scene.frame_set(start + index)  # pyrefly: ignore[missing-attribute]
+        recorded = pose["frames"][shown[index]]["o"]
+        assert polygon_alphas(collection, rig) == [0 if recorded is None else recorded[i] & 255 for i in kept]
+
+
+def fade_slots(mesh):
+    return {i for i, m in enumerate(mesh.materials) if m is not None and appearance_fades.FADE_KEY in m}
+
+
+def fade_properties(rig):
+    return {key for key in rig.keys() if key.startswith(appearance_fades.PROPERTY_PREFIX)}
+
+
+def keyed_fade_properties(action):
+    return {
+        curve.data_path.removeprefix('["').removesuffix('"]')
+        for layer in action.layers
+        for strip in layer.strips
+        for bag in strip.channelbags
+        for curve in bag.fcurves
+        if curve.data_path.startswith(f'["{appearance_fades.PROPERTY_PREFIX}')
+    }
+
+
+@pytest.mark.parametrize("split_first", [False, True])
+def test_a_bone_clip_that_fades_labels_differently_splits_the_fade_group_of_an_earlier_clip(cache, split_first):
+    # Faces share a fade only when every baked clip fades them alike (spec shared-fade-groups, user stories 6 to 8).
+    collection = player(cache, FADE_POSE)
+    first, second = (SPLIT_CLIP, FADE_CLIP) if split_first else (FADE_CLIP, SPLIT_CLIP)
+    first_start = 1
+    second_start = first_start + len(shown_frames(first)) + 5
+    appearance_clip.bake_clip_to_rig(collection, first, start=first_start)
+    rig = appearance_collection.armature_of(collection)
+    (earlier,) = rig_clip_strips(rig)
+    earlier_action = earlier.action
+    bones = [
+        (c.data_path, [tuple(p.co) for p in c.keyframe_points])
+        for c in earlier_action.layers[0].strips[0].channelbags[0].fcurves
+        if "pose.bones" in c.data_path
+    ]
+    appearance_clip.bake_clip_to_rig(collection, second, start=second_start)
+    # The label groups 0 to 2, 4, 9 to 17, 22 and 27 fade alike under both clips, and 18 to 21 and 23 to 26 fade
+    # differently from them under the split clip, so two fade groups.
+    materials = fade_materials(collection)
+    assert sorted(m[appearance_fades.FADE_KEY] for m in materials) == ["rs_fade_0_0", "rs_fade_18_0"]
+    assert fade_properties(rig) == {m[appearance_fades.FADE_KEY] for m in materials}
+    for clip, pose, start in (
+        (first, json.loads((first / "pose-male.json").read_text()), first_start),
+        (second, json.loads((second / "pose-male.json").read_text()), second_start),
+    ):
+        assert_strip_shows_the_client_alphas(cache, collection, rig, clip, pose, start)
+    assert rig_clip_strips(rig)[0].action is earlier_action
+    assert [
+        (c.data_path, [tuple(p.co) for p in c.keyframe_points])
+        for c in earlier_action.layers[0].strips[0].channelbags[0].fcurves
+        if "pose.bones" in c.data_path
+    ] == bones
+    for strip in rig_clip_strips(rig):
+        assert keyed_fade_properties(strip.action) == fade_properties(rig)
+    assert not appearance_collection.is_edited(collection)
+    # Every fade slot of the mesh holds a polygon, so no fade material is left without one.
+    mesh = appearance_collection.mesh_data(collection)
+    assert fade_slots(mesh) <= {p.material_index for p in mesh.polygons}
+
+
+def two_strip_player(cache):
+    """A player with sequence 1994 on frame 1 and sequence 3364 after it, so its fade groups are split in two."""
+    collection = player(cache, FADE_POSE)
+    second_start = 1 + len(shown_frames(FADE_CLIP)) + 5
+    appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=1)
+    appearance_clip.bake_clip_to_rig(collection, SPLIT_CLIP, start=second_start)
+    return collection, second_start
+
+
+def assert_two_strips_show_the_client_alphas(cache, collection, second_start):
+    rig = appearance_collection.armature_of(collection)
+    assert sorted(m[appearance_fades.FADE_KEY] for m in fade_materials(collection)) == ["rs_fade_0_0", "rs_fade_18_0"]
+    assert fade_properties(rig) == {m[appearance_fades.FADE_KEY] for m in fade_materials(collection)}
+    for strip in rig_clip_strips(rig):
+        assert keyed_fade_properties(strip.action) == fade_properties(rig)
+    assert_strip_shows_the_client_alphas(cache, collection, rig, FADE_CLIP, FADE_POSE, 1)
+    assert_strip_shows_the_client_alphas(cache, collection, rig, SPLIT_CLIP, SPLIT_POSE, second_start)
+    assert not appearance_collection.is_edited(collection)
+
+
+def test_a_duplicated_player_with_split_fade_groups_gets_its_own_split_groups_driven_by_its_own_rig(cache):
+    collection, second_start = two_strip_player(cache)
+    copy = appearance_collection.duplicate_player(collection, str(cache))
+    copy_rig = appearance_collection.armature_of(copy)
+    ours, theirs = set(fade_materials(copy)), set(fade_materials(collection))
+    assert len(ours) == 2 and not ours & theirs
+    targets = {c.driver.variables[0].targets[0].id for m in ours for c in m.node_tree.animation_data.drivers}  # pyrefly: ignore[missing-attribute]
+    assert targets == {copy_rig}
+    assert_two_strips_show_the_client_alphas(cache, copy, second_start)
+    assert_two_strips_show_the_client_alphas(cache, collection, second_start)
+    appearance_collection.remove_collection(copy)
+    assert not ours & set(all_fade_materials())
+    assert set(fade_materials(collection)) == theirs
+
+
+def test_baking_over_the_clip_that_kept_two_fade_groups_apart_merges_them_again(cache):
+    before = all_fade_materials()
+    collection = player(cache, FADE_POSE)
+    second_start = 1 + len(shown_frames(FADE_CLIP)) + 5
+    appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=1)
+    appearance_clip.bake_clip_to_rig(collection, SPLIT_CLIP, start=second_start)
+    assert len(fade_materials(collection)) == 2
+    appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=second_start)
+    rig = appearance_collection.armature_of(collection)
+    (material,) = fade_materials(collection)
+    assert fade_properties(rig) == {material[appearance_fades.FADE_KEY]}
+    for strip in rig_clip_strips(rig):
+        assert keyed_fade_properties(strip.action) == fade_properties(rig)
+    assert_strip_shows_the_client_alphas(cache, collection, rig, FADE_CLIP, FADE_POSE, 1)
+    assert_strip_shows_the_client_alphas(cache, collection, rig, FADE_CLIP, FADE_POSE, second_start)
+    assert not appearance_collection.is_edited(collection)
+    mesh = appearance_collection.mesh_data(collection)
+    assert fade_slots(mesh) <= {p.material_index for p in mesh.polygons}
+    assert [m for m in all_fade_materials() if m not in before] == [material]
+
+
 @pytest.mark.parametrize("bake", [appearance_clip.bake_clip, appearance_clip.bake_clip_to_rig])
 def test_a_clips_fade_materials_show_only_the_front_of_faces(cache, bake):
     # The user chose that players cull back faces as the client does, fade materials included (issue 28, decision 1,

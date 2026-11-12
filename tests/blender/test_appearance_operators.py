@@ -9,9 +9,12 @@ import pytest
 from js5_builder import rewrite_cache
 from mathutils import Matrix
 
+from rsps_toolkit.animation.clip import read_sequence
+from rsps_toolkit.animation.frames import frame_schedule
 from rsps_toolkit.blender import (
     appearance_clip,
     appearance_collection,
+    appearance_fades,
     appearance_items,
     appearance_preview,
     appearance_props,
@@ -198,6 +201,50 @@ def test_update_bakes_the_players_clip_again_and_leaves_no_old_action(cache, cap
     assert not appearance_collection.is_edited(rebuilt)
     users = [action for action in bpy.data.actions if action.users == 0]
     assert users == []
+
+
+def test_update_of_a_player_with_split_fade_groups_ends_with_the_same_groups_and_alphas(cache):
+    # Sequence 1994 fades every label alike and 3364 fades two sets of labels differently (spec shared-fade-groups).
+    folders = WALK.parent
+    show(case(None, False, [0, 0, 0, 0, 0]))
+    create(cache_folder=str(cache))
+    (collection,) = players()
+    first, second = (
+        sum(ticks for _, ticks in frame_schedule(read_sequence(folders / name), action=False))
+        for name in ("alpha-1994", "alpha-3364")
+    )
+    second_start = 1 + first + 5
+    appearance_clip.bake_clip_to_rig(collection, folders / "alpha-1994", start=1)
+    appearance_clip.bake_clip_to_rig(collection, folders / "alpha-3364", start=second_start)
+    frames = [1, first, second_start, second_start + second // 2, second_start + second - 1]
+
+    def seen(player):
+        rig = appearance_collection.armature_of(player)
+        mesh = appearance_collection.mesh_data(player)
+        props = [
+            m[appearance_fades.FADE_KEY] for m in mesh.materials if m is not None and appearance_fades.FADE_KEY in m
+        ]
+        keyed = []
+        for strip in rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips:  # pyrefly: ignore[missing-attribute]
+            curves = strip.action.layers[0].strips[0].channelbags[0].fcurves
+            keyed.append(sorted(c.data_path for c in curves if c.data_path.startswith('["rs_fade_')))
+        alphas = []
+        for frame in frames:
+            bpy.context.scene.frame_set(frame)  # pyrefly: ignore[missing-attribute]
+            slots = [mesh.materials[p.material_index] for p in mesh.polygons]
+            alphas.append(
+                [rig[m[appearance_fades.FADE_KEY]] if m and appearance_fades.FADE_KEY in m else 0 for m in slots]
+            )
+        return sorted(props), keyed, alphas
+
+    # This checks that Update keeps what the player showed. The clip tests check the alphas against the client.
+    before = seen(collection)
+    assert before[0] == ["rs_fade_0_0", "rs_fade_18_0"]
+    assert before[1] == [['["rs_fade_0_0"]', '["rs_fade_18_0"]']] * 2
+    assert update(cache_folder=str(cache)) == {"FINISHED"}
+    (rebuilt,) = players()
+    assert seen(rebuilt) == before
+    assert not appearance_collection.is_edited(rebuilt)
 
 
 def test_update_keeps_the_clip_strips_frames_and_the_users_own_animation(cache):
