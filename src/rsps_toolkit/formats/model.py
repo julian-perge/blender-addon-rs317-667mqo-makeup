@@ -124,6 +124,13 @@ def check(model: Model) -> None:
         for i, (kind, parameters) in enumerate(
             zip(source.texture_render_types, source.texture_parameters, strict=True)
         ):
+            # Client rev 149, class dv, method j, offsets 295 to 330, 1999 to 2004, 2261 to 2264, 2407 to 2410,
+            # 2539 to 2542 and 2674 to 2677: the client reads each texture record by its kind, 0, 1, 2 or 3. For
+            # any other kind it reads no bytes for that record and continues, and the record keeps zero triangle
+            # words. The values 0 to 3 are the client's. Refusing a larger kind is our own stricter rule, because
+            # we would read bytes that the client does not read. The owner decided on 2026-11-11 to keep it
+            # (issue 17).
+            # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
             _require(kind in (0, 1, 2, 3), f"Texture record {i} has unsupported kind {kind}")
             size = 0 if kind == 0 else 13 if kind == 2 else 11
             _require(len(parameters) == size, f"Texture record {i} needs {size} parameter bytes")

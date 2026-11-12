@@ -84,6 +84,7 @@ Verdict: **not settled**. The values 0 to 3 are the client's. The refusal is the
 - Also: offsets 1613 to 1629 store each kind byte in `dv.o` and read it as a signed byte. Offsets 295 to 330 count the kinds: 0 is a simple record, 1 to 3 is a complex record, and 2 is also a record with 4 speed bytes.
 - A record with a larger kind is in no count, takes no bytes, and keeps the value 0 in its triangle words.
 - The add-on counts a record of kind 4 or more as complex (`complex_count = texture_count - simple_count` in `formats/new_format.py`). It would then read bytes that the client does not read. This follows from the two code readings. It is not a statement of the client.
+- Tests: the case `texture-kind-4` of `test_decode_refuses_mutated_source_bytes` covers `decode`. `test_texture_kinds_0_to_3_are_accepted_and_kind_4_is_refused` covers kinds 0 to 3 at `encode` and `decode`, and kind 4 at both.
 
 ## Rule 6: footer flags other than 0 or 1 are refused
 
@@ -93,6 +94,7 @@ Verdict: **not settled**. The values 0 and 1 are the client's. The refusal is th
 - A value of 2 to 255 in one of these bytes means the same as 0: the section is absent. The client does not refuse it.
 - The priority byte is compared with 255 only (rule 1). It is not a flag of 0 or 1, and `decode` does not check it.
 - `decode` refuses a value of 2 to 255 in the five flag bytes. For such a file, the client reads no section, and the add-on would read bytes that the client does not read. This follows from the two code readings.
+- Tests: the case `bad-footer-flag` of `test_malformed_new_format_footers_are_refused` writes 2 at footer byte 6, which is the priority byte, not a flag. A value of 2 there is a valid shared priority, so that case fails for another reason and does not test this rule. `test_decode_refuses_a_footer_flag_of_2_but_not_any_priority_byte` sets 2 in each of the five flag bytes, and it sets the priority byte to another value and reads it as a shared priority.
 
 ## The encode side of rule 6
 
@@ -102,7 +104,7 @@ The plan expected that `encode` could write a file that `decode` refuses, becaus
 - The render, alpha and texture flags come from the data (`has_render`, `has_alpha`, `textures`). A source flag equal to 1 only keeps a section that is otherwise empty. A source flag of 2 or more has no effect, so it gives 0 in the file when the data has no such section. The client does the same with it.
 - The face skin and vertex skin flags come from `model.face_skins is not None` and `model.vertex_skins is not None`. The source flags for them are not used.
 
-So no written file can fail to read in `decode`. The only gap is that `check` accepts source flags that `decode` refuses. These flags can come only from a hand-built model, because `decode` refuses them. The files are not affected. It is the user's decision whether `check` should refuse the same flags. That decision is a change of codec behaviour.
+So no written file can fail to read in `decode`. The only gap is that `check` accepts source flags that `decode` refuses. These flags can come only from a hand-built model, because `decode` refuses them. The files are not affected. Making `check` refuse the same flags would change the codec. The owner decided on 2026-11-11 to leave `check` as it is. `test_encode_writes_only_0_or_1_for_the_footer_flags_even_for_a_larger_source_flag` pins the behaviour of `encode`.
 
 ## Summary
 
