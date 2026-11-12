@@ -18,7 +18,7 @@ from . import face_materials, model_source, rs_layers
 
 type Triangle = tuple[int, int, int]
 
-# The new format stores a face's record index plus 1 in a byte; see formats/model.py (unverified there).
+# The new format stores a face's record index plus 1 in a byte; see formats/model.py, which cites the client.
 NEW_FORMAT_RECORD_LIMIT = 255
 
 

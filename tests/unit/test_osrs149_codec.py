@@ -191,8 +191,12 @@ def test_new_encoding_still_refuses_unrepresentable_face_index_deltas():
 
 
 def test_encoder_rule_for_texture_coordinate_byte_limit():
-    # Unverified: this pins our own encoder rule that index 254 is storable and 255 is not. No client or reference
-    # output has confirmed the limit.
+    # Client rev 149, class dv, method j, offsets 1632 to 1665: a face's texture coordinate is one file byte that
+    # holds the index plus 1. Class dv, method ae, offsets 428 to 436 and 449 to 459: file byte 0 means no texture
+    # triangle, and any other byte is used as an unsigned index, so 254 is the highest index. The client has no check
+    # of its own. We refuse 255 because it does not fit in the byte. A model has at most 255 texture triangles, so
+    # index 255 is refused as a missing triangle, and a 256th triangle is refused by the count.
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 3.
     model = decode((FIXTURES / "28954.dat").read_bytes(), profile="osrs-149")
     source = model.new_data
     assert source is not None
@@ -209,7 +213,11 @@ def test_encoder_rule_for_texture_coordinate_byte_limit():
     with pytest.raises(InvalidModelError, match="over 63"):
         replace(model, encoding=ModelEncoding.OLD, new_data=None)
     model.face_texture_triangles[face] = 255
-    with pytest.raises(InvalidModelError):
+    with pytest.raises(InvalidModelError, match="missing texture triangle 255"):
+        encode(model)
+    model.face_texture_triangles[face] = 0
+    model.texture_triangles.append(model.texture_triangles[0])
+    with pytest.raises(InvalidModelError, match="over 255"):
         encode(model)
 
 
@@ -395,6 +403,40 @@ def test_hand_built_model_leaves_out_all_zero_render_type_and_alpha_sections():
     render_data, (render, _, alpha, *_) = _round_trip(render_model)
     assert (render, alpha) == (1, 0)
     assert len(render_data) == len(plain_data) + len(render_model.faces)
+
+
+@pytest.mark.parametrize(
+    ("tail", "accepted"),
+    [
+        (b"\x01" + bytes(9), False),
+        (b"\x01" + bytes(10), True),
+        (b"\x00", True),
+        (b"\x00\x00\x00", True),
+    ],
+    ids=["nonzero-10-bytes", "nonzero-11-bytes", "zero-1-byte", "zero-3-bytes"],
+)
+def test_opaque_tail_with_a_nonzero_first_byte_needs_11_bytes(tail, accepted):
+    # Client rev 149, class dv, method j, offsets 2689 to 2694, 1901 to 1903, 2709 to 2725, 2423 to 2431, 2740 to 2748
+    # and 172 to 180: when the first tail byte is nonzero, the client reads 11 bytes (1, 2, 2, 2 and 4) and ignores
+    # them. It checks no length, so a shorter tail makes it read the footer. The 11 is the client's number, and
+    # refusing a shorter tail is our own stricter rule. The owner decided on 2026-11-11 to keep it (issue 17).
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
+    original = (FIXTURES / "28634.dat").read_bytes()
+    model = decode(original, profile="osrs-149")
+    assert model.new_data is not None
+    footer_at = len(original) - 23
+    data = original[: footer_at - len(model.new_data.tail)] + tail + original[footer_at:]
+    model.new_data = replace(model.new_data, tail=tail)
+    if accepted:
+        for bytes_in in (data, encode(model)):
+            decoded = decode(bytes_in, profile="osrs-149")
+            assert decoded.new_data is not None
+            assert decoded.new_data.tail == tail
+    else:
+        with pytest.raises(InvalidModelError, match="tail"):
+            decode(data, profile="osrs-149")
+        with pytest.raises(InvalidModelError, match="tail"):
+            encode(model)
 
 
 def test_restoring_a_set_aside_face_without_source_fields_is_refused():

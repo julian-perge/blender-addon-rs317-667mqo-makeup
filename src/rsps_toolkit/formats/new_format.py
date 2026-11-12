@@ -91,7 +91,11 @@ def _decode(data: bytes) -> Model:
             if kind == 0
             else scales.take(6) + rotations.take(2) + directions.take(1) + speeds.take(4 if kind == 2 else 2)
         )
-    # Unverified: a tail whose first byte is nonzero must be at least 11 bytes long.
+    # Client rev 149, class dv, method j, offsets 2689 to 2694, 1901 to 1903, 2709 to 2725, 2423 to 2431, 2740 to 2748
+    # and 172 to 180: when the first tail byte is nonzero, the client reads 11 bytes (1, 2, 2, 2 and 4) and ignores
+    # them. It checks no length, so a shorter tail makes it read the footer. The 11 is the client's number, and
+    # refusing a shorter tail is our own stricter rule. The owner decided on 2026-11-11 to keep it (issue 17).
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
     tail = data[offset:footer_at]
     if not tail or (tail[0] != 0 and len(tail) < 11):
         raise InvalidModelError("Truncated OSRS-149 opaque tail")
