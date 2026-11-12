@@ -48,7 +48,7 @@ overrides it; alpha 255 forces effective type 2 and alpha 254 forces type 3.
 Type 3 is flat when untextured and hidden when textured. The selected files
 exercise stored type 2 and both alpha overrides; the textured type-3 branch is
 verified bytecode rather than an observed snapshot-430 case. Exact method offsets
-are in [source findings](../../.scratch/osrs-focus/evidence/reference-source-findings.md).
+are in [source findings](osrs-focus/reference-source-findings.md).
 
 Both this client and RuneLite have the item-8283 alpha-254 neighbor-read overflow.
 The [approved repair policy](../adr/0002-icon-buffer-edge-policy.md) supplies
@@ -160,7 +160,7 @@ Measured against cache 430 and the Gate 0 fixtures; see [the OSRS cache workflow
   kind 0 records into the drawable model and gives faces of kinds 1 to 3 no texture triangle, so `Model.java` line
   1370 draws them with their own corners as P, M and N. The preview does the same. Revision 149 is checked too:
   `dv.ae` keeps only kind 0 records and `ej.au` copies a face's own corners when it has no retained record
-  (`.scratch/osrs-focus/evidence/reference-source-findings.md` items 3 to 5), though the render-level Gate 0
+  (`docs/research/osrs-focus/reference-source-findings.md` items 3 to 5), though the render-level Gate 0
   comparison still needs a client run. RuneLite's `computeTextureUVCoordinates` (line 150) leaves those faces' UVs at zero, so it is no
   reference for them. The texture tools still refuse to edit those faces.
 - 17 of 5,398 `FF FF` models re-encode with a different face-index compression mode. Their decoded models are equal;
@@ -189,20 +189,20 @@ Measured against cache 430 and the Gate 0 fixtures; see [the OSRS cache workflow
   2694, 1901 to 1903, 2709 to 2725, 2423 to 2431, 2740 to 2748 and 172 to 180: when the first tail byte is nonzero,
   the client reads 11 bytes (1, 2, 2, 2 and 4) and ignores them. It checks no length, so a shorter tail makes it
   read the footer. The owner decided on 2026-11-11 to keep the refusal
-  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)).
+  (issue 17 (`git show 2a78edd:.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md`)).
 - Texture kinds above 3 are refused. The values 0 to 3 are the client's. Refusing a larger kind is our own stricter
   rule. Client rev 149, class `dv`, method `j`, offsets 295 to 330, 1999 to 2004, 2261 to 2264, 2407 to 2410, 2539
   to 2542 and 2674 to 2677: the client reads each texture record by its kind, 0, 1, 2 or 3. For any other kind it
   reads no bytes for that record and continues, and the record keeps zero triangle words. We would read bytes that
   the client does not read. The owner decided on 2026-11-11 to keep the refusal
-  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)).
+  (issue 17 (`git show 2a78edd:.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md`)).
 - Footer flags other than 0 or 1 are refused. The values 0 and 1 are the client's. Refusing 2 to 255 is our own
   stricter rule. Client rev 149, class `dv`, method `j`, offsets 1516 to 1519, 1364 to 1367, 426 to 429, 975 to 978
   and 448 to 451: the client compares each of the render, alpha, face skin, texture and vertex skin flags only with
   1, so any other value means the section is absent, and the client does not refuse it. We would read bytes that the
   client does not read. The priority byte is not one of these flags: any value below 255 is one shared priority. The
   owner decided on 2026-11-11 to keep the refusal
-  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)).
+  (issue 17 (`git show 2a78edd:.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md`)).
 - The footer flag rule has a gap on the encode side. `check` accepts source flags of 0 to 255, but `encode` builds
   the five flags from the data and writes only 0 or 1. So no written file is refused by `decode`. Only a hand-built
   source flag of 2 or more passes `check`, and `encode` writes 0 for it, as the client reads it. The owner decided

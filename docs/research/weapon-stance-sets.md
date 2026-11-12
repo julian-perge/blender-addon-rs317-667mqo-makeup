@@ -2,7 +2,7 @@
 
 Researched 2026-11-09 by reading bytecode, local caches and remote source files. Remote files were streamed over HTTPS at pinned commits and filtered in memory; nothing was cloned or saved. No client and no Blender was run. Every statement is tagged **[evidence]** (read or run, source named) or **[guess]**. Scripts and the two linearised bytecode listings are in `<scratch folder 2026-11-09-weapon-stance-sets>/`.
 
-**Status (2026-11-09):** used by plan 13 (`.scratch/osrs-focus/plans/13-weapon-stances.md`). The user approved downloading Alter's two files and the plugin's `data.json`; `scripts/generate-weapon-clips.py` writes `src/rsps_toolkit/data/weapon_clips.json` from them, with Alter's set winning where the two disagree. The panel's Stance and Attack buttons read it.
+**Status (2026-11-09):** used by plan 13 (`tasks/old/osrs-focus/plans/13-weapon-stances.md`). The user approved downloading Alter's two files and the plugin's `data.json`; `scripts/generate-weapon-clips.py` writes `src/rsps_toolkit/data/weapon_clips.json` from them, with Alter's set winning where the two disagree. The panel's Stance and Attack buttons read it.
 
 ## Summary
 

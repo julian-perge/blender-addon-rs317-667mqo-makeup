@@ -12,7 +12,7 @@ most player clips use. Later transforms (112 to 198) repeat the same body parts 
 are left out; the clip bake keys each label bone's remaining motion under its joint, so clips using them still play
 as the client shows them. A joint's pivot is the nearest earlier pivot transform (type 0), as the client uses it,
 and its labels are every label the rotation moves. The plan behind this is
-`.scratch/osrs-focus/plans/11-joint-rig.md`.
+`tasks/old/osrs-focus/plans/11-joint-rig.md`.
 """
 
 import argparse

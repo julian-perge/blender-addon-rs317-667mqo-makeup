@@ -13,3 +13,7 @@ dist/
 keys-*.json
 
 .env
+
+# Plans are scratch. The GitHub issues hold the tasks.
+tasks/*
+!tasks/old/

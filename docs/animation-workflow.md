@@ -19,7 +19,7 @@ manifest (`bundle-manifest.json`), the raw resources, the textures and the refer
 values of the 2013 bundle. It is not itself a bundle folder. Equipment overrides without an
 established compatible assembly are not supported; the supplied whip clip has none.
 
-The [contract](../.scratch/game-animation/source-contract.md) and
+The [contract](research/game-animation-source-contract.md) and
 [fixture provenance](../tests/fixtures/animations/README.md) record the evidence.
 The pinned revision-1 client independently produced all expected poses.
 The attack-name association uses RuneLite's later generated game names; no 2013

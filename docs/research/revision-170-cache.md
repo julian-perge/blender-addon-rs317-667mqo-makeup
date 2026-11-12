@@ -44,7 +44,7 @@ Appearance fixture models: 27 of 29 identical. Both changed ones belong to item 
 
 Palette: the colour tables are client constants (`hv`, `class228`), so the cache cannot show them (Evidence).
 
-Toolkit codec, pure Python, `osrs-149` profile: decodes all 35,129 models; 34,963 re-encode byte-identically. The other 166 are the 159 that also differ on 430 plus 7 added `ffff` models, which matches the known compression-mode issue ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md); the cause for the 7 is a Guess).
+Toolkit codec, pure Python, `osrs-149` profile: decodes all 35,129 models; 34,963 re-encode byte-identically. The other 166 are the 159 that also differ on 430 plus 7 added `ffff` models, which matches the known compression-mode issue (issue 17 (`git show 2a78edd:.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md`); the cause for the 7 is a Guess).
 
 ## 4. Does the 2018 source become an exact match?
 

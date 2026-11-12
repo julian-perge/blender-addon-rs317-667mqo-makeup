@@ -85,7 +85,7 @@ It exits 1 when a reference is missing or any field differs, and ignores only th
 
 ## Evidence
 
-Measured on 2026-11-06 in fresh Blender profiles ([plan 02](../.scratch/osrs-focus/plans/02-toolkit.md), Task 6):
+Measured on 2026-11-06 in fresh Blender profiles ([plan 02](../tasks/old/osrs-focus/plans/02-toolkit.md), Task 6):
 
 - Full cache 430 sweep through the public import and Preserve Source export operators: 33,196 of 33,196 models, no
   failure, none differing, no source file changed. The Java reference recorder over the originals and the exports,
@@ -96,14 +96,14 @@ Measured on 2026-11-06 in fresh Blender profiles ([plan 02](../.scratch/osrs-foc
 - Test totals at the Task 6 commit: 1,053 unit tests passed (12 skipped), 514 Blender tests passed.
 - In profile mode the sweep does not fail on missing textures, because the operators find textures through the
   add-on preferences (agreed with the user in plan 02).
-- The texture mapping of the 13 complex-reference models was not viewed ([issue 09](../.scratch/osrs-focus/issues/09-complex-reference-texture-mapping-not-viewed.md)).
+- The texture mapping of the 13 complex-reference models was not viewed ([#9](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/9)).
 
 The icon reference comparisons are under `tests/fixtures/models/osrs149/icons/`, the raw field
-audit is `.scratch/osrs-focus/evidence/cache430_field_audit.json`, and the verification outputs are in
+audit is `docs/research/osrs-focus/cache430_field_audit.json`, and the verification outputs are in
 `<data workspace>/exports/osrs/openrs2-430/verification/`.
 
 Not covered: byte-identical re-export, which the user deferred
-([issue 08](../.scratch/osrs-focus/issues/08-preserve-source-refuses-any-moved-vertex.md)), reference UVs for texture
+([#8](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/8)), reference UVs for texture
 record kinds 1 to 3, and the complex-reference models' texture mapping.
 
 ### The full export run (2026-11-06)
@@ -119,7 +119,7 @@ This is a measured partial-success result, not an all-assets pass. The known map
 limit is 268 encrypted empty landscapes with no exported key: OpenRS2 counts
 these inferred-empty groups as valid keys, which accounts for its 1,406 count
 versus 1,138 actual JSON/ZIP keys: the difference is those 268 groups. Every omitted group matches the pinned
-`Js5Compression.isEmptyLoc` size rule. No keys or landscape content were invented. Item 8283's icon, the one real renderer failure of that run, was repaired later ([issue 01](../.scratch/osrs-focus/issues/01-cache-430-item-icon-rendering.md)).
+`Js5Compression.isEmptyLoc` size rule. No keys or landscape content were invented. Item 8283's icon, the one real renderer failure of that run, was repaired later (issue 01 (`git show 2a78edd:.scratch/osrs-focus/issues/01-cache-430-item-icon-rendering.md`)).
 
 ### JSON loading benchmark
 
@@ -146,4 +146,4 @@ Both accelerators are slower than stdlib strict once the mandatory duplicate-key
 Importing them adds about 7 ms (msgspec, 28 ms) and 11 ms (orjson, 32 ms) to a 21 ms empty-interpreter start. The
 only real path costs about 0.3 ms, so there is nothing to gain. The duplicate-key rule comes from the
 `animation/bundle.py` loader and the plan's Task 5 gate. When to revisit is
-[issue 19](../.scratch/osrs-focus/issues/19-revisit-json-accelerators.md).
+issue 19 (`git show 2a78edd:.scratch/osrs-focus/issues/19-revisit-json-accelerators.md`).

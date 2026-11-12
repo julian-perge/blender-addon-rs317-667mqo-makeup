@@ -1,2 +1,5 @@
 [plugins."mattpocock-skills@claude-plugins-official"]
 enabled = false
+
+[plugins."agent-skills@agent-skills"]
+enabled = true

@@ -150,7 +150,7 @@ Verified by running the unchanged revision-149 client:
 - Blender: Bake Clip keys each frame on the ticks the client shows it, with a Play As choice (Pose, the default, or Action). Tests: the walk and idle bakes equal the client's timing and the idle bake equals the client's vertices for both bodies; the 1499 action bake equals the client's timing until it stops.
 
 Not verified or not done:
-- Play As defaults to Pose. That is an agent choice that needs the user's decision ([issue 21](../../.scratch/osrs-focus/issues/21-play-as-defaults-to-pose.md)): the clip folder cannot say whether the server plays a sequence as the pose or the action.
+- Play As defaults to Pose. That is an agent choice that needs the user's decision (issue 21 (`git show 2a78edd:.scratch/osrs-focus/issues/21-play-as-defaults-to-pose.md`)): the clip folder cannot say whether the server plays a sequence as the pose or the action.
 - The start state (frame 0, counter 0) is that of a new actor. In the 149 bytecode the only places that zero the pose counters are the cycle wrap in `ap.fb`, so switching from walk to idle in game keeps the frame index; the bake always starts at frame 0. Where the client resets the action counters when an action starts was not located in 149.
 - How often `ap.fb` runs (once per actor per 20 ms client cycle) is from the 2018 source, not checked in 149. The bake still uses one Blender frame per tick at 50 fps.
 - Not recorded: female body for 1499, held-item substitution, interleaving two sequences (`jg.w`), face alpha (type 5), `stretches` and the precedence and priority fields' effects. Held items and face alpha were recorded later, in plans 12 and 10.
@@ -176,6 +176,6 @@ Measured distance from the fitted vertices to the client's recorded vertices, in
 
 Rules: one clip method per player. The bone bake refuses a mesh with shape keys (Update Player rebuilds without them), and the shape-key bake refuses a rig with any action (unlinking it is not an edit). Both refuse edited players and Edit Mode. The bone bake replaces its own action (marked `rs_bone_clip`), refuses an action it did not make, builds the new action fully before assigning it and removes it on failure. It sets every pose bone to quaternion rotation.
 
-Not done or open: the fitted clip on a body the client did not record, and other frame maps, are untested; a non-uniform scale would leave a larger error, and none of the recorded clips has one. Removing the previous action only when nothing else uses it is an agent choice ([issue 20](../../.scratch/osrs-focus/issues/20-rig-and-clip-agent-choices.md)).
+Not done or open: the fitted clip on a body the client did not record, and other frame maps, are untested; a non-uniform scale would leave a larger error, and none of the recorded clips has one. Removing the previous action only when nothing else uses it is an agent choice (issue 20 (`git show 2a78edd:.scratch/osrs-focus/issues/20-rig-and-clip-agent-choices.md`)).
 
 Checked by eye on 2026-11-07 in the user's Blender, beside a shape-key bake of the same walk: the two walk alike, and the evaluated meshes differ by at most 1.6 game units (mean 0.42 to 0.49) over frames 1 to 49, within the fit error above.

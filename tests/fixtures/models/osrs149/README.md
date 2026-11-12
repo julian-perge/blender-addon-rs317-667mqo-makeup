@@ -9,7 +9,7 @@ The complete dataset has 33,196 models: 27,798 old and 5,398 FF FF.
 pins every selected DAT and JSON. These are source data, not generated models.
 
 Read [the field contract](contract.md) before consuming these fixtures.
-[Source findings](../../../../.scratch/osrs-focus/evidence/reference-source-findings.md)
+[Source findings](../../../../docs/research/osrs-focus/reference-source-findings.md)
 give artifact provenance, exact bytecode paths, offsets and limitations.
 The model harness runs the unchanged constructor and lighting method; it does
 not start the game client or connect to a game server.
@@ -47,7 +47,7 @@ OSRS149_CLIENT=<reference work folder>/gamepack-149.jar
 OSRS149_LIBRARY=<reference work folder>/reference-library.jar
 uv run tests/fixtures/record_osrs149.py \
   --models <folder of index 7 models> \
-  --inventory .scratch/osrs-focus/evidence/cache430_field_audit.json \
+  --inventory docs/research/osrs-focus/cache430_field_audit.json \
   --client "$OSRS149_CLIENT" --library "$OSRS149_LIBRARY" \
   --output /private/tmp/osrs149-new-recording
 diff -qr tests/fixtures/models/osrs149 /private/tmp/osrs149-new-recording

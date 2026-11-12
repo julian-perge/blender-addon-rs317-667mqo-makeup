@@ -31,7 +31,7 @@ $B --command extension build --source-dir src/rsps_toolkit --output-dir dist
 
 ## Workflow
 
-- Tasks are tracked in `tasks/todo.md`, and `tasks/` is committed.
-- Specs are files at `spec/<slug>.md`, not `SPEC.md`.
+- Tasks are tracked in GitHub Issues for julian-perge/blender-addon-rs317-667mqo-makeup, with the `gh` CLI ([Issue tracker](docs/agents/issue-tracker.md)). `/agent-skills:plan` creates one sub-issue per task. `tasks/` is git-ignored scratch, except `tasks/old/`.
+- Specs are files at `spec/<issue>-<slug>.md`, not `SPEC.md`. Specs from before this workflow are in `spec/old/`.
 - ADRs go in `docs/adr/`. Read `GLOSSARY.md` and `docs/adr/` (those that exist) before design work.
 - Read `docs/agents/workflow.md` before any `/agent-skills` command.

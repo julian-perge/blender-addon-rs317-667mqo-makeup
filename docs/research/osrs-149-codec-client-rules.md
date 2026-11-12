@@ -1,10 +1,10 @@
 # What the revision 149 client does for the six OSRS-149 codec rules
 
-Read on 2026-11-11 for [spec/codec-rules-cited.md](../../spec/codec-rules-cited.md), task T1. This is a reading of bytecode. No client code was run.
+Read on 2026-11-11 for [spec/old/codec-rules-cited.md](../../spec/old/codec-rules-cited.md), task T1. This is a reading of bytecode. No client code was run.
 
 ## Jar
 
-The earlier findings in [reference-source-findings.md](../../.scratch/osrs-focus/evidence/reference-source-findings.md) give the download command and the provenance limits. The SHA-256 below was checked before any reading.
+The earlier findings in [reference-source-findings.md](osrs-focus/reference-source-findings.md) give the download command and the provenance limits. The SHA-256 below was checked before any reading.
 
 | Identity | Value |
 | --- | --- |

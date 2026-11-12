@@ -1,6 +1,6 @@
 # Workflow
 
-Read this before any `/agent-skills` command, and before planning, implementing, committing or reporting. This repo uses the file mode of `agent-skills`: specs and tasks are Markdown files in the repo, and they are committed.
+Read this before any `/agent-skills` command, and before planning, implementing, committing or reporting. The commands default to `SPEC.md` and `tasks/todo.md`. This repo uses the tracker mode of `planning-and-task-breakdown`: GitHub issues hold the tasks, and files under `spec/` hold the specs. [Issue tracker](issue-tracker.md) holds the `gh` commands.
 
 The user types each stage. Run one stage per session. When it ends, name the next stage and stop.
 
@@ -8,57 +8,83 @@ The user types each stage. Run one stage per session. When it ends, name the nex
 
 | Stage | Command | Result |
 | --- | --- | --- |
-| Idea | `/agent-skills:idea-refine` | A sharp goal. |
-| Design | `/agent-skills:interview-me` | A settled design. |
-| Spec | `/agent-skills:spec` | `spec/<slug>.md`. |
-| Plan | `/agent-skills:plan` | `tasks/plan.md` and `tasks/todo.md`. |
-| Build | `/agent-skills:build` | The next unchecked task, built and committed. |
-| Bug | `/agent-skills:test` | A failing test, then the fix. |
+| Idea | `/agent-skills:idea-refine <issue>` | A sharp goal, as a comment on the issue. |
+| Design | `/agent-skills:interview-me <issue>` | A settled design, as a comment on the issue. |
+| Spec | `/agent-skills:spec <issue>` | `spec/<issue>-<slug>.md`. |
+| Plan | `/agent-skills:plan <issue>` | One sub-issue per task. |
+| Build | `/agent-skills:build <task issue>` | One branch, one pull request. |
+| Bug | `/agent-skills:test <issue>` | A failing test, then the fix, on one branch with one pull request. |
 | Review | `/agent-skills:review` | Findings against the standards and the spec. |
+
+An issue that is one task with acceptance criteria goes straight to Build.
+
+## Labels
+
+| Label | Meaning |
+| --- | --- |
+| `needs-triage` | Nobody has judged the issue yet. |
+| `needs-info` | The issue waits for an answer from its reporter. |
+| `ready-for-agent` | One task with acceptance criteria. An agent can build it unattended. |
+| `ready-for-human` | The work needs the user's hands or judgment. |
+| `wontfix` | The issue will not be done. |
+
+An open issue carries exactly one of these. Change a label only when the user approves it.
 
 ## Design
 
 Read `GLOSSARY.md`, `docs/adr/` and `CODING_STANDARDS.md` (those that exist) before the first question. Use the glossary's terms. Report any conflict with an ADR.
 
-Use the glossary's terms in specs, tasks, hypotheses and test names, and follow its guidance on synonyms to avoid. A concept that is not in the glossary is either language the project does not use, so reconsider it, or a real gap, so note it for the Design stage.
+Use the glossary's terms in specs, issues, hypotheses and test names, and follow its guidance on synonyms to avoid. A concept that is not in the glossary is either language the project does not use, so reconsider it, or a real gap, so note it for the Design stage.
 
 Record each settled decision as an ADR in `docs/adr/` with the `documentation-and-adrs` skill, and continue the existing numbering. Add each settled term to `GLOSSARY.md`.
 
 ## Spec
 
-Save the spec to `spec/<slug>.md`. For commands, structure and code style, link `AGENTS.md`. Keep evidence files in `.scratch/<slug>/evidence/`.
+Save the spec to `spec/<issue>-<slug>.md`, where `<issue>` is the source issue. Link the source issue on the first line. For commands, structure and code style, link `AGENTS.md`. Comment the spec's path on the source issue. Keep evidence files in `docs/research/`.
 
 ## Plan
 
-`tasks/plan.md` and `tasks/todo.md` hold one spec's plan at a time. Name the spec file on the first line of `tasks/plan.md`. When every task is checked, move both files to `tasks/done/<slug>/` so the next plan starts clean.
+Publish each task as a sub-issue of the source issue. Add blockers as native `blocked_by` dependencies. A task body names no blocker: a body list goes stale, and the native edges stay true.
+
+Give every item of a spec's list to one task. A review of each task alone misses an item that two tasks share.
+
+Task body: `Parent`, `What to build`, `Acceptance criteria`, `Verification` (the exact command). Label each task `ready-for-agent`.
+
+`tasks/plan.md` holds the plan's decisions, risks and an ordered list of the task issue numbers. It is git-ignored scratch. A plan is complete when every issue it lists is closed, and a complete plan can be replaced without asking.
 
 ## Build
 
-One branch per spec, `<type>/<slug>`, with one commit per task. `/agent-skills:build auto` runs every unchecked task after one approval.
+`/agent-skills:build` reads one argument, `auto`. Any other text selects single-task mode, so the task issue number you type is context. The plan is the open sub-issues of the source issue.
+
+Pick the task with the **frontier query** in [Issue tracker](issue-tracker.md). Claim it with `gh issue edit <n> --add-assignee @me`.
+
+One task, one branch, one pull request. Branch: `<type>/<issue>-<slug>`. Commit subject: `<type>: <summary> (#<issue>)`, with a conventional-commit type (`feat`, `fix`, `chore`, `docs`). PR title: a plain sentence. Put `Closes #<issue>` in the PR body. Bug tasks start with a failing test.
+
+`/agent-skills:build auto` runs every task of one spec on one branch, `<type>/<source issue>-<slug>`, with one commit per task. Its pull request closes every task issue.
 
 Implement with `test-driven-development`: one behavior at an approved public seam per red/green cycle. The seams that the spec names give that agreement.
 
-Run the verify command from `AGENTS.md` (`Every task`) before each commit. After a task passes its checks, tick its checkbox in `tasks/todo.md` and write the result under that task. Implementation stays with the primary agent unless the user chooses delegation. Open the pull request and stop. The user merges.
+Run the verify command from `AGENTS.md` (`Every task`) before each commit. Implementation stays with the primary agent unless the user chooses delegation. Open the pull request and stop. The user merges.
 
 ## Commit review
 
-Before each commit, run the review with fixed point `HEAD`. Give it the spec file and the tasks worked as the spec. Tell the reviewers that the work is uncommitted, so they review `git diff HEAD` and apply [CODING_STANDARDS.md](../../CODING_STANDARDS.md). Name the files this work owns, so unrelated work is excluded. Ask for approval of the exact reviewed commit. A standing approval applies only inside the scope the user gave.
+Before each commit, run the review with fixed point `HEAD`. Give it the spec file and the task issue as the spec. Tell the reviewers that the work is uncommitted, so they review `git diff HEAD` and apply [CODING_STANDARDS.md](../../CODING_STANDARDS.md). Name the files this work owns, so unrelated work is excluded. Ask for approval of the exact reviewed commit. A standing approval applies only inside the scope the user gave.
 
 ## Review
 
 Run the review in a new session, not in the build session. The command starts no subagent, so the build session would review its own work. Check out the PR branch first (`gh pr checkout <pr>`), because the command reviews staged changes or recent commits.
 
-Run `/agent-skills:review` on the branch. Give it the spec file as the spec. Name [CODING_STANDARDS.md](../../CODING_STANDARDS.md) as the standard. The review does not read it on its own.
+Run `/agent-skills:review` on the branch. Give it the task issue and the spec file as the spec. Name [CODING_STANDARDS.md](../../CODING_STANDARDS.md) as the standard. The review does not read it on its own.
 
 Fix small findings in the review session. Start a new build session for large ones.
 
 ## Earlier layout
 
-`.scratch/<feature>/` holds specs, tickets and plans that were written before this workflow. They are history. New work uses `spec/` and `tasks/`.
+`spec/old/` and `tasks/old/` hold the specs and plans that were written before this workflow. They are history. Their evidence files are in `docs/research/`. Tasks were issue files in `.scratch/osrs-focus/issues/` until 2026-11-12. The open ones became GitHub issues 8 to 11. Read a closed one with `git show 2a78edd:.scratch/osrs-focus/issues/<file>`.
 
-`.scratch/osrs-focus/` and `.scratch/game-animation/` still mention `HANDOFF.md`. It was split into ADRs, issues, research notes and plan files on 2026-11-09. Read it with `git show 0c598c4:HANDOFF.md`.
+Comments in the code that say "issue 27" mean the old issue file of that number, not a GitHub issue.
 
-The last three tasks of plan 02 in `.scratch/osrs-focus/plans/` have been open since 2026-11-07. They finish in their own file. Read its current task, take its seams from the plan, and tick its task checkboxes. Give the commit review the plan as the spec. Write results and progress into the plan file, not into `progress.md`.
+`tasks/old/osrs-focus/` and `tasks/old/game-animation/` still mention `HANDOFF.md`. It was split into ADRs, issues, research notes and plan files on 2026-11-09. Read it with `git show 0c598c4:HANDOFF.md`.
 
 ## Reports and output decisions
 

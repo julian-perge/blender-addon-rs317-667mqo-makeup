@@ -2,7 +2,7 @@
 
 This supersedes [ADR 0003](0003-old-school-caches-come-first.md).
 
-On 2026-11-11 the owner approved [the spec](../../spec/remove-dumper-and-legacy-revisions.md) that removes the separate Java export tool and the code that served only revisions 317 and 667 ([issue 24](../../.scratch/osrs-focus/issues/24-remove-317-and-667-only-code.md)). The add-on and its tests read Old School caches from raw OpenRS2 downloads in Python. The Cache folder preference is the only cache setting, and it names the `cache/` folder of an OpenRS2 download. Kits, items and enums are decoded from config index 2 (groups 3, 10 and 8), and models are read from index 7. The removed code stays on the branch `publish/fork-main`.
+On 2026-11-11 the owner approved [the spec](../../spec/old/remove-dumper-and-legacy-revisions.md) that removes the separate Java export tool and the code that served only revisions 317 and 667 (issue 24 (`git show 2a78edd:.scratch/osrs-focus/issues/24-remove-317-and-667-only-code.md`)). The add-on and its tests read Old School caches from raw OpenRS2 downloads in Python. The Cache folder preference is the only cache setting, and it names the `cache/` folder of an OpenRS2 download. Kits, items and enums are decoded from config index 2 (groups 3, 10 and 8), and models are read from index 7. The removed code stays on the branch `publish/fork-main`.
 
 The owner decided four questions in the spec interview:
 

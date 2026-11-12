@@ -1,6 +1,6 @@
 # Deobfuscating the revision-149 client: is it worth it?
 
-Researched 2026-11-07 against `gamepack-149.jar` (SHA-256 `19c492cc...cbdd`), the May 2018 RuneLite tree `<RuneLite May 2018 tree>` (client revision 170, [appearance evidence](../../.scratch/osrs-focus/evidence/charactercreator-cache430.md) section 1) and `cache-1.13.6-sources.jar`. Each claim is **Evidence** (read or measured, source named) or **Guess**. Nothing was installed. Scripts and outputs (`all149.txt` is `javap -p -c` of all 296 classes) are in `<scratch folder 2026-11-07-deobfuscation-value>/`.
+Researched 2026-11-07 against `gamepack-149.jar` (SHA-256 `19c492cc...cbdd`), the May 2018 RuneLite tree `<RuneLite May 2018 tree>` (client revision 170, [appearance evidence](osrs-focus/charactercreator-cache430.md) section 1) and `cache-1.13.6-sources.jar`. Each claim is **Evidence** (read or measured, source named) or **Guess**. Nothing was installed. Scripts and outputs (`all149.txt` is `javap -p -c` of all 296 classes) are in `<scratch folder 2026-11-07-deobfuscation-value>/`.
 
 ## 1. How recent work used 2018 names
 
@@ -22,7 +22,7 @@ Taken from the 2018 source only (Evidence that 149 was not checked):
 - The structure of `formats/lighting.py` (its output is checked against 149) and equipment slot names (`KitType`).
 - The class map in osrs-149-animation.md, labelled "partly guess".
 
-Two slips (Evidence), both fixed since: the notes said kind 1 to 3 records are unchecked in 149, but [reference-source-findings](../../.scratch/osrs-focus/evidence/reference-source-findings.md) reads them in `dv.ae`/`ej.au`. The appearance README cites kit decoding at `it.c(fe,int)`, which has no call sites; the live decoder is `it.r(fe,int,int)`. Both use the same multiplier, so no result changes.
+Two slips (Evidence), both fixed since: the notes said kind 1 to 3 records are unchecked in 149, but [reference-source-findings](osrs-focus/reference-source-findings.md) reads them in `dv.ae`/`ej.au`. The appearance README cites kit decoding at `it.c(fe,int)`, which has no call sites; the live decoder is `it.r(fe,int,int)`. Both use the same multiplier, so no result changes.
 
 ## 2. 149 against 2018, measured
 

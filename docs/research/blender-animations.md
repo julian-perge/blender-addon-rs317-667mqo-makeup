@@ -14,7 +14,7 @@ Confirmed decisions:
 - Preserve original game poses and timing without added smoothing. Independently calculated client poses are the reference.
 - Baked game motion is acceptable. Objects, materials, cameras and lighting remain editable; poseable rig editing comes later.
 
-The user selected a reusable toolkit feature. Animation runs on separate presentation copies, and `.dat` export visibly refuses those copies while source models retain normal export. The implementer may choose and document adjustable camera, neutral studio lighting and render defaults. External asset downloads and agent-tool installation are outside the first milestone. The full design draft is [the local feature spec](../../.scratch/game-animation/spec.md).
+The user selected a reusable toolkit feature. Animation runs on separate presentation copies, and `.dat` export visibly refuses those copies while source models retain normal export. The implementer may choose and document adjustable camera, neutral studio lighting and render defaults. External asset downloads and agent-tool installation are outside the first milestone. The full design draft is [the local feature spec](../../spec/old/game-animation.md).
 
 ## Local data and current extension
 
@@ -164,7 +164,7 @@ The scene exercise did not measure general agent reliability, complete job orche
 
 ## Open decisions and limits
 
-The user approved the revised design after the isolated evaluation and requested [the implementation plan](../../.scratch/game-animation/plan.md). The feature includes reusable playback, presentation-only copies with a visible `.dat` export refusal, and adjustable presentation defaults. Poseable rig editing is deferred. Plan review and execution-method selection precede product implementation; permanent tool adoption remains separate. Only documentation and temporary evaluation artifacts changed. New implementation choices proposed in the plan, including non-looping presentation behavior, await that review rather than being treated as game rules.
+The user approved the revised design after the isolated evaluation and requested [the implementation plan](../../tasks/old/game-animation/plan.md). The feature includes reusable playback, presentation-only copies with a visible `.dat` export refusal, and adjustable presentation defaults. Poseable rig editing is deferred. Plan review and execution-method selection precede product implementation; permanent tool adoption remains separate. Only documentation and temporary evaluation artifacts changed. New implementation choices proposed in the plan, including non-looping presentation behavior, await that review rather than being treated as game rules.
 
 ## Gate 0: matching-client reference recorded
 
@@ -179,4 +179,4 @@ Measured results:
 - The matching client confirms Magic Tree object 1306 references model 7978 and animation -1. Direct texture-method calls on numbered pixels confirm texture 34 shifts two 128-buffer rows per tick and wraps at 64 ticks; texture 8 stays fixed. High-memory sampling resolution is distinguished from native image size in the contract.
 - Packed-cache recording and replay from the 305 decompressed fixture payloads produced byte-identical canonical reference JSON. Relevant temporary-cache hashes still match the original cache, which was not opened by the harness.
 
-The [frozen version-1 source contract](../../.scratch/game-animation/source-contract.md) now specifies the opt-in producer request, records, assembly, clocks and failure handling. This is reference/extraction preparation, not a completed animation importer or rendered game showcase. Blender playback, independent extra alpha cases and offscreen texture scheduling remain outside this Gate 0 deliverable.
+The [frozen version-1 source contract](game-animation-source-contract.md) now specifies the opt-in producer request, records, assembly, clocks and failure handling. This is reference/extraction preparation, not a completed animation importer or rendered game showcase. Blender playback, independent extra alpha cases and offscreen texture scheduling remain outside this Gate 0 deliverable.
