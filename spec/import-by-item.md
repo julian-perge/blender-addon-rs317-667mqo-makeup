@@ -29,8 +29,8 @@ User: a modeller who edits Old School worn items in Blender.
 
 From issue 07 (user, 2026-11-10), changed only where ADR 0017 requires it:
 
-- **Entry.** A new import operator, listed under File > Import as `RS Item (from cache)` (user, 2026-11-11). It reads the Cache folder preference through `appearance_props.profile()`, the shared `CacheProfile` that Player Appearance uses. Item definitions come from `CacheProfile.items` (`WornItem`: male and female model ids, offsets, recolours, retextures). Model files come from `CacheProfile.load_model`, which decodes with the Old School revision 149 profile.
-- **Body and item choice.** File > Import opens a dialog with a Male/Female choice (Male by default) and an item field (user, 2026-11-11). The item field is a dropdown that can be searched by name or id. Its entries are the items whose worn model for the chosen body has a first model id other than -1, sorted by name then id, labelled `<name> (<id>)` as in the worn item search of Player Appearance. OK runs the import.
+- **Entry.** A new import entry, `RS Item (from cache)` under File > Import (user, 2026-11-11). It opens the body dialog (`import_scene.rs_item_body`), and the importer is `import_scene.rs_item`. It reads the Cache folder preference through `appearance_props.profile()`, the shared `CacheProfile` that Player Appearance uses. Item definitions come from `CacheProfile.items` (`WornItem`: male and female model ids, offsets, recolours, retextures). Model files come from `CacheProfile.load_model`, which decodes with the Old School revision 149 profile.
+- **Body and item choice.** File > Import opens a dialog with a Male/Female choice (Male by default), and OK opens a search popup for the item (user, 2026-11-11, changed from one dialog with an item dropdown after the dropdown could not be searched in Blender 5.3). The popup is searched by name or id, as in the worn item search of Player Appearance. Its entries are the items whose worn model for the chosen body has a first model id other than -1, sorted by name then id, labelled `<name> (<id>)`. Picking an item runs the import.
 - **Objects.** Each model id of the body's worn model (the first, then the second and third when they are not -1) becomes its own object named by the model id, at its stored position.
 - **Colours.** Each face keeps the model file's colour, texture and alpha as its stored game values. A face whose stored colour an item recolour finds shows the recolour's replacement colour, at the Brightness setting. Recolours apply in the item definition's order, the same way that `formats/appearance.py` `recolour` applies them for worn items and kits. A later recolour can find the colour that an earlier one put in. No new colour conversion is added.
 - **Materials.** Materials are made per object, keyed by the stored game values, as `mesh.model_to_object` does now. A material holds the stored values from the file and shows the recoloured colour. A plain import and an item import of the same model never share a material.
@@ -109,8 +109,8 @@ Never:
 
 ## Success criteria
 
-1. File > Import lists `RS Item (from cache)`. It opens a dialog with a Male/Female choice (Male by default) and a searchable item field.
-2. The item field lists only items with a worn model for the chosen body, and matches names and ids.
+1. File > Import lists `RS Item (from cache)`. It opens a dialog with a Male/Female choice (Male by default), and OK opens a searchable item popup.
+2. The item popup lists only items with a worn model for the chosen body, and matches names and ids.
 3. Importing item 2653 for the male body gives objects 3379, 164 and 3381 at their stored positions. They are selected, and 3381 is active.
 4. Faces with colour 61, 41 or 24 in those objects show the item's replacements for them (-29403, -28266 and 937 in `ItemDefinitions.json`, as signed 16-bit values) at the Brightness setting. Their stored face colour stays 61, 41 or 24.
 5. Exporting one of those objects writes a model whose face colours equal the model file's.
@@ -131,7 +131,7 @@ Never:
 
 ## Open questions
 
-None. The user answered three on 2026-11-11: the menu label, the dialog for the body and item, and test-built item definitions for the refusal tests.
+None. The user answered three on 2026-11-11: the menu label, the dialog for the body and item, and test-built item definitions for the refusal tests. On 2026-11-11 the user also chose a body dialog followed by a search popup, because the plain item dropdown could not be searched.
 
 ## Notes
 

@@ -1,7 +1,7 @@
 import bpy.utils.previews
 
 import rsps_toolkit.blender as addon
-from rsps_toolkit.blender import appearance_swatches
+from rsps_toolkit.blender import appearance_swatches, import_item
 from rsps_toolkit.formats import cache_profile
 
 
@@ -27,3 +27,16 @@ def test_unregistering_the_add_on_drops_the_shared_cache_profiles(tmp_path):
     kept = cache_profile.shared_profile(tmp_path)
     addon.unregister()
     assert cache_profile.shared_profile(tmp_path) is not kept
+
+
+# The entry and its text are the user's choice of 2026-11-11 (spec import-by-item, Decisions "Entry").
+def test_the_item_import_entry_is_added_on_register_and_removed_on_unregister_twice():
+    def listed() -> bool:
+        draw_functions = bpy.types.TOPBAR_MT_file_import.draw._draw_funcs  # pyrefly: ignore[missing-attribute]
+        return import_item.menu_entry in draw_functions
+
+    for _ in range(2):
+        addon.register()
+        assert listed()
+        addon.unregister()
+        assert not listed()

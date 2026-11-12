@@ -7,9 +7,13 @@ import bpy
 
 from ..formats import decode
 from ..formats.appearance import items_with_worn_model, recolour
+from ..formats.cache_profile import SET_CACHE_FOLDER
 from . import appearance_props, model_source
 from .mesh import model_to_object
 from .preferences import brightness, first_texture, texture_folders
+
+NO_ITEMS = "none"
+BODIES = [("MALE", "Male", ""), ("FEMALE", "Female", "")]
 
 # Blender keeps only references to enum item strings, so the last lists are held here.
 _kept_items: list[list[tuple[str, str, str]]] = []
@@ -17,8 +21,11 @@ _kept_items: list[list[tuple[str, str, str]]] = []
 
 def _worn_item_choices(self, context) -> list[tuple[str, str, str]]:
     cache = appearance_props.profile()
-    found = items_with_worn_model(cache.items, self.body == "FEMALE")
-    choices = [(str(item.id), f"{item.name} ({item.id})", "") for item in found]
+    if cache is None:
+        choices = [(NO_ITEMS, SET_CACHE_FOLDER, "")]
+    else:
+        found = items_with_worn_model(cache.items, self.body == "FEMALE")
+        choices = [(str(item.id), f"{item.name} ({item.id})", "") for item in found]
     _kept_items.append(choices)
     del _kept_items[:-4]
     return choices
@@ -30,14 +37,22 @@ class RS_OT_import_item(bpy.types.Operator):
     bl_idname = "import_scene.rs_item"
     bl_label = "Import RS Item"
     bl_options = {"REGISTER", "UNDO"}
+    bl_property = "item"
 
     body: bpy.props.EnumProperty(  # pyrefly: ignore[bad-assignment]
-        name="Body", items=[("MALE", "Male", ""), ("FEMALE", "Female", "")], default="MALE"
+        name="Body", items=BODIES, default="MALE"
     )
     item: bpy.props.EnumProperty(name="Item", items=_worn_item_choices)  # pyrefly: ignore[bad-assignment]
 
+    def invoke(self, context, event):
+        context.window_manager.invoke_search_popup(self)
+        return {"RUNNING_MODAL"}
+
     def execute(self, context):
         cache = appearance_props.profile()
+        if cache is None or self.item == NO_ITEMS:
+            self.report({"ERROR"}, SET_CACHE_FOLDER)
+            return {"CANCELLED"}
         item = cache.items[int(self.item)]
         models = item.female_models if self.body == "FEMALE" else item.male_models
         folders = texture_folders()
@@ -69,4 +84,32 @@ class RS_OT_import_item(bpy.types.Operator):
         return {"FINISHED"}
 
 
-classes = (RS_OT_import_item,)
+def _search_items(body: str) -> None:
+    """Open the item search popup for the body."""
+    bpy.ops.import_scene.rs_item("INVOKE_DEFAULT", body=body)  # pyrefly: ignore[missing-attribute]
+
+
+class RS_OT_import_item_body(bpy.types.Operator):
+    """Choose the body, then search the items that have a worn model for it"""
+
+    bl_idname = "import_scene.rs_item_body"
+    bl_label = "Import RS Item"
+
+    body: bpy.props.EnumProperty(name="Body", items=BODIES, default="MALE")  # pyrefly: ignore[bad-assignment]
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "body", expand=True)
+
+    def execute(self, context):
+        _search_items(self.body)
+        return {"FINISHED"}
+
+
+def menu_entry(self, context):
+    self.layout.operator(RS_OT_import_item_body.bl_idname, text="RS Item (from cache)")
+
+
+classes = (RS_OT_import_item, RS_OT_import_item_body)

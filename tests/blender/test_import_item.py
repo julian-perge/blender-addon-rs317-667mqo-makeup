@@ -27,7 +27,7 @@ def operator_registered(monkeypatch, cache, clean):
     cache_profile.clear_shared_profiles()
 
 
-def run_import(item: int, body: str = "MALE") -> set[str]:
+def run_import(item: int | str, body: str = "MALE") -> set[str]:
     # The body comes first because the item list reads it. The stubs only list Blender's own operators.
     return bpy.ops.import_scene.rs_item(body=body, item=str(item))  # pyrefly: ignore[missing-attribute]
 
@@ -297,3 +297,64 @@ def test_a_textured_face_keeps_its_texture_and_shows_no_colour_instead():
     values = [face_materials.material_values(m) for m in mesh.materials]
     assert values == [(None, 16, 0), (6100, None, 0)]
     assert shown_rgb(mesh.materials[1]) == face_colour_to_rgb(2000, 0.8)  # pyrefly: ignore[bad-argument-type]
+
+
+# The message is the example in the spec's Code style section and the text in the T3 accept line of tasks/todo.md.
+NO_CACHE_MESSAGE = "Set the Cache folder in the add-on preferences."
+
+
+# The text `RS Item (from cache)` is the user's choice of 2026-11-11 (spec, Decisions "Entry").
+def test_the_menu_entry_adds_the_body_dialog_with_its_text():
+    calls = []
+    layout = SimpleNamespace(operator=lambda idname, text: calls.append((idname, text)))
+
+    import_item.menu_entry(SimpleNamespace(layout=layout), None)
+
+    assert calls == [("import_scene.rs_item_body", "RS Item (from cache)")]
+
+
+# User choice of 2026-11-11: the plain dropdown of items cannot be searched in Blender, so the dialog asks only for the
+# body, and OK opens a search popup for the item, as Player Appearance does.
+def test_ok_on_the_body_dialog_opens_the_item_search_for_that_body(monkeypatch):
+    opened = []
+    monkeypatch.setattr(import_item, "_search_items", opened.append)
+
+    result = import_item.RS_OT_import_item_body.execute(SimpleNamespace(body="FEMALE"), bpy.context)  # pyrefly: ignore[bad-argument-type]
+
+    assert opened == ["FEMALE"]
+    assert result == {"FINISHED"}
+
+
+def test_the_item_operator_opens_a_search_popup_when_invoked():
+    popups = []
+    context = SimpleNamespace(window_manager=SimpleNamespace(invoke_search_popup=popups.append))
+    operator = SimpleNamespace()
+
+    result = import_item.RS_OT_import_item.invoke(operator, context, None)  # pyrefly: ignore[bad-argument-type]
+
+    assert popups == [operator]
+    assert result == {"RUNNING_MODAL"}
+
+
+def test_without_a_cache_folder_the_list_offers_one_entry_that_says_so(monkeypatch):
+    monkeypatch.setattr(preferences, "cache_folder", lambda: None)
+
+    choices = import_item._worn_item_choices(type("Operator", (), {"body": "MALE"})(), bpy.context)
+
+    assert choices == [("none", NO_CACHE_MESSAGE, "")]
+
+
+def test_without_a_cache_folder_the_import_is_refused_with_the_same_message(monkeypatch):
+    monkeypatch.setattr(preferences, "cache_folder", lambda: None)
+
+    with pytest.raises(RuntimeError, match=NO_CACHE_MESSAGE):
+        run_import("none")
+
+    assert not bpy.data.objects
+
+
+def test_both_operators_are_registered_and_the_item_operator_searches_by_its_item_property():
+    assert hasattr(bpy.ops.import_scene, "rs_item_body")
+    assert hasattr(bpy.ops.import_scene, "rs_item")
+    assert import_item.RS_OT_import_item.bl_property == "item"
+    assert "item" in bpy.ops.import_scene.rs_item.get_rna_type().properties.keys()  # pyrefly: ignore[missing-attribute]

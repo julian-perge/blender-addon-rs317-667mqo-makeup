@@ -48,24 +48,25 @@ Spec: `spec/import-by-item.md`. Plan: `tasks/plan.md`. Each task ends with `prek
 
 ## Phase 2: The user interface
 
-- [ ] **T3 The dialog and the File > Import entry** (S)
-  - Description: `invoke` opens a dialog with the Male/Female choice and the item dropdown. OK runs the import. A menu entry `RS Item (from cache)` is appended to File > Import and removed on unregister. The item list reads the dialog's body, so it follows a change of body.
+- [x] **T3 The dialog and the File > Import entry** (S)
+  - Description: `import_scene.rs_item_body` opens a dialog with the Male/Female choice. OK opens the search popup of `import_scene.rs_item` for that body, and picking an item runs the import. A menu entry `RS Item (from cache)` that opens the dialog is appended to File > Import and removed on unregister. The item list reads the operator's body, so it follows the body chosen in the dialog. (Changed on 2026-11-11 by the user: the plain item dropdown of the first version could not be searched.)
   - Accept:
-    - [ ] `menu_entry` adds `import_scene.rs_item` with the text `RS Item (from cache)`. `register` appends it and `unregister` removes it (the add-on registers and unregisters twice without error, as `test_register.py` does).
-    - [ ] With no Cache folder, the item list offers one entry that says `Set the Cache folder in the add-on preferences.` and OK is refused with the same message.
-    - [ ] Selecting the Female body changes the list (tested by calling the items callback with a stand-in operator, as `popup` does in `test_appearance_items.py`).
-    - [ ] By eye, in Blender against snapshot 430: File > Import lists the entry, the dialog opens with Male chosen, the dropdown opens without a long delay and can be searched by name and by id. Report how long it takes to open. If it cannot be searched, stop and ask the user (Plan, Risks).
+    - [x] `menu_entry` adds `import_scene.rs_item_body` with the text `RS Item (from cache)`. `register` appends it and `unregister` removes it (the add-on registers and unregisters twice without error, as `test_register.py` does).
+    - [x] With no Cache folder, the item list offers one entry that says `Set the Cache folder in the add-on preferences.` and OK is refused with the same message.
+    - [x] The Female body changes the list (tested by calling the items callback with a stand-in operator, as `popup` does in `test_appearance_items.py`).
+    - [x] OK in the dialog opens the item search for the chosen body, and the item operator opens a search popup when invoked (tested with stand-ins).
+    - [x] By eye, in Blender 5.3 against snapshot 430: File > Import lists the entry, the dialog opens with Male chosen, OK opens the search popup with its text field, and the 3503 male items are listed (the list builds in about 10 ms). I could not type into the popup through the automation, so searching by name and by id is not checked by eye here; the popup is the one Player Appearance uses.
   - Verify:
-    - [ ] `BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh tests/blender/test_import_item.py tests/blender/test_register.py` passes.
-    - [ ] The by-eye check above, with the "Trying the panel by hand" scripts in [Blender execution and packaging](../docs/agents/blender.md). Dialog layout is not testable headless, so say it was checked by eye.
-    - [ ] `prek run --all-files` passes.
-    - [ ] Commit review as in T1.
+    - [x] `scripts/test-blender.sh` gives 806 passed, 3 skipped. `prek run --all-files` passes.
+    - Not yet handled, left to T4: a set cache that lists no item for the body (empty popup), a stale `none` entry with a valid cache, and `MissingResourceError` raised by the item list.
+    - [ ] The user types a name and an id into the popup in Blender and confirms the search.
+    - [x] Commit review as in T1 (spec and standards sub-agents; findings fixed).
   - Deps: T1.
-  - Files: `src/rsps_toolkit/blender/import_item.py`, `src/rsps_toolkit/blender/__init__.py`, `tests/blender/test_import_item.py`.
+  - Files: `src/rsps_toolkit/blender/import_item.py`, `src/rsps_toolkit/blender/__init__.py`, `tests/blender/test_import_item.py`, `tests/blender/test_register.py`, `spec/import-by-item.md`, `tasks/plan.md`.
 
 ### Checkpoint: after T3
 - [ ] The user has seen the entry and dialog, or has said to continue without
-- [ ] The dropdown search risk is closed or the user chose a fallback
+- [x] The dropdown search risk is closed: the user chose the search popup on 2026-11-11
 
 ## Phase 3: Safety and the panel
 
