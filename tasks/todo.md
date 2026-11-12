@@ -4,7 +4,9 @@ Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade
 
 ## Phase 1: One clip merges
 
-- [ ] **T1: A shape-key bake of sequence 1994 makes one fade material** (ticket 01, part 1)
+- [x] **T1: A shape-key bake of sequence 1994 makes one fade material** (ticket 01, part 1)
+
+  Result (2026-11-12): done. `prek run --all-files` and the Blender suite (828 tests) pass. New test checks one fade material and the client alphas on both bodies. Review found that `fade_groups` joins per mesh part, so a multi-part player can get two properties for one fade group. T2 must join over the whole player (the bone bake dedupes by property in `appearance_clip.py`, and its comment is stale). A fade material left with no polygon on the bone path (`apply_fades` without `clear_fades`) is covered in T2 and T4.
 
   Make `FadeGroup` hold several labels, join label groups with equal rest alpha and equal values in `fade_groups`, and let `apply_fades` give polygons of several labels one slot. Name a group after its lowest label and rest alpha.
 

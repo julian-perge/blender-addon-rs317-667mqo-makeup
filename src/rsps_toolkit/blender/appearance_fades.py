@@ -1,10 +1,11 @@
 """Face fades of a baked clip: materials whose opacity follows a keyed property, one per group of faces that fade alike.
 
 A clip's alpha transforms (type 5) add to the alpha of every face with a given skin label, starting from the face's
-rest alpha, so faces that share a label and a rest alpha always fade alike. Each such group that a clip changes gets
-a property on the clip's owner (the rig for a bone clip, the shape keys for a shape-key clip), keyed with the clip,
-and a material whose driver turns the property into opacity as the client blends: (256 - alpha) / 256. Solid mode
-draws the lit vertex colours without alpha, so the fades show in Material Preview and Rendered modes.
+rest alpha, so faces that share a label and a rest alpha always fade alike. Label groups with the same rest alpha and
+the same alpha on every frame join into one fade group. Each fade group that a clip changes gets a property on the
+clip's owner (the rig for a bone clip, the shape keys for a shape-key clip), keyed with the clip, and a material whose
+driver turns the property into opacity as the client blends: (256 - alpha) / 256. Solid mode draws the lit vertex
+colours without alpha, so the fades show in Material Preview and Rendered modes.
 """
 
 from dataclasses import dataclass
@@ -21,11 +22,16 @@ PROPERTY_PREFIX = "rs_fade_"
 
 @dataclass(frozen=True)
 class FadeGroup:
-    label: int
+    # The skin labels of the group, lowest first. A group of one label keeps the names it had before groups joined.
+    labels: tuple[int, ...]
     rest: int
     polygons: tuple[int, ...]
     # The group's alpha on each frame of the clip, in clip frame order.
     values: tuple[int, ...]
+
+    @property
+    def label(self) -> int:
+        return self.labels[0]
 
     @property
     def prop(self) -> str:
@@ -47,17 +53,26 @@ def _values(attribute, count: int) -> tuple[int, ...]:
 
 
 def fade_groups(labels: tuple[int, ...], rests: tuple[int, ...], posed: tuple[PosedFrame, ...]) -> list[FadeGroup]:
-    """The groups of polygons whose alpha some frame changes, each with its alpha per frame."""
+    """The groups of polygons whose alpha some frame changes, each with its alpha per frame.
+
+    Faces of one label and rest alpha always fade alike. Those label groups join when their rest alpha and their alpha
+    on every frame are equal.
+    """
     members: dict[tuple[int, int], list[int]] = {}
     for polygon, key in enumerate(zip(labels, rests, strict=True)):
         members.setdefault(key, []).append(polygon)
-    groups = []
+    joined: dict[tuple[int, tuple[int, ...]], tuple[list[int], list[int]]] = {}
     for (label, rest), polygons in sorted(members.items()):
         first = polygons[0]
         values = tuple(frame.alphas[first] if frame.alphas is not None else rest for frame in posed)
         if any(value != rest for value in values):
-            groups.append(FadeGroup(label, rest, tuple(polygons), values))
-    return groups
+            group_labels, group_polygons = joined.setdefault((rest, values), ([], []))
+            group_labels.append(label)
+            group_polygons.extend(polygons)
+    return [
+        FadeGroup(tuple(group_labels), rest, tuple(sorted(group_polygons)), values)
+        for (rest, values), (group_labels, group_polygons) in joined.items()
+    ]
 
 
 def apply_fades(mesh_obj: bpy.types.Object, owner: bpy.types.ID, groups: list[FadeGroup]) -> None:
