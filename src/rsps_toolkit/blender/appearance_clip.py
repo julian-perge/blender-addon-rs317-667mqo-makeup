@@ -430,7 +430,10 @@ _clip_choices = [(str(i), appearance_clip_cache.clip_label(i), "") for i in sort
 class RSPS_OT_pick_clip(bpy.types.Operator):
     bl_idname = "rsps.pick_clip"
     bl_label = "Search Clips"
-    bl_description = "Find a player animation by typing part of its RuneLite name or its id, and choose it for baking"
+    bl_description = (
+        "Find a player animation by typing part of its RuneLite name or its id, and choose it for baking. "
+        "It also sets Play As: Pose for a stance clip, Action for any other clip"
+    )
     bl_options = {"REGISTER", "UNDO"}
     bl_property = "clip"
 

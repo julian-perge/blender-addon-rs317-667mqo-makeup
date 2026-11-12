@@ -110,6 +110,10 @@ _Avoid_: render animations, base animation set, BAS
 A weapon's stance clips plus the attack clip for each of its combat style buttons and its block clip, as an open table gives them (`data/weapon_clips.json`).
 _Avoid_: stance set, which leaves out the attack and block clips
 
+**Play as**:
+How a bake advances a clip's frames. A Pose starts at frame 0 and ignores the loop offset. An Action plays once, or loops by its loop offset. Picking a clip by name sets Pose for a stance clip in the weapon clips table and Action for any other clip. The Stance and Attack buttons set it for their own clips, and the animator can change it after.
+_Avoid_: play mode, loop mode
+
 **Frame map**:
 In legacy game animation, a set of transform types and the skin labels each transform affects.
 _Avoid_: bone hierarchy, armature
