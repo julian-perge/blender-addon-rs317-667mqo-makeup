@@ -20,6 +20,16 @@ from rsps_toolkit.formats import (
 FIXTURES = Path(__file__).parents[1] / "fixtures/models/osrs149"
 MODEL_IDS = sorted(int(model_id) for model_id in json.loads((FIXTURES / "coverage.json").read_text())["models"])
 
+# The footer is the last 23 bytes of a new-format model. These are the positions of its fields from its start.
+FOOTER_SIZE = 23
+FOOTER_RENDER_TYPE_FLAG = 5
+FOOTER_PRIORITY = 6
+FOOTER_ALPHA_FLAG = 7
+FOOTER_FACE_SKIN_FLAG = 8
+FOOTER_TEXTURE_FLAG = 9
+FOOTER_VERTEX_SKIN_FLAG = 10
+FOOTER_TEXTURE_COORDINATE_LENGTH = 19
+
 
 def test_old_model_keeps_legacy_calls_and_explicit_profile():
     reference = json.loads((FIXTURES / "96.json").read_text())
@@ -191,10 +201,7 @@ def test_new_encoding_still_refuses_unrepresentable_face_index_deltas():
 
 
 def test_encoder_rule_for_texture_coordinate_byte_limit():
-    # Client rev 149, class dv, method j, offsets 1632 to 1665: a face's texture coordinate is one file byte that
-    # holds the index plus 1. Class dv, method ae, offsets 428 to 436 and 449 to 459: file byte 0 means no texture
-    # triangle, and any other byte is used as an unsigned index, so 254 is the highest index. The client has no check
-    # of its own. We refuse 255 because it does not fit in the byte. A model has at most 255 texture triangles, so
+    # The file byte holds the index plus 1, so 254 is the highest index. A model has at most 255 texture triangles, so
     # index 255 is refused as a missing triangle, and a 256th triangle is refused by the count.
     # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 3.
     model = decode((FIXTURES / "28954.dat").read_bytes(), profile="osrs-149")
@@ -282,16 +289,16 @@ def test_old_encoder_refuses_a_new_format_model():
         old_format.encode(model)
 
 
-@pytest.mark.parametrize("case", ["section-overrun", "bad-footer-flag", "truncated-body"])
+@pytest.mark.parametrize("case", ["section-overrun", "wrong-priority-byte", "truncated-body"])
 def test_malformed_new_format_footers_are_refused(case):
     data = bytearray((FIXTURES / "32971.dat").read_bytes())
-    footer = len(data) - 23
+    footer = len(data) - FOOTER_SIZE
     if case == "section-overrun":
         data[footer + 12 : footer + 14] = b"\xff\xff"
-    elif case == "bad-footer-flag":
-        data[footer + 6] = 2
+    elif case == "wrong-priority-byte":
+        data[footer + FOOTER_PRIORITY] = 2
     else:
-        data = data[:20] + data[-23:]
+        data = data[:20] + data[-FOOTER_SIZE:]
     with pytest.raises(InvalidModelError):
         decode(bytes(data), profile="osrs-149")
 
@@ -356,9 +363,8 @@ def _round_trip(model):
 
 
 def test_hand_built_faces_with_one_priority_store_it_once_in_the_footer():
-    # Client rev 149, class dv, method j, offsets 2235 to 2240 and 965 to 969: a footer priority byte of 255 means
-    # that one priority byte follows for every face, and any other value is the one priority of all faces.
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 1.
+    # A footer priority byte below 255 is the one priority of all faces. Evidence:
+    # .scratch/codec-rules-cited/evidence/client-rules.md, rule 1.
     shared_data, (_, priority, *_) = _round_trip(_hand_built(priority=lambda i: 7))
     assert priority == 7
     mixed = _hand_built(priority=lambda i: 7 if i else 8)
@@ -372,10 +378,8 @@ def test_hand_built_faces_with_one_priority_store_it_once_in_the_footer():
 
 
 def test_hand_built_model_without_faces_stores_priority_zero():
-    # Client rev 149, class dv, method j, offsets 2235 to 2240 and 965 to 969: a footer priority byte of 255 means
-    # that one priority byte follows for every face, and any other value is the one priority of all faces.
-    # The client has no case for a model with no faces, so writing 0 there is our choice.
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 1.
+    # The client has no case for a model with no faces, so writing 0 there is our choice. Evidence:
+    # .scratch/codec-rules-cited/evidence/client-rules.md, rule 1.
     empty = Model(
         vertices=[(0, 0, 0), (1, 2, 3)],
         encoding=ModelEncoding.OSRS_FFFF,
@@ -389,10 +393,8 @@ def test_hand_built_model_without_faces_stores_priority_zero():
 
 
 def test_hand_built_model_leaves_out_all_zero_render_type_and_alpha_sections():
-    # Client rev 149, class dv, method ae, offsets 563 to 570, 1192 to 1199, 1488 to 1491 and 1706 to 1709: a missing
-    # render type or alpha array reads as 0. Class dv, method j, offsets 1516 to 1522 and 1559 to 1562: each of those
-    # sections is read only when its footer flag is 1.
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 2.
+    # The client reads a section only when its footer flag is 1, and a missing section reads as 0. Evidence:
+    # .scratch/codec-rules-cited/evidence/client-rules.md, rule 2.
     plain_data, (render, _, alpha, *_) = _round_trip(_hand_built())
     assert (render, alpha) == (0, 0)
     alpha_model = _hand_built(alpha=lambda i: 9 if i == 0 else 0)
@@ -416,15 +418,12 @@ def test_hand_built_model_leaves_out_all_zero_render_type_and_alpha_sections():
     ids=["nonzero-10-bytes", "nonzero-11-bytes", "zero-1-byte", "zero-3-bytes"],
 )
 def test_opaque_tail_with_a_nonzero_first_byte_needs_11_bytes(tail, accepted):
-    # Client rev 149, class dv, method j, offsets 2689 to 2694, 1901 to 1903, 2709 to 2725, 2423 to 2431, 2740 to 2748
-    # and 172 to 180: when the first tail byte is nonzero, the client reads 11 bytes (1, 2, 2, 2 and 4) and ignores
-    # them. It checks no length, so a shorter tail makes it read the footer. The 11 is the client's number, and
-    # refusing a shorter tail is our own stricter rule. The owner decided on 2026-11-11 to keep it (issue 17).
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
+    # The 11 is the client's number, but the client checks no length. Refusing a shorter tail is our own stricter
+    # rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
     original = (FIXTURES / "28634.dat").read_bytes()
     model = decode(original, profile="osrs-149")
     assert model.new_data is not None
-    footer_at = len(original) - 23
+    footer_at = len(original) - FOOTER_SIZE
     data = original[: footer_at - len(model.new_data.tail)] + tail + original[footer_at:]
     model.new_data = replace(model.new_data, tail=tail)
     if accepted:
@@ -457,18 +456,15 @@ def _model_with_texture_kinds(kinds):
 
 
 def test_texture_kinds_0_to_3_are_accepted_and_kind_4_is_refused():
-    # Client rev 149, class dv, method j, offsets 295 to 330, 1999 to 2004, 2261 to 2264, 2407 to 2410, 2539 to 2542
-    # and 2674 to 2677: the client reads each texture record by its kind, 0, 1, 2 or 3. For any other kind it reads
-    # no bytes for that record and continues, and the record keeps zero triangle words. The values 0 to 3 are the
-    # client's. Refusing a larger kind is our own stricter rule, because we would read bytes that the client does
-    # not read. The owner decided on 2026-11-11 to keep it (issue 17).
-    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
-    data, _ = _round_trip(_model_with_texture_kinds((0, 1, 2, 3)))
+    # The kinds 0 to 3 are the client's. The client reads no bytes for a larger kind, so refusing it is our own
+    # stricter rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
+    kinds = (0, 1, 2, 3)
+    data, _ = _round_trip(_model_with_texture_kinds(kinds))
     refused = bytearray(data)
-    refused[3] = 4  # The texture kinds are the first bytes of the file, so this changes the last kind to 4.
+    refused[len(kinds) - 1] = 4  # The texture kinds are the first bytes of the file, so this changes the last one.
     with pytest.raises(InvalidModelError, match="texture record kind"):
         decode(bytes(refused), profile="osrs-149")
-    model = _model_with_texture_kinds((0, 1, 2, 3))
+    model = _model_with_texture_kinds(kinds)
     assert model.new_data is not None
     model.new_data = replace(model.new_data, texture_render_types=(0, 1, 2, 4))
     with pytest.raises(InvalidModelError, match="unsupported kind 4"):
@@ -477,25 +473,27 @@ def test_texture_kinds_0_to_3_are_accepted_and_kind_4_is_refused():
 
 @pytest.mark.parametrize(
     ("position", "name"),
-    [(5, "render"), (7, "alpha"), (8, "face skin"), (9, "texture"), (10, "vertex skin")],
+    [
+        (FOOTER_RENDER_TYPE_FLAG, "render"),
+        (FOOTER_ALPHA_FLAG, "alpha"),
+        (FOOTER_FACE_SKIN_FLAG, "face skin"),
+        (FOOTER_TEXTURE_FLAG, "texture"),
+        (FOOTER_VERTEX_SKIN_FLAG, "vertex skin"),
+    ],
 )
 def test_decode_refuses_a_footer_flag_of_2_but_not_any_priority_byte(position, name):
-    # Client rev 149, class dv, method j, offsets 1516 to 1519, 1364 to 1367, 426 to 429, 975 to 978 and 448 to 451:
-    # the client compares each of the render, alpha, face skin, texture and vertex skin flags only with 1, so any
-    # other value means the section is absent, and the client does not refuse it. The values 0 and 1 are the
-    # client's. Refusing 2 to 255 is our own stricter rule, because we would read bytes that the client does not
-    # read. The owner decided on 2026-11-11 to keep it (issue 17). The priority byte is not one of these flags
-    # (rule 1): any value below 255 is one shared priority.
+    # The client treats any flag other than 1 as an absent section and refuses nothing. Refusing 2 to 255 is our own
+    # stricter rule, kept by the owner. The priority byte is not a flag: any value below 255 is one shared priority.
     # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 6.
     data, _ = _round_trip(_hand_built(priority=lambda i: 7))
-    footer = len(data) - 23
+    footer = len(data) - FOOTER_SIZE
     flagged = bytearray(data)
     flagged[footer + position] = 2
     with pytest.raises(InvalidModelError, match="footer flags"):
         decode(bytes(flagged), profile="osrs-149")
     for value in (0, 1, 2, 9, 254):
         priority = bytearray(data)
-        priority[footer + 6] = value
+        priority[footer + FOOTER_PRIORITY] = value
         shared = decode(bytes(priority), profile="osrs-149")
         assert shared.render_priorities == [value] * len(shared.faces)
 
@@ -508,8 +506,10 @@ def test_encode_writes_only_0_or_1_for_the_footer_flags_even_for_a_larger_source
     assert model.new_data is not None
     model.new_data = replace(model.new_data, section_flags=(2, 7, 2, 2, 2, 2))
     data = encode(model)
-    footer = len(data) - 23
-    render, priority, alpha, face_skin, texture, vertex_skin = data[footer + 5 : footer + 11]
+    footer = len(data) - FOOTER_SIZE
+    render, priority, alpha, face_skin, texture, vertex_skin = data[
+        footer + FOOTER_RENDER_TYPE_FLAG : footer + FOOTER_VERTEX_SKIN_FLAG + 1
+    ]
     assert (render, priority, alpha) == (0, 7, 0)
     assert {face_skin, texture, vertex_skin} <= {0, 1}
     assert decode(data, profile="osrs-149").new_data is not None
@@ -526,7 +526,7 @@ def test_restoring_a_set_aside_face_without_source_fields_is_refused():
 
 def _mutated(model_id, mutate):
     data = bytearray((FIXTURES / f"{model_id}.dat").read_bytes())
-    footer = len(data) - 23
+    footer = len(data) - FOOTER_SIZE
     vertex_count, face_count, texture_count, render = struct.unpack_from(">HHBB", data, footer)
     mutate(data, vertex_count, face_count, texture_count, render)
     return bytes(data)
@@ -565,9 +565,9 @@ def test_decode_refuses_a_face_index_past_the_vertex_count_and_unused_coordinate
     with pytest.raises(InvalidModelError, match="does not exist"):
         replace(model, faces=[(0, 1, len(model.vertices))] + model.faces[1:])
     data = bytearray((FIXTURES / "28634.dat").read_bytes())
-    footer = len(data) - 23
-    coord_length = struct.unpack_from(">H", data, footer + 19)[0]
-    struct.pack_into(">H", data, footer + 19, coord_length + 1)
+    footer = len(data) - FOOTER_SIZE
+    coord_length = struct.unpack_from(">H", data, footer + FOOTER_TEXTURE_COORDINATE_LENGTH)[0]
+    struct.pack_into(">H", data, footer + FOOTER_TEXTURE_COORDINATE_LENGTH, coord_length + 1)
     with pytest.raises(InvalidModelError):
         decode(bytes(data), profile="osrs-149")
 

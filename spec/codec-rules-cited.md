@@ -2,7 +2,7 @@
 
 Status: done on 2026-11-11 on branch `docs/codec-rules-cited`. Results are in issue 17.
 
-Written on 2026-11-11 from [.scratch/codec-rules-cited/spec.md](../.scratch/codec-rules-cited/spec.md) (status ready-for-agent), which follows the decisions 1 to 3 in [issue 17](../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md) (the user chose them on 2026-11-10). The scratch spec was written before the workflow in [docs/agents/workflow.md](../docs/agents/workflow.md). This spec keeps its content and adds the six areas that the workflow needs. The code and test sites below were checked on 2026-11-11.
+Written on 2026-11-11 from [.scratch/codec-rules-cited/spec.md](../.scratch/codec-rules-cited/spec.md) (now only a pointer to this spec), which followed the decisions 1 to 3 in [issue 17](../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md) (the user chose them on 2026-11-10). The scratch spec was written before the workflow in [docs/agents/workflow.md](../docs/agents/workflow.md). This spec keeps its content and adds the six areas that the workflow needs. The code and test sites below were checked on 2026-11-11.
 
 ## Objective
 
