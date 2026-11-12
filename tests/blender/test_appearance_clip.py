@@ -858,6 +858,27 @@ def test_a_shape_key_bake_of_a_clip_that_fades_every_label_alike_makes_one_fade_
     assert not appearance_collection.is_edited(collection)
 
 
+@pytest.mark.parametrize("body", ["male", "female"])
+def test_a_bone_bake_of_a_clip_that_fades_every_label_alike_makes_one_fade_material(cache, body):
+    # Sequence 1994 fades all 23 skin labels with one curve (issue 14, decision 1, 2026-11-10).
+    pose = json.loads((FADE_CLIP / f"pose-{body}.json").read_text())
+    collection = player(cache, pose)
+    appearance_clip.bake_clip_to_rig(collection, FADE_CLIP, start=10)
+    rig = appearance_collection.armature_of(collection)
+    (material,) = fade_materials(collection)
+    assert material[appearance_fades.FADE_KEY].startswith("rs_fade_0_") and material.name.startswith("Player fade 0")
+    assert [key for key in rig.keys() if key.startswith(appearance_fades.PROPERTY_PREFIX)] == [
+        material[appearance_fades.FADE_KEY]
+    ]
+    kept = kept_faces(cache, pose)
+    shown = shown_frames(FADE_CLIP)
+    for index in (0, len(shown) - 30, len(shown) - 1):
+        bpy.context.scene.frame_set(10 + index)  # pyrefly: ignore[missing-attribute]
+        recorded = pose["frames"][shown[index]]["o"]
+        assert polygon_alphas(collection, rig) == [0 if recorded is None else recorded[i] & 255 for i in kept]
+    assert not appearance_collection.is_edited(collection)
+
+
 @pytest.mark.parametrize("bake", [appearance_clip.bake_clip, appearance_clip.bake_clip_to_rig])
 def test_a_clips_fade_materials_show_only_the_front_of_faces(cache, bake):
     # The user chose that players cull back faces as the client does, fade materials included (issue 28, decision 1,

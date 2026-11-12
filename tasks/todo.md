@@ -21,14 +21,16 @@ Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade
   Files: `blender/appearance_fades.py`, `blender/appearance_pose.py`, `blender/appearance_shape_keys.py`, `tests/blender/test_appearance_clip.py`.
   Scope: M.
 
-- [ ] **T2: A single bone clip of sequence 1994 makes one fade material** (ticket 01, part 2)
+- [x] **T2: A single bone clip of sequence 1994 makes one fade material** (ticket 01, part 2)
+
+  Result (2026-11-12): the full Blender suite passes (830 tests), including the existing Duplicate Player, remove-player and no-fade tests. Test-only commit, as agreed. The bone bake already merges after T1 (one fade material, one rig property, client alphas match on both bodies). Open for T4 (unverified, from reading the code, no fixture covers it): groups are joined per mesh part, so a player with a held-item part may get two properties for one fade group. The existing dedupe by property may cover part of that case. T4 must compute the groups over the whole player and fix the stale comment at `appearance_clip.py:180`.
 
   The bone bake keys one curve per shared group (`_fill_action`) and assigns shared materials. This may need no source change after T1. Then the commit adds only the test.
 
   Acceptance:
-  - [ ] Sequence 1994 bone bake makes one fade material on both bodies, with one fade property on the rig, and every polygon matches the client on the checked frames.
-  - [ ] Duplicate Player, removing a player and a clip without fades pass their existing tests.
-  - [ ] The player stays unedited.
+  - [x] Sequence 1994 bone bake makes one fade material on both bodies, with one fade property on the rig, and every polygon matches the client on the checked frames.
+  - [x] Duplicate Player, removing a player and a clip without fades pass their existing tests.
+  - [x] The player stays unedited.
 
   Verify: `prek run --all-files`; Blender runner on `tests/blender/test_appearance_clip.py`.
   Depends on: T1.
