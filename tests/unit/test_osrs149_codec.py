@@ -439,6 +439,82 @@ def test_opaque_tail_with_a_nonzero_first_byte_needs_11_bytes(tail, accepted):
             encode(model)
 
 
+def _model_with_texture_kinds(kinds):
+    parameters = {0: b"", 1: bytes(11), 2: bytes(13), 3: bytes(11), 4: bytes(11)}
+    return Model(
+        vertices=[(0, 0, 0), (1, 2, 3), (4, 5, 6)],
+        texture_triangles=[(0, 1, 2)] * len(kinds),
+        encoding=ModelEncoding.OSRS_FFFF,
+        profile="osrs-149",
+        new_data=NewFormatData(
+            textured_face_colours=(),
+            face_render_types=(),
+            texture_render_types=tuple(kinds),
+            texture_parameters=tuple(parameters[kind] for kind in kinds),
+            tail=b"\0",
+        ),
+    )
+
+
+def test_texture_kinds_0_to_3_are_accepted_and_kind_4_is_refused():
+    # Client rev 149, class dv, method j, offsets 295 to 330, 1999 to 2004, 2261 to 2264, 2407 to 2410, 2539 to 2542
+    # and 2674 to 2677: the client reads each texture record by its kind, 0, 1, 2 or 3. For any other kind it reads
+    # no bytes for that record and continues, and the record keeps zero triangle words. The values 0 to 3 are the
+    # client's. Refusing a larger kind is our own stricter rule, because we would read bytes that the client does
+    # not read. The owner decided on 2026-11-11 to keep it (issue 17).
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
+    data, _ = _round_trip(_model_with_texture_kinds((0, 1, 2, 3)))
+    refused = bytearray(data)
+    refused[3] = 4  # The texture kinds are the first bytes of the file, so this changes the last kind to 4.
+    with pytest.raises(InvalidModelError, match="texture record kind"):
+        decode(bytes(refused), profile="osrs-149")
+    model = _model_with_texture_kinds((0, 1, 2, 3))
+    assert model.new_data is not None
+    model.new_data = replace(model.new_data, texture_render_types=(0, 1, 2, 4))
+    with pytest.raises(InvalidModelError, match="unsupported kind 4"):
+        encode(model)
+
+
+@pytest.mark.parametrize(
+    ("position", "name"),
+    [(5, "render"), (7, "alpha"), (8, "face skin"), (9, "texture"), (10, "vertex skin")],
+)
+def test_decode_refuses_a_footer_flag_of_2_but_not_any_priority_byte(position, name):
+    # Client rev 149, class dv, method j, offsets 1516 to 1519, 1364 to 1367, 426 to 429, 975 to 978 and 448 to 451:
+    # the client compares each of the render, alpha, face skin, texture and vertex skin flags only with 1, so any
+    # other value means the section is absent, and the client does not refuse it. The values 0 and 1 are the
+    # client's. Refusing 2 to 255 is our own stricter rule, because we would read bytes that the client does not
+    # read. The owner decided on 2026-11-11 to keep it (issue 17). The priority byte is not one of these flags
+    # (rule 1): any value below 255 is one shared priority.
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 6.
+    data, _ = _round_trip(_hand_built(priority=lambda i: 7))
+    footer = len(data) - 23
+    flagged = bytearray(data)
+    flagged[footer + position] = 2
+    with pytest.raises(InvalidModelError, match="footer flags"):
+        decode(bytes(flagged), profile="osrs-149")
+    for value in (0, 1, 2, 9, 254):
+        priority = bytearray(data)
+        priority[footer + 6] = value
+        shared = decode(bytes(priority), profile="osrs-149")
+        assert shared.render_priorities == [value] * len(shared.faces)
+
+
+def test_encode_writes_only_0_or_1_for_the_footer_flags_even_for_a_larger_source_flag():
+    # Read from the add-on code, not from the client: `check` takes source flags of 0 to 255, and `encode` builds the
+    # five flags from the data, so a source flag of 2 gives 0 or 1 in the file, and the client reads both.
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, the encode side of rule 6.
+    model = _hand_built()
+    assert model.new_data is not None
+    model.new_data = replace(model.new_data, section_flags=(2, 7, 2, 2, 2, 2))
+    data = encode(model)
+    footer = len(data) - 23
+    render, priority, alpha, face_skin, texture, vertex_skin = data[footer + 5 : footer + 11]
+    assert (render, priority, alpha) == (0, 7, 0)
+    assert {face_skin, texture, vertex_skin} <= {0, 1}
+    assert decode(data, profile="osrs-149").new_data is not None
+
+
 def test_restoring_a_set_aside_face_without_source_fields_is_refused():
     model = decode((FIXTURES / "3676.dat").read_bytes(), profile="osrs-149")
     reduced, aside = set_aside_faces(model)

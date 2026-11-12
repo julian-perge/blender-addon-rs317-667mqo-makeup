@@ -42,6 +42,12 @@ def _decode(data: bytes) -> Model:
     ) = _FOOTER.unpack_from(data, footer_at)
     if marker != b"\xff\xff":
         raise InvalidModelError("Missing OSRS FFFF marker")
+    # Client rev 149, class dv, method j, offsets 1516 to 1519, 1364 to 1367, 426 to 429, 975 to 978 and 448 to 451:
+    # the client compares each of these five flags only with 1, so any other value means the section is absent, and
+    # the client does not refuse it. The values 0 and 1 are the client's. Refusing 2 to 255 is our own stricter
+    # rule, because we would read bytes that the client does not read. The owner decided on 2026-11-11 to keep it
+    # (issue 17). The priority byte is not one of these flags (rule 1).
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 6.
     if any(flag not in (0, 1) for flag in (render, alpha, face_skin, textures, vertex_skin)):
         raise InvalidModelError("Unsupported OSRS-149 footer flags")
     offset = 0
@@ -56,6 +62,12 @@ def _decode(data: bytes) -> Model:
         return result
 
     kinds = section(texture_count)
+    # Client rev 149, class dv, method j, offsets 295 to 330, 1999 to 2004, 2261 to 2264, 2407 to 2410, 2539 to 2542
+    # and 2674 to 2677: the client reads each texture record by its kind, 0, 1, 2 or 3. For any other kind it reads
+    # no bytes for that record and continues, and the record keeps zero triangle words. The values 0 to 3 are the
+    # client's. Refusing a larger kind is our own stricter rule, because we would read bytes that the client does
+    # not read. The owner decided on 2026-11-11 to keep it (issue 17).
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
     if any(kind > 3 for kind in kinds):
         raise InvalidModelError("Unsupported texture record kind")
     vertex_flags = section(vertex_count)
