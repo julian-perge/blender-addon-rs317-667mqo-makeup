@@ -182,14 +182,10 @@ def bake_clip_to_rig(
         for strip in (() if track is None else track.strips)
         if strip != replaced and strip.action is not None and appearance_collection.RIG_ACTION_KEY in strip.action
     ]
-    read: list[appearance_fades.EarlierFades] = []
-
-    def earlier_of(shown: list[bpy.types.Object]) -> appearance_fades.EarlierFades:
-        read.append(appearance_bone_action.earlier_fades(earlier_actions, shown))
-        return read[0]
-
     with appearance_held.held_items_undone_on_failure(collection):
-        parts = posed.ensure_parts(earlier_of)
+        cut = posed.ensure_cut()
+        earlier = appearance_bone_action.earlier_fades(earlier_actions, [piece.obj for piece, _ in cut])
+        parts = posed.parts_of(cut, earlier)
         # A fade group has one property on the rig, whichever objects hold its faces.
         fades = list({fade.prop: fade for part in parts for fade in part.fades}.values())
         name = f"{collection.name} {_title(source)}"
@@ -218,7 +214,8 @@ def bake_clip_to_rig(
     for pose_bone in rig.pose.bones:  # pyrefly: ignore[missing-attribute]
         pose_bone.rotation_mode = "QUATERNION"
     # An earlier clip keeps what it showed: each action gets a curve for every group, with the group's alpha under it.
-    earlier = read[0]
+    # `earlier_fades` already read the frames of every one of these actions inside the block above, so a broken action
+    # was refused before the bake changed anything.
     # An object the clip does not show (the held items of another clip) keeps its fade materials and their properties.
     shown = {part.obj for part in parts}
     keep = {
@@ -230,7 +227,7 @@ def bake_clip_to_rig(
     }
     for number, earlier_action in enumerate(earlier_actions):
         appearance_bone_action.rekey_fades(
-            earlier_action, {fade.prop: earlier.of(fade.labels[0], fade.rest)[number] for fade in fades}, keep
+            earlier_action, {fade.prop: earlier.of(fade.label, fade.rest)[number] for fade in fades}, keep
         )
     for part in parts:
         appearance_fades.apply_fades(part.obj, rig, part.fades)

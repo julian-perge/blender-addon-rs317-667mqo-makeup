@@ -97,6 +97,7 @@ def fade_groups(
         before = earlier.of(label, rest)
         if all(value == rest for value in series) and all(value == rest for run in before for value in run):
             continue
+        # `before` keeps two label groups apart when an earlier clip fades them differently, which is the split.
         joined.setdefault((rest, series, before), []).append(label)
     out = []
     for part in members:

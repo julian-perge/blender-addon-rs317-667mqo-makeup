@@ -79,11 +79,11 @@ def rekey_fades(action: bpy.types.Action, fades: dict[str, tuple[float, ...]], k
     action[appearance_collection.RIG_ACTION_KEY] = appearance_collection.keys_hash(action)
 
 
-def _is_fade(curve) -> bool:
+def _is_fade(curve: bpy.types.FCurve) -> bool:
     return curve.data_path.startswith(f'["{PROPERTY_PREFIX}')
 
 
-def _prop(curve) -> str:
+def _prop(curve: bpy.types.FCurve) -> str:
     return curve.data_path.removeprefix('["').removesuffix('"]')
 
 
