@@ -1,6 +1,6 @@
 # Play As defaults to Pose
 
-Status: ready-for-agent
+Status: done
 
 The bake's Play As setting (`clip_play_as`) defaults to Pose. That is an agent choice: neither the cache nor a clip says whether the server plays a sequence as the pose or as the action. A pose sequence starts at frame 0 and ignores the loop offset, and an action plays once or loops by its loop offset ([clip coverage](../../../docs/research/osrs-149-animation.md#clip-coverage-2026-11-07)). Recorded 2026-11-07.
 
@@ -13,11 +13,12 @@ The user chose on 2026-11-10, in a design interview:
 
 ## Task
 
-- [ ] Agree the test seam with the user first.
-- [ ] Picking a stance clip by name sets Play As to Pose, and picking any other clip sets it to Action.
-- [ ] prek and the Blender suite pass; the work gets the two-axis review before its commit.
+- [x] Agree the test seam with the user first.
+- [x] Picking a stance clip by name sets Play As to Pose, and picking any other clip sets it to Action.
+- [x] prek and the Blender suite pass; the work gets the two-axis review before its commit.
 
 ## Comments
 
 - 2026-11-10, design interview with the user: decisions 1 and 2, ready-for-agent.
-- 2026-11-10, agent: the spec is [.scratch/play-as-from-clip/spec.md](../../play-as-from-clip/spec.md) (ready-for-agent). The user agreed one test seam, the clip picker operator.
+- 2026-11-10, agent: the spec is [spec/play-as-from-clip.md](../../../spec/play-as-from-clip.md) (ready-for-agent). The user agreed one test seam, the clip picker operator.
+- 2026-11-11, agent: done in commit 4a54a61. Picking a clip by name sets Play As; the default and the Stance and Attack buttons are unchanged.
