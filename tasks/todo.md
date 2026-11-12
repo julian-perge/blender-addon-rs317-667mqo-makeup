@@ -45,15 +45,17 @@ Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade
 
 ## Phase 2: Several clips
 
-- [ ] **T3: Record a clip whose fades differ by label** (ticket 02)
+- [x] **T3: Record a clip whose fades differ by label** (ticket 02)
 
   Pick a snapshot 430 player clip (frame map 0) with an alpha transform that changes faces of some labels and not others. Use a seeded sample as for the three alpha fixtures. Export it and record the poses for both bodies with the fixture scripts. Add the README entry.
 
+  Result (2026-11-12): sequence 3364, in `alpha-3364`. Scanning all 217 clips found it is the only one whose alpha transforms give the player's labels more than one curve (two curves, equal except on frame 10: alpha 32 against 255). The recorded `o` alphas on frame 10 hold exactly 32 and 255 for both bodies. The scan script is outside the repo, so the README gives its result and not the script. The unit tests of `test_pose_149.py` pass with the new clip added to the alpha cases (61 passed).
+
   Acceptance:
-  - [ ] The README says how the clip was picked (seed and sample).
-  - [ ] `tests/fixtures/animation149/<name>/` holds the exported clip files, the manifest with hashes, and `pose-male.json` and `pose-female.json` with face alphas `o`.
-  - [ ] A short script shows more than one distinct alpha curve across labels. Its result is in the README entry.
-  - [ ] No published fixture is changed.
+  - [x] The README says how the clip was picked (seed and sample).
+  - [x] `tests/fixtures/animation149/<name>/` holds the exported clip files, the manifest with hashes, and `pose-male.json` and `pose-female.json` with face alphas `o`.
+  - [x] A short script shows more than one distinct alpha curve across labels. Its result is in the README entry.
+  - [x] No published fixture is changed.
 
   Verify: `prek run --all-files`; the fixture manifest check that the existing fixtures use.
   Depends on: none.

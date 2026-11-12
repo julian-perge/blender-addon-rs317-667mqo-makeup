@@ -30,9 +30,10 @@ SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
 HAS_SNAPSHOT_430 = "RSPS_SNAPSHOT_430_CACHE" in os.environ and SNAPSHOT_430.is_dir()
 BODIES = ("male", "female")
 CASES = [(clip, body) for clip in CLIP_NAMES for body in BODIES] + [("loop", "male")]
-# Three sequences picked with random.Random(149).sample from the 217 player clips that have a face alpha transform,
-# exported the same way and recorded for both bodies, face alphas included.
-ALPHA_CASES = [(f"alpha-{sequence}", body) for sequence in (1697, 1994, 3182) for body in BODIES]
+# Three sequences picked with random.Random(149).sample from the 217 player clips that have a face alpha transform, and
+# 3364, found by scanning them (see the fixture README). All are exported the same way and recorded for both bodies,
+# face alphas included.
+ALPHA_CASES = [(f"alpha-{sequence}", body) for sequence in (1697, 1994, 3182, 3364) for body in BODIES]
 
 
 def reference(clip: str, body: str) -> dict:
