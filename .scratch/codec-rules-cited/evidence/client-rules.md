@@ -63,7 +63,7 @@ Verdict: **confirmed**. The limit is the size of the field. The client has no ch
 - Anchor: class `dv`, method `j`, offsets 1632 to 1665. For a face that has a texture, the method reads one unsigned byte with `fe.z`, subtracts 1 and stores the result in `dv.u` as a byte.
 - Also: the method reads this byte only when `dv.u` exists (the texture flag is 1 and the texture count is above 0, offsets 975 to 981, 2143 to 2148 and 994 to 999). Class `dv`, method `ae`, offsets 428 to 436: a stored -1 (file byte 0) means no texture triangle. Offsets 449 to 459 and 1618 to 1630 use the stored byte as an index after `& 255`.
 - A file byte of 255 reads as index 254. This is the highest index. An index of 255 needs a file byte of 256, which does not fit in one byte. The add-on refuses it because it cannot write it.
-- Read from the add-on code: a model has at most 255 texture triangles (`check`, the count test), so index 255 is refused as a missing triangle before the `limit = 254` test is reached. The `limit` test is a second guard. No input reaches it.
+- Read from the add-on code: a model has at most 255 texture triangles (`check`, the count test), so index 255 is refused as a missing triangle. The code had a `limit = 254` test for a new-format model as a second guard, and no input reached it. The review of PR 6 asked to delete it, and the owner agreed on 2026-11-12. `check` now tests the index limit for an old-format model only.
 
 ## Rule 4: an opaque tail with a nonzero first byte and fewer than 11 bytes is refused
 
@@ -94,7 +94,7 @@ Verdict: **not settled**. The values 0 and 1 are the client's. The refusal is th
 - A value of 2 to 255 in one of these bytes means the same as 0: the section is absent. The client does not refuse it.
 - The priority byte is compared with 255 only (rule 1). It is not a flag of 0 or 1, and `decode` does not check it.
 - `decode` refuses a value of 2 to 255 in the five flag bytes. For such a file, the client reads no section, and the add-on would read bytes that the client does not read. This follows from the two code readings.
-- Tests: the case `bad-footer-flag` of `test_malformed_new_format_footers_are_refused` writes 2 at footer byte 6, which is the priority byte, not a flag. A value of 2 there is a valid shared priority, so that case fails for another reason and does not test this rule. `test_decode_refuses_a_footer_flag_of_2_but_not_any_priority_byte` sets 2 in each of the five flag bytes, and it sets the priority byte to another value and reads it as a shared priority.
+- Tests: the case of `test_malformed_new_format_footers_are_refused` that was named `bad-footer-flag` wrote 2 at footer byte 6, which is the priority byte, not a flag. A value of 2 there is a valid shared priority, so that case failed for another reason and did not test this rule. It is now named `wrong-priority-byte`. `test_decode_refuses_a_footer_flag_of_2_but_not_any_priority_byte` sets 2 in each of the five flag bytes, and it sets the priority byte to another value and reads it as a shared priority.
 
 ## The encode side of rule 6
 

@@ -32,7 +32,7 @@ The evidence is in [client-rules.md](../../codec-rules-cited/evidence/client-rul
 
 Rule 6 on the encode side: `encode` builds the five flags from the data and writes only 0 or 1, so no written file is refused by `decode`. Only `check` accepts source flags of 0 to 255. It stays as it is (decision 5).
 
-The existing test case `bad-footer-flag` sets the priority byte, not a flag, so it never tested rule 6. The new test covers each of the five flag bytes. The "unverified" marks are gone for the six rules in the note and the code. The codec behaviour did not change: the diff in `src/` is comments only.
+The existing test case `bad-footer-flag` set the priority byte, not a flag, so it never tested rule 6. It is now named `wrong-priority-byte`. The new test covers each of the five flag bytes. The "unverified" marks are gone for the six rules in the note and the code. The codec behaviour did not change: the diff in `src/` is comments only.
 
 ## Comments
 

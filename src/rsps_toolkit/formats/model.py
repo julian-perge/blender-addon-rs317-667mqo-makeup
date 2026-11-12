@@ -114,23 +114,14 @@ def check(model: Model) -> None:
             flags is None or (len(flags) == 6 and all(isinstance(flag, int) and 0 <= flag <= 255 for flag in flags)),
             "OSRS-149 section flags must be six bytes",
         )
-        # Client rev 149, class dv, method j, offsets 2689 to 2694, 1901 to 1903, 2709 to 2725, 2423 to 2431,
-        # 2740 to 2748 and 172 to 180: when the first tail byte is nonzero, the client reads 11 bytes (1, 2, 2, 2 and
-        # 4) and ignores them. It checks no length, so a shorter tail makes it read the footer. The 11 is the
-        # client's number, and refusing a shorter tail is our own stricter rule. The owner decided on 2026-11-11 to
-        # keep it (issue 17).
-        # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
+        # The 11 is the client's number, but the client checks no length. Refusing a shorter tail is our own stricter
+        # rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 4.
         _require(source.tail[0] == 0 or len(source.tail) >= 11, "OSRS-149 source tail is truncated")
         for i, (kind, parameters) in enumerate(
             zip(source.texture_render_types, source.texture_parameters, strict=True)
         ):
-            # Client rev 149, class dv, method j, offsets 295 to 330, 1999 to 2004, 2261 to 2264, 2407 to 2410,
-            # 2539 to 2542 and 2674 to 2677: the client reads each texture record by its kind, 0, 1, 2 or 3. For
-            # any other kind it reads no bytes for that record and continues, and the record keeps zero triangle
-            # words. The values 0 to 3 are the client's. Refusing a larger kind is our own stricter rule, because
-            # we would read bytes that the client does not read. The owner decided on 2026-11-11 to keep it
-            # (issue 17).
-            # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
+            # The kinds 0 to 3 are the client's. The client reads no bytes for a larger kind, so refusing it is our own
+            # stricter rule, kept by the owner. Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 5.
             _require(kind in (0, 1, 2, 3), f"Texture record {i} has unsupported kind {kind}")
             size = 0 if kind == 0 else 13 if kind == 2 else 11
             _require(len(parameters) == size, f"Texture record {i} needs {size} parameter bytes")
@@ -160,14 +151,14 @@ def check(model: Model) -> None:
         if triangle is not None:
             _require(texture is not None, f"face {i} has a texture triangle but no texture")
             _require(0 <= triangle < len(model.texture_triangles), f"face {i} uses missing texture triangle {triangle}")
-            # Client rev 149, class dv, method j, offsets 1632 to 1665: a face's texture coordinate is one file byte
-            # that holds the index plus 1. Class dv, method ae, offsets 428 to 436 and 449 to 459: file byte 0 means
-            # no texture triangle, and any other byte is used as an unsigned index, so 254 is the highest index. The
-            # client has no check of its own. We refuse 255 because it does not fit in the byte. A model has at most
-            # 255 texture triangles, so the checks above refuse index 255 first and this limit is a second guard.
+            # A new-format model has no limit test here. The file byte holds the index plus 1, so 254 is the highest
+            # index, and the count test above allows at most 255 texture triangles. That already refuses index 255.
             # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 3.
-            limit = 254 if newer else MAX_TEXTURE_TRIANGLE_INDEX
-            _require(triangle <= limit, f"face {i} uses texture triangle {triangle}, over {limit}")
+            if not newer:
+                _require(
+                    triangle <= MAX_TEXTURE_TRIANGLE_INDEX,
+                    f"face {i} uses texture triangle {triangle}, over {MAX_TEXTURE_TRIANGLE_INDEX}",
+                )
     for i, corners in enumerate(model.texture_triangles):
         if source is not None and source.texture_render_types[i] != 0:
             _require(all(0 <= word <= 0xFFFF for word in corners), f"Texture record {i} has non-16-bit words")

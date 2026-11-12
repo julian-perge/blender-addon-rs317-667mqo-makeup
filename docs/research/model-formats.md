@@ -185,22 +185,24 @@ Measured against cache 430 and the Gate 0 fixtures; see [the OSRS cache workflow
   and 449 to 459: file byte 0 means no texture triangle, and any other byte is used as an unsigned index, so 254 is
   the highest index. The client has no check of its own. We refuse 255 because it does not fit in the byte.
 - An opaque tail whose first byte is nonzero and that holds fewer than 11 bytes is refused. The 11 is the client's
-  number. Refusing a shorter tail is our own stricter rule, and the owner decided on 2026-11-11 to keep it
-  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)). Client rev 149, class `dv`, method `j`, offsets 2689 to 2694, 1901 to
-  1903, 2709 to 2725, 2423 to 2431, 2740 to 2748 and 172 to 180: when the first tail byte is nonzero, the client reads
-  11 bytes (1, 2, 2, 2 and 4) and ignores them. It checks no length, so a shorter tail makes it read the footer.
+  number. Refusing a shorter tail is our own stricter rule. Client rev 149, class `dv`, method `j`, offsets 2689 to
+  2694, 1901 to 1903, 2709 to 2725, 2423 to 2431, 2740 to 2748 and 172 to 180: when the first tail byte is nonzero,
+  the client reads 11 bytes (1, 2, 2, 2 and 4) and ignores them. It checks no length, so a shorter tail makes it
+  read the footer. The owner decided on 2026-11-11 to keep the refusal
+  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)).
 - Texture kinds above 3 are refused. The values 0 to 3 are the client's. Refusing a larger kind is our own stricter
-  rule, and the owner decided on 2026-11-11 to keep it
-  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)). Client rev 149, class
-  `dv`, method `j`, offsets 295 to 330, 1999 to 2004, 2261 to 2264, 2407 to 2410, 2539 to 2542 and 2674 to 2677: the
-  client reads each texture record by its kind, 0, 1, 2 or 3. For any other kind it reads no bytes for that record
-  and continues, and the record keeps zero triangle words. We would read bytes that the client does not read.
+  rule. Client rev 149, class `dv`, method `j`, offsets 295 to 330, 1999 to 2004, 2261 to 2264, 2407 to 2410, 2539
+  to 2542 and 2674 to 2677: the client reads each texture record by its kind, 0, 1, 2 or 3. For any other kind it
+  reads no bytes for that record and continues, and the record keeps zero triangle words. We would read bytes that
+  the client does not read. The owner decided on 2026-11-11 to keep the refusal
+  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)).
 - Footer flags other than 0 or 1 are refused. The values 0 and 1 are the client's. Refusing 2 to 255 is our own
-  stricter rule, and the owner decided on 2026-11-11 to keep it. Client rev 149, class `dv`, method `j`, offsets
-  1516 to 1519, 1364 to 1367, 426 to 429, 975 to 978 and 448 to 451: the client compares each of the render, alpha,
-  face skin, texture and vertex skin flags only with 1, so any other value means the section is absent, and the
-  client does not refuse it. We would read bytes that the client does not read. The priority byte is not one of
-  these flags: any value below 255 is one shared priority.
+  stricter rule. Client rev 149, class `dv`, method `j`, offsets 1516 to 1519, 1364 to 1367, 426 to 429, 975 to 978
+  and 448 to 451: the client compares each of the render, alpha, face skin, texture and vertex skin flags only with
+  1, so any other value means the section is absent, and the client does not refuse it. We would read bytes that the
+  client does not read. The priority byte is not one of these flags: any value below 255 is one shared priority. The
+  owner decided on 2026-11-11 to keep the refusal
+  ([issue 17](../../.scratch/osrs-focus/issues/17-osrs-149-codec-choices-need-a-source.md)).
 - The footer flag rule has a gap on the encode side. `check` accepts source flags of 0 to 255, but `encode` builds
   the five flags from the data and writes only 0 or 1. So no written file is refused by `decode`. Only a hand-built
   source flag of 2 or more passes `check`, and `encode` writes 0 for it, as the client reads it. The owner decided
