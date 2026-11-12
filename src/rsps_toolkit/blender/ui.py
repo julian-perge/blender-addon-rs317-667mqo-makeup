@@ -2,6 +2,7 @@ from textwrap import wrap
 
 import bpy
 
+from . import rs_layers
 from .animation import binding_warning, is_presentation
 
 
@@ -20,6 +21,28 @@ def draw_presentation_notice(layout, obj) -> None:
             notice.label(text="Recreate it from source.")
 
 
+def item_import_note(obj) -> str | None:
+    """What the importer showed for an object imported by item, or None for any other object. The note says what the
+    import showed, not what the object shows now, because the user can change the materials afterwards."""
+    stored = None if obj is None else rs_layers.read_item_import(obj)
+    if stored is None:
+        return None
+    body = "female" if stored.body == "FEMALE" else "male"
+    return (
+        f"Imported from item {stored.item_name} ({stored.item_id}), {body} body. "
+        "Shown colours follow the item's recolours. Export writes the model's own colours."
+    )
+
+
+def draw_item_import_note(layout, obj) -> None:
+    note = item_import_note(obj)
+    if note is not None:
+        box = layout.box()
+        box.label(text="Imported by item", icon="INFO")
+        for line in wrap(note, width=30):
+            box.label(text=line)
+
+
 # --- PANEL ---
 class VIEW3D_PT_rsps_model_io(bpy.types.Panel):
     """The UI panel for model import/export in the 3D View."""
@@ -36,6 +59,7 @@ class VIEW3D_PT_rsps_model_io(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         draw_presentation_notice(layout, context.active_object)
+        draw_item_import_note(layout, context.active_object)
 
         # --- EXPORT SECTION ---
         export_box = layout.box()

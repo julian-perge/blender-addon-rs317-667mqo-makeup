@@ -10,7 +10,7 @@ painters and the weighter all rely on:
 
 import json
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 
 import bmesh
 import bpy
@@ -41,6 +41,18 @@ VERTEX_SKIN_GROUPS = ("VSKIN1:", "VSKIN2:", "VSKIN3:")
 # Faces that repeat a vertex stay out of the mesh (see formats/set_aside.py) and are kept as JSON in this mesh
 # custom property, naming vertices by index.
 SET_ASIDE_FACES = "rs_set_aside_faces"
+# The item that an object was imported from with File > Import > RS Item, as JSON in a custom property of the object,
+# not of its mesh. It names no vertex or face, and a duplicate of the object keeps it. Joining other meshes into the
+# object, or giving it another mesh, leaves it unchanged, so it then says where the object started.
+ITEM_IMPORT = "rs_item_import"
+
+
+@dataclass(frozen=True)
+class ItemImport:
+    item_id: int
+    item_name: str
+    # The body the import was made for, as the importer's BODY choice names it: MALE or FEMALE.
+    body: str
 
 
 def write_face_values(mesh: bpy.types.Mesh, layer_name: str, values: list[int]) -> None:
@@ -277,3 +289,21 @@ def read_set_aside_faces(mesh: bpy.types.Mesh) -> list[SetAsideFace]:
         p, q, r = (tuple(corner) for corner in face.pop("corners"))
         faces.append(SetAsideFace(face=(a, b, c), corners=(p, q, r), **face))
     return faces
+
+
+def write_item_import(obj: bpy.types.Object, item: ItemImport) -> None:
+    obj[ITEM_IMPORT] = json.dumps(asdict(item))
+
+
+def read_item_import(obj: bpy.types.Object) -> ItemImport | None:
+    """The item the object was imported from, or None when it was not imported by item or the data is unreadable."""
+    stored = obj.get(ITEM_IMPORT)
+    if stored is None:
+        return None
+    try:
+        item = ItemImport(**json.loads(stored))
+    except (ValueError, TypeError):
+        return None
+    if not (isinstance(item.item_id, int) and isinstance(item.item_name, str) and item.body in ("MALE", "FEMALE")):
+        return None
+    return item
