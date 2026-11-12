@@ -7,7 +7,14 @@ from js5_builder import build_cache, rewrite_cache
 from rsps_toolkit.formats import cache_profile
 from rsps_toolkit.formats.appearance import assemble_body, default_equipment
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
-from rsps_toolkit.formats.cache_profile import CacheProfile, MissingResourceError
+from rsps_toolkit.formats.cache_profile import (
+    CONFIG_INDEX,
+    ENUM_GROUP,
+    ITEM_GROUP,
+    KIT_GROUP,
+    CacheProfile,
+    MissingResourceError,
+)
 from rsps_toolkit.formats.enum_definition import decode_enum
 from rsps_toolkit.formats.item_definition import decode_item
 from rsps_toolkit.formats.js5 import Js5Store
@@ -136,14 +143,14 @@ def test_the_snapshot_430_cache_builds_the_default_male_body():
 @needs_snapshot_430
 @pytest.mark.parametrize(
     ("group", "decoder", "count"),
-    [(3, decode_kit, 151), (8, decode_enum, 1725), (10, decode_item, 21392)],
+    [(KIT_GROUP, decode_kit, 151), (ENUM_GROUP, decode_enum, 1725), (ITEM_GROUP, decode_item, 21392)],
     ids=["kits", "enums", "items"],
 )
 def test_every_snapshot_430_definition_of_a_config_group_decodes(group, decoder, count):
     # The counts are the raw config files in an export of snapshot 430 that the RuneLite cache library wrote, under its
     # configs/identkit, configs/enum and configs/item folders (counted on 2026-11-11). A decoder raises on an unknown
     # opcode or on bytes after the closing opcode.
-    files = Js5Store(SNAPSHOT_430).files(2, group)
+    files = Js5Store(SNAPSHOT_430).files(CONFIG_INDEX, group)
     assert len(files) == count
     for definition_id, data in files.items():
         decoder(definition_id, data)
