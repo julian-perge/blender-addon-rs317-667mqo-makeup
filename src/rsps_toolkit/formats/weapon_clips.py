@@ -38,6 +38,10 @@ class WeaponClipTable:
         """The weapon's clips, or the unarmed ones for a weapon neither table lists, which is the user's choice."""
         return self.items.get(item_id, self.unarmed)
 
+    def is_stance_clip(self, sequence_id: int) -> bool:
+        """True when the clip is a stance clip of the unarmed set or of any weapon's set."""
+        return sequence_id in self.unarmed.stance or any(sequence_id in clips.stance for clips in self.items.values())
+
 
 def load_weapon_clips(path: Path = PATH) -> WeaponClipTable:
     data = json.loads(path.read_text())
