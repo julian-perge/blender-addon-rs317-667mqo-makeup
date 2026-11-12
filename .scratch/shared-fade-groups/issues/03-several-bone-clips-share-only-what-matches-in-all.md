@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (One clip: faces that fade alike share a fade material) and 02 (Record a clip whose fades differ by label).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Agree the test seam with the user first: the bone bake, with sequence 1994 and the clip from ticket 02 as two strips.
 - [ ] After baking both, each strip's frames match the client's recorded alphas.

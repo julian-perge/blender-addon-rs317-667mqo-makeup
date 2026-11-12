@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (Import an item's worn model with its recolours).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Agree the test seam with the user first.
 - [ ] File > Import lists "RS Item (from dump)".

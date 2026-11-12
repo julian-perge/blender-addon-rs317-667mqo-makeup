@@ -1,6 +1,6 @@
 # Spec: Faces that fade alike share one fade material
 
-Status: approved by the user on 2026-11-12, ready for planning.
+Status: resolved on 2026-11-12 (merged in pull request 7). Approved by the user on 2026-11-12.
 
 Written on 2026-11-12 from [.scratch/shared-fade-groups/spec.md](../.scratch/shared-fade-groups/spec.md) (now only a pointer to this spec), which followed the decisions 1 to 5 in [issue 14](../.scratch/osrs-focus/issues/14-a-clip-fading-every-label-makes-23-materials.md) (the user chose them on 2026-11-10). The scratch spec was written before the workflow in [docs/agents/workflow.md](../docs/agents/workflow.md). This spec keeps its content and adds the areas that the workflow needs. The code sites below were checked on 2026-11-12.
 

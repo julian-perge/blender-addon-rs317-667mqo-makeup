@@ -1,6 +1,6 @@
 # A clip that fades every label makes 23 fade materials
 
-Status: ready-for-agent
+Status: resolved
 
 A bake groups the faces a clip fades by skin label and rest alpha, and each group gets its own material with an opacity driver ([plan 10](../plans/10-animate-the-player.md)). A clip that fades every label therefore makes one material per label, 23 in all. Recorded 2026-11-07.
 
@@ -19,3 +19,4 @@ The user chose on 2026-11-10, in a design interview:
 - 2026-11-10, triage with the user: needs-info. Whether labels with identical fades should share one material is the owner's call.
 - 2026-11-10, design interview with the user: decisions 1 to 5, ready-for-agent. GLOSSARY.md gained Fade group. The implementation agrees its test seams with the user first.
 - 2026-11-10, agent: the spec is [.scratch/shared-fade-groups/spec.md](../../shared-fade-groups/spec.md) (ready-for-agent). The user agreed one test seam, the two bake functions, plus a newly recorded clip fixture with label-specific fades for the split case.
+- 2026-11-12, agent: resolved. The three tickets of [.scratch/shared-fade-groups/](../../shared-fade-groups/spec.md) were built and merged (pull request 7). The plan is in `tasks/done/shared-fade-groups/`.

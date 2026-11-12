@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Agree the test seam with the user first: the two bake functions, as the existing fade tests use them.
 - [ ] Sequence 1994 baked with shape keys and as a bone clip makes one fade material on both bodies.

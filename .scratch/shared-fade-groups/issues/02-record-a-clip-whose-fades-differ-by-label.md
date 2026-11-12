@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The clip is picked reproducibly, and the README says how.
 - [ ] Its folder holds the exported clip files, the manifest with hashes, and the client's recorded male and female poses with face alphas.

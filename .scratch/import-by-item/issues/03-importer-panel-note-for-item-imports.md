@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (Import an item's worn model with its recolours).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Agree the test seam with the user first: the function that gives the note's text for an object.
 - [ ] Objects from an import by item store the item id, item name and body.

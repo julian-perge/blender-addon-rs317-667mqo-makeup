@@ -1,6 +1,6 @@
 # Import worn models by item
 
-Status: ready-for-agent
+Status: done
 
 From [issue 07](../osrs-focus/issues/07-imported-worn-items-show-stored-colours.md), whose Decisions block (decisions 1 to 11, chosen by the user on 2026-11-10) this spec follows.
 

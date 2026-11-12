@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [ ] Agree the test seam with the user first: the import operator run headless with the item and body set, against the test dump fixtures.
 - [ ] One object per model file of the chosen body's worn model, named by model id, at its stored position, with no body offset and no joining.

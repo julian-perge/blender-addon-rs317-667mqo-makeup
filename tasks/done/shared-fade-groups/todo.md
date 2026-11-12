@@ -11,10 +11,10 @@ Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade
   Make `FadeGroup` hold several labels, join label groups with equal rest alpha and equal values in `fade_groups`, and let `apply_fades` give polygons of several labels one slot. Name a group after its lowest label and rest alpha.
 
   Acceptance:
-  - [ ] Sequence 1994 shape-key bake makes one fade material, and every polygon matches the client on the checked frames, on both bodies.
-  - [ ] A group of one label keeps `rs_fade_<label>_<rest>` and "<mesh> fade <label>".
-  - [ ] A fade material left with no polygon is removed.
-  - [ ] The player stays unedited.
+  - [x] Sequence 1994 shape-key bake makes one fade material, and every polygon matches the client on the checked frames, on both bodies.
+  - [x] A group of one label keeps `rs_fade_<label>_<rest>` and "<mesh> fade <label>".
+  - [x] A fade material left with no polygon is removed.
+  - [x] The player stays unedited.
 
   Verify: `prek run --all-files`; Blender runner on `tests/blender/test_appearance_clip.py` (docs/agents/blender.md).
   Depends on: none.
@@ -39,9 +39,9 @@ Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade
 
 ### Checkpoint: One clip
 
-- [ ] `prek run --all-files` and the Blender suite pass.
-- [ ] Existing fade tests pass unchanged.
-- [ ] Review with the user before T4.
+- [x] `prek run --all-files` and the Blender suite pass.
+- [x] Existing fade tests pass unchanged.
+- [x] Review with the user before T4.
 
 ## Phase 2: Several clips
 
@@ -100,7 +100,7 @@ Spec: spec/shared-fade-groups.md. Plan: tasks/plan.md. Branch: `feat/shared-fade
 
 ### Checkpoint: Complete
 
-- [ ] All success criteria of the spec are met.
-- [ ] `prek run --all-files` and the Blender suite pass.
-- [ ] Review in a new session, with the spec and `CODING_STANDARDS.md`.
-- [ ] Move `tasks/plan.md` and `tasks/todo.md` to `tasks/done/shared-fade-groups/`.
+- [x] All success criteria of the spec are met.
+- [x] `prek run --all-files` and the Blender suite pass.
+- [x] Review in a new session, with the spec and `CODING_STANDARDS.md`.
+- [x] Move `tasks/plan.md` and `tasks/todo.md` to `tasks/done/shared-fade-groups/`.
