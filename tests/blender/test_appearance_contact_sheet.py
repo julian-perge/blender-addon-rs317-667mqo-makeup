@@ -141,7 +141,7 @@ def test_the_operator_is_not_offered_without_an_active_player():
 
 
 def test_the_operator_is_hidden_from_the_operator_search():
-    # Blender leaves an operator that has the INTERNAL option out of the operator search (ADR 0020).
+    # ADR 0020 records why the operator is hidden.
     assert "INTERNAL" in bpy.ops.rsps.contact_sheet.bl_options  # pyrefly: ignore[missing-attribute]
 
 
