@@ -1,6 +1,6 @@
 # Tasks
 
-Spec: `spec/import-by-item.md`. Plan: `tasks/plan.md`. Each task ends with `prek run --all-files`, a commit review, and one commit on `feat/import-by-item`. Tick a task and write its result under it. Build each with `test-driven-development`: one behavior at the operator seam per red/green cycle.
+Spec: `spec/import-by-item.md`. Plan: `plan.md` in this folder. Each task ends with `prek run --all-files`, a commit review, and one commit on `feat/import-by-item`. Tick a task and write its result under it. Build each with `test-driven-development`: one behavior at the operator seam per red/green cycle.
 
 ## Phase 1: The import
 
@@ -42,9 +42,9 @@ Spec: `spec/import-by-item.md`. Plan: `tasks/plan.md`. Each task ends with `prek
   - Files: `src/rsps_toolkit/blender/mesh.py`, `src/rsps_toolkit/blender/face_materials.py`, `src/rsps_toolkit/blender/import_item.py`, `tests/blender/test_import_item.py`.
 
 ### Checkpoint: after T2
-- [ ] Full Blender suite and unit suite pass
-- [ ] Success criteria 3 to 6 hold in tests
-- [ ] Review with the user before T3
+- [x] Full Blender suite and unit suite pass
+- [x] Success criteria 3 to 6 hold in tests
+- [x] Review with the user before T3 (the user chose to build T3 next)
 
 ## Phase 2: The user interface
 
@@ -65,7 +65,7 @@ Spec: `spec/import-by-item.md`. Plan: `tasks/plan.md`. Each task ends with `prek
   - Files: `src/rsps_toolkit/blender/import_item.py`, `src/rsps_toolkit/blender/__init__.py`, `tests/blender/test_import_item.py`, `tests/blender/test_register.py`, `spec/import-by-item.md`, `tasks/plan.md`.
 
 ### Checkpoint: after T3
-- [ ] The user has seen the entry and dialog, or has said to continue without
+- [x] The user has seen the entry and dialog, or has said to continue without (the user chose to build T4 next)
 - [x] The dropdown search risk is closed: the user chose the search popup on 2026-11-11
 
 ## Phase 3: Safety and the panel
@@ -108,25 +108,26 @@ Spec: `spec/import-by-item.md`. Plan: `tasks/plan.md`. Each task ends with `prek
   - Files: `src/rsps_toolkit/blender/rs_layers.py`, `src/rsps_toolkit/blender/ui.py`, `src/rsps_toolkit/blender/import_item.py`, `tests/blender/test_import_item.py`.
 
 ### Checkpoint: after T5
-- [ ] `prek run --all-files` and the full Blender suite pass (success criterion 9)
-- [ ] Every user story (1 to 10) has a test, or a by-eye check named in the results (stories 1, 2 and 8 in part)
-- [ ] Out of scope untouched: File > Import > RS Model, joining, female offset, retextures shown, other model kinds
-- [ ] Review with the user before T6
+- [x] `prek run --all-files` and the full Blender suite pass (success criterion 9)
+- [x] Every user story (1 to 10) has a test, or a by-eye check named in the results (stories 1, 2 and 8 in part)
+- [x] Out of scope untouched: File > Import > RS Model, joining, female offset, retextures shown, other model kinds
+- [x] Review with the user before T6 (the user chose to build T6 next)
 
 ## Phase 4: Close-out
 
-- [ ] **T6 Close-out and pull request** (XS)
+- [x] **T6 Close-out and pull request** (XS)
   - Description: Tick issue 07 with a dated comment that names the commits. Add the glossary term only if the glossary lacks a fit and the user agrees. Move the plan to `tasks/done/import-by-item/`. Open the pull request and stop. The user merges.
   - Accept:
-    - [ ] Issue 07 shows its status and a dated comment that links `spec/import-by-item.md`.
-    - [ ] `rg -n "RS Item \(from dump\)" .` finds nothing outside `.scratch/` history (the old label was "from dump").
-    - [ ] `tasks/plan.md` and `tasks/todo.md` are in `tasks/done/import-by-item/`.
-    - [ ] Pull request open from `feat/import-by-item`, with no local paths and no attribution lines.
+    - [x] Issue 07 shows its status and a dated comment that links `spec/import-by-item.md`.
+    - [x] `rg -n "RS Item \(from dump\)" .` finds nothing outside `.scratch/` history (the old label was "from dump").
+    - [x] `tasks/plan.md` and `tasks/todo.md` are in `tasks/done/import-by-item/`.
+    - [x] Pull request open from `feat/import-by-item`, with no local paths and no attribution lines.
   - Verify:
-    - [ ] `prek run --all-files` passes.
+    - [x] `prek run --all-files` passes.
+  - Result (2026-11-11): issue 07 is done with a dated comment that names the five commits. `git grep` finds `RS Item (from dump)` only under `.scratch/`, in the older spec and tickets. No glossary term was added, because Worn model and Recolour already name the concepts. The plan and todo moved to `tasks/done/import-by-item/`.
   - Deps: T5.
   - Files: `.scratch/osrs-focus/issues/07-imported-worn-items-show-stored-colours.md`, `GLOSSARY.md` (optional), `tasks/`.
 
 ### Checkpoint: complete
-- [ ] All nine success criteria in the spec met (criteria 1 and 8 by eye with the user)
+- [ ] All nine success criteria in the spec met (criteria 1 and 8 by eye with the user). Open: the user has not yet typed a name and an id into the item popup in Blender.
 - [ ] Ready for review in a new session (`/agent-skills:review`)

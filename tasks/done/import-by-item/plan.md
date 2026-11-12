@@ -2,7 +2,7 @@ Spec: spec/import-by-item.md
 
 # Implementation Plan: Import worn models by item
 
-Branch: `feat/import-by-item`. One commit per task. Tasks are in `tasks/todo.md`. Issue: [issue 07](../.scratch/osrs-focus/issues/07-imported-worn-items-show-stored-colours.md).
+Branch: `feat/import-by-item`. One commit per task. Tasks are in `tasks/todo.md`. Issue: [issue 07](../../../.scratch/osrs-focus/issues/07-imported-worn-items-show-stored-colours.md).
 
 ## Overview
 
