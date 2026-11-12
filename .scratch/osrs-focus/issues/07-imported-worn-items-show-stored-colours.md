@@ -1,6 +1,6 @@
 # Imported worn items show their stored colours, not the item's recolours
 
-Status: needs-info
+Status: done
 
 Old School worn models imported with File > Import > RS Model show the models' stored colours, grey and tan on a rune armour set, because the importer does not apply the `colorFind` and `colorReplace` that `ItemDefinitions.json` holds for such items (evidence: in `src/`, only `formats/appearance.py` and the animation modules read recolours). Seen 2026-11-05 on a rune full helm, platebody and platelegs, gloves, boots, cape, amulet of glory, kiteshield and scimitar; the recolour lists were read for the platebody and cape. That applying them gives the real colours is unchecked.
 
@@ -24,4 +24,5 @@ The user chose on 2026-11-10, in a design interview:
 
 - 2026-11-10, triage with the user: needs-info. A model file alone does not say which item's recolours apply, so how the importer picks the item is the owner's call.
 - 2026-11-10, design interview with the user: decisions 1 to 11 above. Next step: the user runs /to-spec. GLOSSARY.md gained Worn model and Recolour.
-- 2026-11-10, agent: the spec is [.scratch/import-by-item/spec.md](../../import-by-item/spec.md) (ready-for-agent). The user agreed two test seams: the new import operator, and the function that gives the importer panel's note.
+- 2026-11-10, agent: the spec is [spec/import-by-item.md](../../../spec/import-by-item.md) (ready-for-agent). The user agreed two test seams: the new import operator, and the function that gives the importer panel's note.
+- 2026-11-11, agent: done in commits cef4eca, 756cc5a, 994f5fd, 4e07f51 and eb715c5, from [spec/import-by-item.md](../../../spec/import-by-item.md). File > Import > RS Item (from cache) replaces the "from dump" label of decision 5, because the importer reads the Cache folder (ADR 0017). After the body dialog, OK opens a search popup, because the plain item dropdown could not be searched (user, 2026-11-11). Typing a name and an id into the popup has not been checked by eye yet.
