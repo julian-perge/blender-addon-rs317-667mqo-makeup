@@ -1,5 +1,8 @@
 """Converts between a Model and a Blender mesh object."""
 
+from collections.abc import Sequence
+from dataclasses import replace
+
 import bpy
 
 from ..formats import InvalidModelError, Model, ModelEncoding, SetAsideFace, restore_faces, set_aside_faces, texture_uvs
@@ -15,14 +18,22 @@ def model_to_object(
     name: str,
     find_texture: FindTexture | None = None,
     brightness: float = face_materials.DEFAULT_BRIGHTNESS,
+    shown_colours: Sequence[int | None] | None = None,
 ) -> bpy.types.Object:
     """Create a mesh object for the model and link it to the active collection.
 
-    Face colours show as the client's palette colours at the given brightness setting.
+    Face colours show as the client's palette colours at the given brightness setting. `shown_colours`, one per face
+    of the model, replaces the colour a face shows; the face still stores the model's own colour as its game value.
 
     Game y points down, so a game vertex (x, y, z) becomes Blender (x, z, -y), with Blender's z up. Faces that
     repeat a vertex are kept beside the mesh rather than in it, and object_to_model puts them back.
     """
+    shown = shown_colours
+    if shown is not None:
+        if len(shown) != len(model.faces):
+            raise ValueError(f"{len(shown)} shown colours for {len(model.faces)} faces")
+        # The shown colours follow the faces that stay in the mesh, the same ones the model keeps.
+        shown = set_aside_faces(replace(model, face_colours=list(shown)))[0].face_colours
     model, aside = set_aside_faces(model)
     mesh = bpy.data.meshes.new(f"{name}_mesh")
     mesh.from_pydata([(x, z, -y) for x, y, z in model.vertices], [], model.faces)
@@ -30,16 +41,21 @@ def model_to_object(
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.collection.objects.link(obj)
 
-    slots: dict[tuple[int | None, int | None, int], int] = {}
+    slots: dict[tuple[int | None, int | None, int, int | None], int] = {}
     materials: list[bpy.types.Material] = []
     stacked = _stacked_textured_faces(model)
-    for face, (polygon, colour, texture, alpha) in enumerate(
-        zip(mesh.polygons, model.face_colours, model.face_textures, model.face_alphas, strict=True)
+    shown_per_face = [None] * len(model.faces) if shown is None else shown
+    for face, (polygon, colour, texture, alpha, shown_colour) in enumerate(
+        zip(mesh.polygons, model.face_colours, model.face_textures, model.face_alphas, shown_per_face, strict=True)
     ):
-        key = (colour, texture, alpha)
+        # A face that shows its own colour has the key of a plain import, so that import keeps its materials.
+        shown_instead = None if shown_colour == colour else shown_colour
+        key = (colour, texture, alpha, shown_instead)
         if key not in slots:
             slots[key] = len(materials)
-            materials.append(face_materials.face_material(colour, texture, alpha, find_texture, brightness))
+            materials.append(
+                face_materials.face_material(colour, texture, alpha, find_texture, brightness, shown_instead)
+            )
             mesh.materials.append(materials[-1])
         polygon.material_index = slots[key]
         if face in stacked:

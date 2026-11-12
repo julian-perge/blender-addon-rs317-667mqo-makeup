@@ -23,19 +23,21 @@ Spec: `spec/import-by-item.md`. Plan: `tasks/plan.md`. Each task ends with `prek
   - Deps: none.
   - Files: `src/rsps_toolkit/blender/import_item.py` (new), `src/rsps_toolkit/blender/__init__.py`, `src/rsps_toolkit/formats/appearance.py`, `src/rsps_toolkit/formats/cache_profile.py`, `tests/blender/test_import_item.py` (new), `tests/unit/test_appearance.py`, `tests/unit/test_cache_profile.py`.
 
-- [ ] **T2 Faces show the item's recolours** (M)
+- [x] **T2 Faces show the item's recolours** (M)
   - Description: `model_to_object` takes an optional per-face shown colour. `face_materials.face_material` shows it and keeps the stored values. The import builds the shown colours from a copy of the model run through the item's recolours in list order (`formats.appearance.recolour`), and passes them at the Brightness setting. The plain import is unchanged.
   - Accept:
-    - [ ] In item 2653 male, faces with stored colour 61, 41 or 24 show the colours that `face_colour_to_rgb` gives for 36133, 37270 and 937 at the Brightness setting. Their material still holds stored colour 61, 41 or 24. The test comment cites issue 07 decisions 2 and 8 and `ItemDefinitions.json`.
-    - [ ] A face in the same objects with no matching recolour shows its stored colour.
-    - [ ] A recolour that finds a colour an earlier one produced is applied (a test builds the item definition or checks the order against `item_model`). The comment cites the spec's Colours decision.
-    - [ ] A plain import and an item import of the same model never share a material. Two faces with one stored colour and different shown colours get different materials, and a plain import's materials are as before (existing import and mesh tests pass unchanged).
-    - [ ] Export of a recoloured object writes the model file's colours (criterion 5), and the Brightness setting changes the shown colour only.
+    - [x] In item 2653 male, faces with stored colour 61, 41 or 24 show the colours that `face_colour_to_rgb` gives for 36133, 37270 and 937 at the Brightness setting. Their material still holds stored colour 61, 41 or 24. The test comment cites issue 07 decisions 2 and 8 and `ItemDefinitions.json`.
+    - [x] A face in the same objects with no matching recolour shows its stored colour.
+    - [x] A recolour that finds a colour an earlier one produced is applied (a test builds the item definition or checks the order against `item_model`). The comment cites the spec's Colours decision.
+    - [x] A plain import and an item import of the same model never share a material. Two faces with one stored colour and different shown colours get different materials, and a plain import's materials are as before (existing import and mesh tests pass unchanged).
+    - [x] Export of a recoloured object writes the model file's colours (criterion 5), and the Brightness setting changes the shown colour only.
   - Verify:
     - [ ] The T2 cases failed before the code, and a mutation check (shown colour ignored; stored value written from the shown colour) fails them.
     - [ ] `BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh tests/blender/test_import_item.py tests/blender/test_mesh.py tests/blender/test_import.py tests/blender/test_export.py` passes.
     - [ ] `prek run --all-files` passes.
     - [ ] Commit review as in T1.
+  - Result (2026-11-11): `scripts/test-blender.sh` gives 799 passed, 3 skipped (19 cases in `test_import_item.py`), `uv run pytest` gives 1334 passed, 24 skipped, `prek run --all-files` passes. The four T2 cases for shown colours, order and materials failed before the code. Mutation checks: showing the stored colour fails 4 cases, and writing the shown colour as the stored value fails 6.
+    - Choices to report: (1) `model_to_object` raises `ValueError` when `shown_colours` does not have one entry per face; the spec does not say. (2) The material key adds the shown colour only when it differs from the stored one, so a plain import keeps its materials. (3) Material names stay `RS_Colour_<stored>_<alpha>`, so two shown variants get Blender's `.001` suffix. (4) No fixture item has a textured face with a recolour, so a textured face is tested with a model built in the test.
   - Deps: T1.
   - Files: `src/rsps_toolkit/blender/mesh.py`, `src/rsps_toolkit/blender/face_materials.py`, `src/rsps_toolkit/blender/import_item.py`, `tests/blender/test_import_item.py`.
 

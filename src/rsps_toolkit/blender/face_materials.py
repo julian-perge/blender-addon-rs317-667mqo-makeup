@@ -1,4 +1,4 @@
-"""Materials for a model's faces: one per distinct face colour or texture ID and face alpha.
+"""Materials for a model's faces: one per distinct face colour or texture ID, face alpha and shown colour.
 
 Each material keeps the game values it stands for as custom properties, so exporting returns exactly the
 imported values. Its visible colour is the client's palette colour, which Blender holds in linear space.
@@ -30,7 +30,9 @@ def face_material(
     alpha: int,
     find_texture: FindTexture | None = None,
     brightness: float = DEFAULT_BRIGHTNESS,
+    shown_colour: int | None = None,
 ) -> bpy.types.Material:
+    """A material that stores the game values and shows the face colour, or `shown_colour` in its place when given."""
     if texture is not None:
         material = bpy.data.materials.new(f"RS_Texture_{texture}_{alpha}")
         material[TEXTURE_ID] = texture
@@ -38,7 +40,7 @@ def face_material(
     elif colour is not None:
         material = bpy.data.materials.new(f"RS_Colour_{colour}_{alpha}")
         material[FACE_COLOUR] = colour
-        _show_colour(material, colour, brightness)
+        _show_colour(material, colour if shown_colour is None else shown_colour, brightness)
     else:
         raise ValueError("a face needs either a face colour or a texture ID")
     material[ALPHA] = alpha
