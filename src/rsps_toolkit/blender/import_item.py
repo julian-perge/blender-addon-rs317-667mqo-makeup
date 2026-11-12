@@ -1,11 +1,12 @@
 """The File > Import entry for the worn model of one item, read from the cache."""
 
 import hashlib
+from dataclasses import replace
 
 import bpy
 
 from ..formats import decode
-from ..formats.appearance import items_with_worn_model
+from ..formats.appearance import items_with_worn_model, recolour
 from . import appearance_props, model_source
 from .mesh import model_to_object
 from .preferences import brightness, first_texture, texture_folders
@@ -44,11 +45,17 @@ class RS_OT_import_item(bpy.types.Operator):
         imported = []
         for model_id in (model_id for model_id in models if model_id != -1):
             data = cache.model_bytes(model_id)
+            model = decode(data, profile="osrs-149")
+            # `recolour` replaces a list instead of changing it, so a shallow copy keeps the model's own colours.
+            recoloured = replace(model)
+            for find, to in item.recolours:
+                recolour(recoloured, find, to)
             obj = model_to_object(
-                decode(data, profile="osrs-149"),
+                model,
                 str(model_id),
                 lambda texture: first_texture(folders, texture),
                 shown_brightness,
+                recoloured.face_colours,
             )
             if isinstance(obj.data, bpy.types.Mesh):
                 model_source.record_source_hash(obj.data, hashlib.sha256(data).hexdigest())

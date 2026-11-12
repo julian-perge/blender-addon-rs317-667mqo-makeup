@@ -7,10 +7,10 @@ import bpy
 import pytest
 from runelite_json import load_items
 
-from rsps_toolkit.blender import appearance_props, import_item, import_model, model_source, preferences
+from rsps_toolkit.blender import appearance_props, face_materials, import_item, import_model, model_source, preferences
 from rsps_toolkit.blender.export_model import PRESERVE_SOURCE, prepare_exports
-from rsps_toolkit.blender.mesh import object_to_model
-from rsps_toolkit.formats import cache_profile, decode
+from rsps_toolkit.blender.mesh import model_to_object, object_to_model
+from rsps_toolkit.formats import Model, cache_profile, decode, face_colour_to_rgb
 
 APPEARANCE = Path(__file__).parent.parent / "fixtures" / "appearance"
 
@@ -140,3 +140,160 @@ def test_the_female_list_follows_the_female_models(monkeypatch):
 
     assert [identifier for identifier, _, _ in female] == ["1149", "4087", "35", "2653"]
     assert "3140" in [identifier for identifier, _, _ in male]
+
+
+def shown_rgb(material: bpy.types.Material) -> tuple[int, int, int]:
+    """The 8-bit sRGB colour Blender shows for a material, from its linear viewport colour."""
+    rgba = [0.0] * 4
+    material.diffuse_color.foreach_get(rgba)
+    srgb = [c * 12.92 if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055 for c in rgba[:3]]
+    r, g, b = (round(c * 255) for c in srgb)
+    return r, g, b
+
+
+def shown_by_stored_colour(*names: str) -> dict[int, set[tuple[int, int, int]]]:
+    """For each stored face colour in the named objects, the colours its faces show."""
+    shown: dict[int, set[tuple[int, int, int]]] = {}
+    for name in names:
+        mesh = mesh_of(objects_by_name()[name])
+        indices = [0] * len(mesh.polygons)
+        mesh.polygons.foreach_get("material_index", indices)
+        for index in indices:
+            material = mesh.materials[index]
+            assert material is not None
+            stored, _, _ = face_materials.material_values(material)
+            assert stored is not None
+            shown.setdefault(stored, set()).add(shown_rgb(material))
+    return shown
+
+
+# ItemDefinitions.json holds the Zamorak platebody (2653) with colorFind [61, 41, 24] and colorReplace [-29403, -28266,
+# 937]. The decoder reads colours as unsigned 16-bit values, so those replacements are 36133, 37270 and 937. Issue 07
+# decision 2: Blender shows the item's recolours while each face keeps the model file's colour as its game value.
+# Decision 8: the material holds both.
+@pytest.mark.parametrize("brightness", [0.8, 0.6])
+def test_faces_that_a_recolour_finds_show_its_replacement_and_keep_the_stored_colour(monkeypatch, brightness):
+    monkeypatch.setattr(import_item, "brightness", lambda: brightness)
+
+    run_import(2653)
+
+    shown = shown_by_stored_colour("3379", "164", "3381")
+    for stored, replacement in ((61, 36133), (41, 37270), (24, 937)):
+        assert shown[stored] == {face_colour_to_rgb(replacement, brightness)}
+    stored_after_export = {
+        colour for name in ("3379", "164", "3381") for colour in object_to_model(objects_by_name()[name]).face_colours
+    }
+    assert {61, 41, 24} <= stored_after_export
+
+
+def test_a_face_that_no_recolour_finds_shows_its_stored_colour():
+    # The recolours of item 2653 find 61, 41 and 24 (ItemDefinitions.json). Every other stored colour of the model files
+    # shows as it is.
+    run_import(2653)
+
+    stored = {
+        colour
+        for model_id in (3379, 164, 3381)
+        for colour in decode(model_file(model_id), profile="osrs-149").face_colours
+        if colour is not None
+    }
+    shown = shown_by_stored_colour("3379", "164", "3381")
+    assert set(shown) == stored
+    unfound = stored - {61, 41, 24}
+    assert unfound
+    for colour in unfound:
+        assert shown[colour] == {face_colour_to_rgb(colour, preferences.brightness())}
+
+
+# Spec, Decisions "Colours": recolours apply in the item definition's order, so a later recolour can find the colour an
+# earlier one put in. The item definition is built here: 61 becomes 41, then 41 becomes 937, so a face stored as 61
+# shows 937. Applied in the other order, it would show 41.
+def test_a_recolour_finds_the_colour_an_earlier_recolour_put_in(monkeypatch):
+    items = load_items(APPEARANCE / "ItemDefinitions.json")
+    items[2653] = replace(items[2653], recolours=((61, 41), (41, 937)))
+    real = appearance_props.profile()
+    assert real is not None
+    monkeypatch.setattr(appearance_props, "profile", lambda: SimpleNamespace(items=items, model_bytes=real.model_bytes))
+
+    run_import(2653)
+
+    shown = shown_by_stored_colour("3379", "164", "3381")
+    assert shown[61] == shown[41] == {face_colour_to_rgb(937, preferences.brightness())}
+    assert shown[24] == {face_colour_to_rgb(24, preferences.brightness())}
+
+
+def test_two_faces_with_one_stored_colour_and_different_shown_colours_get_different_materials():
+    # Issue 07 decision 8. All 15 faces of model 3381 have stored colour 937.
+    model = decode(model_file(3381), profile="osrs-149")
+    shown = [1000 if face < 7 else 2000 for face in range(len(model.faces))]
+
+    mesh = mesh_of(model_to_object(model, "shown", shown_colours=shown))
+
+    materials = [m for m in mesh.materials if m is not None]
+    assert len(materials) == 2
+    assert [face_materials.material_values(m) for m in materials] == [(937, None, 0)] * 2
+    assert {shown_rgb(m) for m in materials} == {
+        face_colour_to_rgb(1000, face_materials.DEFAULT_BRIGHTNESS),
+        face_colour_to_rgb(2000, face_materials.DEFAULT_BRIGHTNESS),
+    }
+
+
+def test_the_brightness_setting_changes_the_shown_colour_only(monkeypatch):
+    monkeypatch.setattr(import_item, "brightness", lambda: 0.6)
+
+    run_import(2653)
+
+    assert shown_by_stored_colour("3381")[937] == {face_colour_to_rgb(937, 0.6)}
+    assert face_colour_to_rgb(937, 0.6) != face_colour_to_rgb(937, 0.8)
+    for model_id in (3379, 164, 3381):
+        obj = objects_by_name()[str(model_id)]
+        (exported,) = prepare_exports([obj], PRESERVE_SOURCE, auto_detect=False)
+        assert decode(exported.payload, profile="osrs-149").face_colours == (
+            decode(model_file(model_id), profile="osrs-149").face_colours
+        )
+
+
+# A face that repeats a vertex stays out of the mesh (ADR 0005), so the shown colour of that face must not reach the
+# mesh. The timeout stops a test that lets such a face freeze Edit Mode (docs/agents/testing.md).
+@pytest.mark.parametrize("aside", [0, 8], ids=["first", "middle"])
+@pytest.mark.timeout(10, method="thread")
+def test_shown_colours_follow_the_faces_that_stay_in_the_mesh(aside):
+    model = decode(model_file(3381), profile="osrs-149")
+    model = replace(model, faces=[(0, 0, 1) if face == aside else f for face, f in enumerate(model.faces)])
+    shown = [2000] * len(model.faces)
+    shown[aside] = 3000
+    shown[aside + 1] = 4000
+
+    mesh = mesh_of(model_to_object(model, "aside", shown_colours=shown))
+
+    # Model 3381 already holds one such face, so one more leaves 13 of its 15 faces in the mesh.
+    assert len(mesh.polygons) == 13
+    materials = [m for m in mesh.materials if m is not None]
+    assert {shown_rgb(m) for m in materials} == {face_colour_to_rgb(2000, 0.8), face_colour_to_rgb(4000, 0.8)}
+
+
+def test_a_list_of_shown_colours_must_have_one_colour_per_face():
+    model = decode(model_file(3381), profile="osrs-149")
+
+    with pytest.raises(ValueError, match="14 shown colours for 15 faces"):
+        model_to_object(model, "short", shown_colours=[1000] * 14)
+
+
+def test_a_textured_face_keeps_its_texture_and_shows_no_colour_instead():
+    # Textured faces have no face colour (formats.appearance.recolour), so only the coloured face shows another colour.
+    model = Model(
+        vertices=[(0, 0, 0), (10, 0, 0), (0, 0, 10), (10, 0, 10)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[None, 6100],
+        face_textures=[16, None],
+        render_priorities=[0, 0],
+        face_alphas=[0, 0],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+
+    mesh = mesh_of(model_to_object(model, "textured", shown_colours=[None, 2000]))
+
+    values = [face_materials.material_values(m) for m in mesh.materials]
+    assert values == [(None, 16, 0), (6100, None, 0)]
+    assert shown_rgb(mesh.materials[1]) == face_colour_to_rgb(2000, 0.8)  # pyrefly: ignore[bad-argument-type]
