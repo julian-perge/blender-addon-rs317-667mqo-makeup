@@ -140,6 +140,11 @@ def test_the_operator_is_not_offered_without_an_active_player():
     assert not bpy.ops.rsps.contact_sheet.poll()  # pyrefly: ignore[missing-attribute]
 
 
+def test_the_operator_is_hidden_from_the_operator_search():
+    # ADR 0020 records why the operator is hidden.
+    assert "INTERNAL" in bpy.ops.rsps.contact_sheet.bl_options  # pyrefly: ignore[missing-attribute]
+
+
 def test_the_sheet_has_one_column_per_frame_and_one_row_per_view(cache, tmp_path):
     player(cache)
     image = sheet(tmp_path / "sheet.png", "1,2,3", "front,right,top,back")
