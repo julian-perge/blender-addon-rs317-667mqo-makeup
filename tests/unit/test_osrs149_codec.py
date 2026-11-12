@@ -6,7 +6,16 @@ from typing import Any
 
 import pytest
 
-from rsps_toolkit.formats import InvalidModelError, ModelEncoding, decode, encode, restore_faces, set_aside_faces
+from rsps_toolkit.formats import (
+    InvalidModelError,
+    Model,
+    ModelEncoding,
+    NewFormatData,
+    decode,
+    encode,
+    restore_faces,
+    set_aside_faces,
+)
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/models/osrs149"
 MODEL_IDS = sorted(int(model_id) for model_id in json.loads((FIXTURES / "coverage.json").read_text())["models"])
@@ -313,6 +322,79 @@ def test_hand_built_model_without_section_flags_encodes_and_gains_flags():
     assert again.new_data is not None
     assert again.new_data.section_flags is not None
     assert replace(again, new_data=replace(again.new_data, section_flags=None)) == built
+
+
+def _hand_built(priority=lambda i: 7, alpha=lambda i: 0, render_type=lambda i: 0):
+    model = decode((FIXTURES / "28634.dat").read_bytes(), profile="osrs-149")
+    assert model.new_data is not None
+    faces = range(len(model.faces))
+    return replace(
+        model,
+        render_priorities=[priority(i) for i in faces],
+        face_alphas=[alpha(i) for i in faces],
+        flat_shaded=[render_type(i) in (1, 3) for i in faces],
+        new_data=replace(model.new_data, section_flags=None, face_render_types=tuple(render_type(i) for i in faces)),
+    )
+
+
+def _round_trip(model):
+    """Encode a hand-built model, check that it decodes to itself, and return the bytes and the footer flags."""
+    data = encode(model)
+    again = decode(data, profile="osrs-149")
+    assert again.new_data is not None
+    assert replace(again, new_data=replace(again.new_data, section_flags=None)) == model
+    assert again.new_data.section_flags is not None
+    return data, again.new_data.section_flags
+
+
+def test_hand_built_faces_with_one_priority_store_it_once_in_the_footer():
+    # Client rev 149, class dv, method j, offsets 2235 to 2240 and 965 to 969: a footer priority byte of 255 means
+    # that one priority byte follows for every face, and any other value is the one priority of all faces.
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 1.
+    shared_data, (_, priority, *_) = _round_trip(_hand_built(priority=lambda i: 7))
+    assert priority == 7
+    mixed = _hand_built(priority=lambda i: 7 if i else 8)
+    mixed_data, (_, mixed_priority, *_) = _round_trip(mixed)
+    assert mixed_priority == 255
+    assert len(mixed_data) == len(shared_data) + len(mixed.faces)
+    all_255 = _hand_built(priority=lambda i: 255)
+    all_255_data, (_, all_255_priority, *_) = _round_trip(all_255)
+    assert all_255_priority == 255
+    assert len(all_255_data) == len(shared_data) + len(all_255.faces)
+
+
+def test_hand_built_model_without_faces_stores_priority_zero():
+    # Client rev 149, class dv, method j, offsets 2235 to 2240 and 965 to 969: a footer priority byte of 255 means
+    # that one priority byte follows for every face, and any other value is the one priority of all faces.
+    # The client has no case for a model with no faces, so writing 0 there is our choice.
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 1.
+    empty = Model(
+        vertices=[(0, 0, 0), (1, 2, 3)],
+        encoding=ModelEncoding.OSRS_FFFF,
+        profile="osrs-149",
+        new_data=NewFormatData(
+            textured_face_colours=(), face_render_types=(), texture_render_types=(), texture_parameters=(), tail=b"\0"
+        ),
+    )
+    _, (_, priority, *_) = _round_trip(empty)
+    assert priority == 0
+
+
+def test_hand_built_model_leaves_out_all_zero_render_type_and_alpha_sections():
+    # Client rev 149, class dv, method ae, offsets 563 to 570, 1192 to 1199, 1488 to 1491 and 1706 to 1709: a missing
+    # render type or alpha array reads as 0. Class dv, method j, offsets 1516 to 1522 and 1559 to 1562: each of those
+    # sections is read only when its footer flag is 1.
+    # Evidence: .scratch/codec-rules-cited/evidence/client-rules.md, rule 2.
+    plain_data, (render, _, alpha, *_) = _round_trip(_hand_built())
+    assert (render, alpha) == (0, 0)
+    alpha_model = _hand_built(alpha=lambda i: 9 if i == 0 else 0)
+    alpha_data, (render, _, alpha, *_) = _round_trip(alpha_model)
+    assert (render, alpha) == (0, 1)
+    assert len(alpha_data) == len(plain_data) + len(alpha_model.faces)
+    render_model = _hand_built(render_type=lambda i: 2 if i == 0 else 0)
+    render_data, (render, _, alpha, *_) = _round_trip(render_model)
+    assert (render, alpha) == (1, 0)
+    assert len(render_data) == len(plain_data) + len(render_model.faces)
 
 
 def test_restoring_a_set_aside_face_without_source_fields_is_refused():

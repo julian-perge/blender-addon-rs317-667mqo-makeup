@@ -209,9 +209,16 @@ def _encode(model: Model) -> bytes:
         if len(stream) > 0xFFFF:
             raise InvalidModelError(f"{name} stream has {len(stream)} bytes, over 65535")
     # The source footer's choices are kept while the edited model still agrees with them. Only when it no longer
-    # does, or for a hand-built model, are the choices computed. Those computed choices are unverified against
-    # the client: a single shared priority is stored once in the footer (0 for no faces), and the render type
-    # and alpha sections are omitted when every value is 0.
+    # does, or for a hand-built model, are the choices computed: a single shared priority is stored once in the
+    # footer (0 for no faces), and the render type and alpha sections are omitted when every value is 0.
+    # Both rules are checked against the revision 149 client (bytecode offsets, obfuscated names), as recorded in
+    # .scratch/codec-rules-cited/evidence/client-rules.md.
+    # Client rev 149, class dv, method j, offsets 2235 to 2240 and 965 to 969: a footer priority byte of 255 means
+    # that one priority byte follows for every face, and any other value is the one priority of all faces.
+    # The client has no case for a model with no faces, so writing 0 there is our choice.
+    # Client rev 149, class dv, method ae, offsets 563 to 570, 1192 to 1199, 1488 to 1491 and 1706 to 1709: a
+    # missing render type or alpha array reads as 0. Class dv, method j, offsets 1516 to 1522 and 1559 to 1562:
+    # each of those sections is read only when its footer flag is 1.
     flags = source.section_flags
     priorities = set(model.render_priorities)
     shared = next(iter(priorities)) if len(priorities) == 1 and 255 not in priorities else None
