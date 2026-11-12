@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import bpy
 import pytest
+from js5_builder import build_cache, item_definition, read_cache
 from runelite_json import load_items
 
 from rsps_toolkit.blender import appearance_props, face_materials, import_item, import_model, model_source, preferences
@@ -346,11 +347,12 @@ def test_without_a_cache_folder_the_list_offers_one_entry_that_says_so(monkeypat
 
 def test_without_a_cache_folder_the_import_is_refused_with_the_same_message(monkeypatch):
     monkeypatch.setattr(preferences, "cache_folder", lambda: None)
+    before = counts()
 
     with pytest.raises(RuntimeError, match=NO_CACHE_MESSAGE):
         run_import("none")
 
-    assert not bpy.data.objects
+    assert counts() == before
 
 
 def test_both_operators_are_registered_and_the_item_operator_searches_by_its_item_property():
@@ -358,3 +360,124 @@ def test_both_operators_are_registered_and_the_item_operator_searches_by_its_ite
     assert hasattr(bpy.ops.import_scene, "rs_item")
     assert import_item.RS_OT_import_item.bl_property == "item"
     assert "item" in bpy.ops.import_scene.rs_item.get_rna_type().properties.keys()  # pyrefly: ignore[missing-attribute]
+
+
+def counts() -> tuple[int, int, int]:
+    return len(bpy.data.objects), len(bpy.data.meshes), len(bpy.data.materials)
+
+
+def use_changed_cache(monkeypatch, tmp_path, cache, change):
+    """Point the Cache folder at a copy of the fixture cache, written again with `change` applied to its parts."""
+    folder = tmp_path / "changed"
+    parts = read_cache(cache)
+    change(parts)
+    build_cache(folder, **parts)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: folder)
+    cache_profile.clear_shared_profiles()
+
+
+# Item definitions built here (user choice of 2026-11-11, spec Decisions "Refusals"): no fixture item lists retextures
+# or lacks a female worn model.
+TEXTURED = item_definition("Textured test item", male=(3381, -1, -1), retextures=((1, 2),))
+MALE_ONLY = item_definition("Male only test item", male=(3381, -1, -1))
+
+
+def test_an_item_with_retextures_is_refused_naming_the_item_and_adds_nothing(monkeypatch, tmp_path, cache):
+    use_changed_cache(monkeypatch, tmp_path, cache, lambda parts: parts["items"].update({9001: TEXTURED}))
+    before = counts()
+
+    with pytest.raises(RuntimeError, match=r"Textured test item \(9001\) lists retextures"):
+        run_import(9001)
+
+    assert counts() == before
+
+
+def test_an_item_with_no_worn_model_for_the_body_is_refused_through_execute_and_adds_nothing(
+    monkeypatch, tmp_path, cache
+):
+    # Blender rejects an item that the Female list does not offer before `execute` runs (TypeError: enum "9002" not
+    # found), so `execute` is called with a stand-in operator.
+    use_changed_cache(monkeypatch, tmp_path, cache, lambda parts: parts["items"].update({9002: MALE_ONLY}))
+    reports = []
+    operator = SimpleNamespace(body="FEMALE", item="9002", report=lambda level, message: reports.append(message))
+    before = counts()
+
+    result = import_item.RS_OT_import_item.execute(operator, bpy.context)  # pyrefly: ignore[bad-argument-type]
+
+    assert result == {"CANCELLED"}
+    assert reports == ["Male only test item (9002) has no worn model for the female body."]
+    assert counts() == before
+
+
+def test_an_item_id_the_cache_does_not_hold_is_refused_and_adds_nothing():
+    reports = []
+    operator = SimpleNamespace(body="MALE", item="9999", report=lambda level, message: reports.append(message))
+    before = counts()
+
+    result = import_item.RS_OT_import_item.execute(operator, bpy.context)  # pyrefly: ignore[bad-argument-type]
+
+    assert result == {"CANCELLED"}
+    assert reports == ["Item 9999 is not in the cache."]
+    assert counts() == before
+
+
+def test_a_model_file_missing_from_the_cache_is_refused_naming_the_model_and_leaves_nothing(
+    monkeypatch, tmp_path, cache
+):
+    # Item 2653 lists models 3379, 164 and 3381 (ItemDefinitions.json). Every model file is read before an object is
+    # made, so the missing second file makes nothing.
+    use_changed_cache(monkeypatch, tmp_path, cache, lambda parts: parts["models"].pop(164))
+    before = counts()
+
+    with pytest.raises(RuntimeError, match=r"Model 164 is not in .*Set the Cache folder"):
+        run_import(2653)
+
+    assert counts() == before
+
+
+def test_a_failure_after_the_first_object_is_made_removes_it_with_its_mesh_and_materials(monkeypatch):
+    real = import_item.model_to_object
+    calls = []
+
+    def fails_on_the_second_model(*arguments):
+        calls.append(arguments)
+        if len(calls) == 2:
+            raise RuntimeError("the second model could not be built")
+        return real(*arguments)
+
+    monkeypatch.setattr(import_item, "model_to_object", fails_on_the_second_model)
+    before = counts()
+
+    with pytest.raises(RuntimeError, match="the second model could not be built"):
+        run_import(2653)
+
+    assert len(calls) == 2
+    assert counts() == before
+
+
+def test_a_cache_without_the_item_group_is_refused_with_the_cause_and_adds_nothing(monkeypatch, tmp_path, cache):
+    use_changed_cache(monkeypatch, tmp_path, cache, lambda parts: parts["items"].clear())
+    before = counts()
+    choices = import_item._worn_item_choices(type("Operator", (), {"body": "MALE"})(), bpy.context)
+
+    with pytest.raises(RuntimeError, match=r"Set the Cache folder in the add-on preferences"):
+        run_import(import_item.NO_ITEMS)
+
+    assert [identifier for identifier, _, _ in choices] == ["none"]
+    assert "group 10" in choices[0][1]
+    assert counts() == before
+
+
+def test_an_empty_or_stale_item_choice_with_a_valid_cache_asks_for_an_item_and_adds_nothing():
+    # Blender rejects a "none" that the list does not offer before `execute` runs, so `execute` is called directly.
+    before = counts()
+
+    for choice in ("", "none"):
+        reports = []
+        operator = SimpleNamespace(body="MALE", item=choice, report=lambda level, message: reports.append(message))
+
+        result = import_item.RS_OT_import_item.execute(operator, bpy.context)  # pyrefly: ignore[bad-argument-type]
+
+        assert result == {"CANCELLED"}
+        assert reports == ["Pick an item that has a worn model for the male body."]
+    assert counts() == before

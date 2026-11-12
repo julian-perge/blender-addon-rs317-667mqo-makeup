@@ -6,8 +6,8 @@ from dataclasses import replace
 import bpy
 
 from ..formats import decode
-from ..formats.appearance import items_with_worn_model, recolour
-from ..formats.cache_profile import SET_CACHE_FOLDER
+from ..formats.appearance import WornItem, items_with_worn_model, recolour
+from ..formats.cache_profile import SET_CACHE_FOLDER, CacheProfile, MissingResourceError
 from . import appearance_props, model_source
 from .mesh import model_to_object
 from .preferences import brightness, first_texture, texture_folders
@@ -24,11 +24,18 @@ def _worn_item_choices(self, context) -> list[tuple[str, str, str]]:
     if cache is None:
         choices = [(NO_ITEMS, SET_CACHE_FOLDER, "")]
     else:
-        found = items_with_worn_model(cache.items, self.body == "FEMALE")
-        choices = [(str(item.id), f"{item.name} ({item.id})", "") for item in found]
+        try:
+            found = items_with_worn_model(cache.items, self.body == "FEMALE")
+            choices = [(str(item.id), f"{item.name} ({item.id})", "") for item in found]
+        except MissingResourceError as error:
+            choices = [(NO_ITEMS, str(error), "")]
     _kept_items.append(choices)
     del _kept_items[:-4]
     return choices
+
+
+class RefusalError(Exception):
+    """The import cannot run, and the message names the cause."""
 
 
 class RS_OT_import_item(bpy.types.Operator):
@@ -50,17 +57,53 @@ class RS_OT_import_item(bpy.types.Operator):
 
     def execute(self, context):
         cache = appearance_props.profile()
-        if cache is None or self.item == NO_ITEMS:
-            self.report({"ERROR"}, SET_CACHE_FOLDER)
+        female = self.body == "FEMALE"
+        try:
+            if cache is None:
+                raise RefusalError(SET_CACHE_FOLDER)
+            items = cache.items
+            if self.item in ("", NO_ITEMS):
+                raise RefusalError(f"Pick an item that has a worn model for the {'female' if female else 'male'} body.")
+            if int(self.item) not in items:
+                raise RefusalError(f"Item {self.item} is not in the cache.")
+            item = items[int(self.item)]
+            imported = _import_models(cache, item, _worn_models(item, female))
+        except (RefusalError, MissingResourceError) as error:
+            self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
-        item = cache.items[int(self.item)]
-        models = item.female_models if self.body == "FEMALE" else item.male_models
-        folders = texture_folders()
-        shown_brightness = brightness()
-        imported = []
-        for model_id in (model_id for model_id in models if model_id != -1):
-            data = cache.model_bytes(model_id)
-            model = decode(data, profile="osrs-149")
+        for obj in context.view_layer.objects:
+            obj.select_set(False)
+        for obj in imported:
+            obj.select_set(True)
+        context.view_layer.objects.active = imported[-1]
+        self.report({"INFO"}, f"Imported {len(imported)} models of {item.name} ({item.id})")
+        return {"FINISHED"}
+
+
+def _worn_models(item: WornItem, female: bool) -> list[int]:
+    """The model ids of the item's worn model for the body, or a RefusalError when the import cannot show them."""
+    if item.retextures:
+        raise RefusalError(f"{item.name} ({item.id}) lists retextures, which this import does not show.")
+    models = [model_id for model_id in (item.female_models if female else item.male_models) if model_id != -1]
+    if not models:
+        raise RefusalError(f"{item.name} ({item.id}) has no worn model for the {'female' if female else 'male'} body.")
+    return models
+
+
+def _import_models(cache: CacheProfile, item: WornItem, models: list[int]) -> list[bpy.types.Object]:
+    """One object per model file. Every file is read first, so a missing one makes nothing. A failure while building
+    removes every object, mesh and material made so far and passes on."""
+    files = [
+        (model_id, data, decode(data, profile="osrs-149"))
+        for model_id in models
+        for data in [cache.model_bytes(model_id)]
+    ]
+    objects, meshes, materials = set(bpy.data.objects), set(bpy.data.meshes), set(bpy.data.materials)
+    folders = texture_folders()
+    shown_brightness = brightness()
+    imported = []
+    try:
+        for model_id, data, model in files:
             # `recolour` replaces a list instead of changing it, so a shallow copy keeps the model's own colours.
             recoloured = replace(model)
             for find, to in item.recolours:
@@ -75,13 +118,15 @@ class RS_OT_import_item(bpy.types.Operator):
             if isinstance(obj.data, bpy.types.Mesh):
                 model_source.record_source_hash(obj.data, hashlib.sha256(data).hexdigest())
             imported.append(obj)
-        for obj in context.view_layer.objects:
-            obj.select_set(False)
-        for obj in imported:
-            obj.select_set(True)
-        context.view_layer.objects.active = imported[-1]
-        self.report({"INFO"}, f"Imported {len(imported)} models of {item.name} ({item.id})")
-        return {"FINISHED"}
+    except Exception:
+        for obj in set(bpy.data.objects) - objects:
+            bpy.data.objects.remove(obj)
+        for mesh in set(bpy.data.meshes) - meshes:
+            bpy.data.meshes.remove(mesh)
+        for material in set(bpy.data.materials) - materials:
+            bpy.data.materials.remove(material)
+        raise
+    return imported
 
 
 def _search_items(body: str) -> None:

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from js5_builder import item_definition
 from runelite_json import load_items
 
 from rsps_toolkit.formats.item_definition import decode_item
@@ -51,3 +52,16 @@ def test_an_unknown_opcode_is_refused():
 def test_bytes_after_the_closing_opcode_are_refused():
     with pytest.raises(ValueError, match="2 byte"):
         decode_item(0, bytes([11, 0, 1, 2]))
+
+
+def test_the_test_encoder_writes_what_the_decoder_reads():
+    item = decode_item(
+        9000,
+        item_definition(
+            "Test item", male=(10, 11, 12), female=(20, -1, -1), recolours=((1, 2),), retextures=((3, 4), (5, 6))
+        ),
+    )
+    assert item.worn.name == "Test item"
+    assert item.worn.male_models == (10, 11, 12) and item.worn.female_models == (20, -1, -1)
+    assert item.worn.recolours == ((1, 2),) and item.worn.retextures == ((3, 4), (5, 6))
+    assert decode_item(9001, item_definition("Bare")).worn.male_models == (-1, -1, -1)
