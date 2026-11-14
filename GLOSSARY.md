@@ -92,6 +92,10 @@ _Avoid_: texture mode, mapping type
 A texture mapping whose reference points are the face's own three corners, rather than a separately retained texture triangle.
 _Avoid_: cylindrical fallback, cube fallback
 
+**Sprite**:
+One image of cache index 8, stored as palette indices on a canvas. A sprite group is one group of index 8. It holds one or more sprites, called its frames, which share one palette and one canvas size. The pixels of a texture come from frame 0 of each of its sprite groups.
+_Avoid_: bitmap, texture image
+
 ## Regions and scenery
 
 **Region**:

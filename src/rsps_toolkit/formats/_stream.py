@@ -11,7 +11,8 @@ def smart(value: int) -> bytes:
 
 
 class Reader:
-    """Reads big-endian values from one section of a model file, raising IndexError past its end."""
+    """Reads big-endian values from cache data, such as one section of a model file or one definition, raising
+    IndexError past its end."""
 
     def __init__(self, data: bytes, offset: int = 0) -> None:
         self._data = data
