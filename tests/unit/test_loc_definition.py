@@ -56,9 +56,14 @@ def test_opcode_92_ends_the_impostors_with_its_own_default():
     assert (loc.impostor_varbit, loc.impostor_varp, loc.impostors) == (-1, 3, (11, 42))
 
 
+def test_an_animation_of_0xffff_is_no_animation():
+    # ObjectComposition.java lines 398 to 402: opcode 24 turns an animation id of 65535 into -1.
+    assert decode_loc(1, bytes([24, 0xFF, 0xFF, 0])).animation == -1
+
+
 def test_a_second_model_list_is_skipped():
     # ObjectComposition.java lines 353 to 354 and 370 to 371: once a loc has models, a later opcode 1 or 5 is skipped,
-    # because the import assumes that the client's low memory mode is off (`GameCanvas.java` line 295).
+    # because the client never turns low memory mode on (`Client.java` line 1214, `AbstractSoundSystem.java` line 503).
     loc = decode_loc(1, bytes([5, 1, 0x00, 0x07, 1, 1, 0x00, 0x08, 10, 5, 1, 0x00, 0x09, 0]))
     assert (loc.models, loc.loc_types) == ((7,), None)
 

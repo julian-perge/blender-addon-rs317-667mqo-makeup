@@ -31,7 +31,7 @@ class Overlay:
     `hides_underlay` is the client's `isHidden`, with RuneLite's name. It is True unless opcode 5 clears it. The only use
     of it that is checked is `class24.java` lines 224 to 230: a flat tile gets tile flag 2340 only when its overlay keeps
     the flag. It does not decide whether the overlay is drawn. The overlay that the client does not draw is the one with
-    colour 0xFF00FF (`class24.java` lines 252 to 253)."""
+    colour 0xFF00FF (`class24.java` lines 252 to 253, and "Hidden overlay" in `GLOSSARY.md`)."""
 
     colour: int
     texture: int
@@ -84,7 +84,8 @@ def decode_overlay(overlay_id: int, data: bytes) -> Overlay:
 
 def _hsl(colour: int) -> tuple[float, float, float]:
     """The hue as a fraction of a turn from -1/6 to 5/6, and the saturation and the lightness from 0 to 1, as both
-    `setHSL` methods compute them. The hue is negative when red is highest and blue is above green (`FloorUnderlayDefinition.java` lines 102 to 144, `Overlay.java` lines 153 to 195)."""
+    `setHSL` methods compute them. The hue is negative when red is highest and blue is above green
+    (`FloorUnderlayDefinition.java` lines 102 to 144, `Overlay.java` lines 153 to 195)."""
     red = (colour >> 16 & 255) / 256.0
     green = (colour >> 8 & 255) / 256.0
     blue = (colour & 255) / 256.0

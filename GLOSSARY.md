@@ -122,6 +122,10 @@ _Avoid_: floor colour
 A ground type with its own colour or texture and shape, drawn over the underlay of a tile (config group 4, 137 definitions in snapshot 430).
 _Avoid_: floor type
 
+**Hidden overlay**:
+An overlay with colour 0xFF00FF. The client does not draw the overlay part of a tile that uses it: `class24.java` lines 252 to 253 give that part colour -2, `KeyFocusListener.java` lines 243 to 244 turn -2 into 12345678, and `Region.java` lines 1852, 1879 and 1967 skip faces of that colour. The overlay flag that opcode 5 clears (the client's `isHidden`, RuneLite's `hideUnderlay`) does not decide this.
+_Avoid_: `isHidden` overlay
+
 **Loc**:
 A fixed thing in the game world, such as a tree, a wall or a door. A loc definition (config group 6, 30,386 in snapshot 430) names its model and can carry recolours and retextures.
 _Avoid_: object (reserve for Blender), game object

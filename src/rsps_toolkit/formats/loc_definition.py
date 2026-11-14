@@ -79,8 +79,9 @@ def decode_loc(loc_id: int, data: bytes) -> LocDefinition:
     while (opcode := reader.u8()) != 0:
         if opcode in (1, 5):
             # Lines 350 to 380. The client sets low detail mode from its low memory mode (`GameCanvas.java` line 295,
-            # `KitDefinition.java` line 252). The import assumes that low memory mode is off, as it does for textures
-            # (`GameCanvas.java` line 445). So once a loc has models, a later list is skipped. A count of 0 reads nothing.
+            # `KitDefinition.java` line 252), and it only ever sets low memory mode to false (`Client.java` line 1214,
+            # `AbstractSoundSystem.java` line 503). So once a loc has models, a later list is skipped. A count of 0 reads
+            # nothing.
             count = reader.u8()
             if count == 0:
                 continue
@@ -123,6 +124,7 @@ def decode_loc(loc_id: int, data: bytes) -> LocDefinition:
         elif opcode in (68, 82):
             reader.u16()
         elif 70 <= opcode <= 72:
+            # Lines 448 to 453 read the offsets as signed shorts, where RuneLite's ObjectLoader reads unsigned ones.
             offset[opcode - 70] = int.from_bytes(reader.take(2), signed=True)
         elif opcode == 78:
             reader.take(3)

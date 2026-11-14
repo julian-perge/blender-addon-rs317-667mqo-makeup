@@ -53,6 +53,17 @@ def test_an_underlay_with_red_highest_and_blue_above_green_has_a_negative_hue():
     )
 
 
+def test_an_underlay_with_a_lightness_of_exactly_one_half_takes_the_second_saturation_rule():
+    # No fixture underlay has a lightness of exactly 0.5. For 0xFF0101, FloorUnderlayDefinition.java lines 102 to 169
+    # give: lightness (255/256 + 1/256) / 2 = 0.5, so line 131 and not line 127 sets the saturation to
+    # (254/256) / (2 - 255/256 - 1/256) = 0.9921875, and int(0.9921875 * 256) = 254; lightness int(0.5 * 256) = 128.
+    # Line 159 is false at 0.5, so the multiplier is int(512 * 0.5 * 0.9921875) = 254. Green equals blue, so the hue
+    # is 0.
+    assert decode_underlay(0, bytes([1, 0xFF, 0x01, 0x01, 0])) == Underlay(
+        colour=0xFF0101, hue=0, saturation=254, lightness=128, hue_multiplier=254
+    )
+
+
 @pytest.mark.parametrize("data", [bytes([2, 0]), bytes([1, 0, 0, 0, 3, 0])], ids=["opcode 2", "opcode 3 after 1"])
 def test_an_underlay_with_an_unknown_opcode_is_refused(data):
     # FloorUnderlayDefinition.java line 89 reads only opcode 1.
