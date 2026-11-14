@@ -2,7 +2,7 @@
 
 Source: [issue 35](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/35) (Import a map chunk (terrain and scenery) into Blender).
 
-Status: draft of 2026-11-14. It waits for the owner's approval.
+Status: the owner approved this spec on 2026-11-14 (comment on issue 35).
 
 This spec follows the idea and design comments on issue 35, [ADR 0022](../docs/adr/0022-the-region-import-checks-each-value-against-a-second-reader.md) and [ADR 0023](../docs/adr/0023-the-region-import-reads-neighbour-terrain-and-gives-contoured-locs-their-own-mesh.md). Terms follow [GLOSSARY.md](../GLOSSARY.md). The owner answered eight questions at this stage on 2026-11-14:
 
@@ -138,7 +138,7 @@ Build and verify commands are in [AGENTS.md](../AGENTS.md). Test commands are in
 
 ```bash
 prek run --all-files
-uv run pytest tests/test_region.py
+uv run pytest tests/unit/test_region_*.py
 RSPS_SNAPSHOT_430_CACHE=<path to cache> BLENDER_USER_RESOURCES="$PWD/.blender-test-profile" scripts/test-blender.sh tests/blender/test_region_import.py
 ```
 
@@ -151,12 +151,17 @@ RSPS_SNAPSHOT_430_CACHE=<path to cache> BLENDER_USER_RESOURCES="$PWD/.blender-te
 | `src/rsps_toolkit/formats/sprite.py`, `texture.py` | Sprites and textures. |
 | `src/rsps_toolkit/formats/floor_definition.py`, `loc_definition.py` | Underlays, overlays and locs. |
 | `src/rsps_toolkit/formats/region.py` | Terrain, landscape, keys and the client's height at a point. |
-| `src/rsps_toolkit/formats/region_scene.py` | The client rules of parts 6 and 7 that need no Blender: blending, colours, shapes, light, shadows, placement transforms and contour. |
+| `src/rsps_toolkit/formats/region_shapes.py` | The tile shapes and their rotation (part 7). |
+| `src/rsps_toolkit/formats/region_colours.py` | The underlay blending and the colours of a tile corner (part 7). |
+| `src/rsps_toolkit/formats/region_loc.py` | Which model a loc type uses, and the recolours, retextures, mirror, turn and scale of a placement (part 6). |
+| `src/rsps_toolkit/formats/region_placement.py` | Where a placement stands, its slot and its transform (part 6). |
+| `src/rsps_toolkit/formats/region_contour.py` | The contour of a placement on uneven ground (part 6). |
+| `src/rsps_toolkit/formats/region_light.py` | The terrain light and the loc shadows (parts 6 and 7). |
 | `src/rsps_toolkit/blender/region_terrain.py` | The terrain mesh and the tile-to-position function. |
 | `src/rsps_toolkit/blender/region_scenery.py` | The scenery objects and their meshes. |
 | `src/rsps_toolkit/blender/region_import.py` | The operator and its menu entry. |
 | `src/rsps_toolkit/blender/face_materials.py` | The texture source that gives a Blender image. |
-| `tests/test_region.py` and more unit test files as the plan needs | Unit tests without Blender. |
+| `tests/unit/test_region_*.py` | Unit tests without Blender, one file for each rule module and for the landscape. |
 | `tests/blender/test_region_import.py` | Blender tests. |
 | `tests/fixtures/region/` | The groups of `48_50` and its neighbours as the cache stores them, the key file of `48_50`, and the reference files. |
 | `tests/fixtures/RegionReference.java`, `TextureReference.java` | The RuneLite programs that write the reference files, like `ModelReference.java`. |

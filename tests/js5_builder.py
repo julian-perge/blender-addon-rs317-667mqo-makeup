@@ -9,6 +9,7 @@ from pathlib import Path
 from rsps_toolkit.formats.js5 import REFERENCE_INDEX, SECTOR_SIZE, Js5Store
 
 CONFIG_INDEX, MODEL_INDEX = 2, 7
+REGION_FIXTURES = Path(__file__).parent / "fixtures/region"
 KIT_GROUP, ENUM_GROUP, ITEM_GROUP = 3, 8, 10
 
 
@@ -144,3 +145,16 @@ def rewrite_cache(folder: Path, change: Callable[[dict[str, dict[int, bytes]]], 
     for path in folder.iterdir():
         time = before.get(path, path.stat().st_mtime_ns) + 1_000_000_000
         os.utime(path, ns=(time, time))
+
+
+def build_region_cache(folder: Path) -> None:
+    """Write a disk cache that holds the stored reference table of index 5 and the stored landscape group `l48_50` (group
+    617) of snapshot 430, both as the cache stores them. The landscape is still encrypted."""
+    folder.mkdir(parents=True, exist_ok=True)
+    write_store(
+        folder,
+        {
+            (REFERENCE_INDEX, 5): (REGION_FIXTURES / "reference-table-5.dat").read_bytes(),
+            (5, 617): (REGION_FIXTURES / "l48_50.dat").read_bytes(),
+        },
+    )
