@@ -15,6 +15,11 @@ This spec follows the idea and design comments on issue 35, [ADR 0022](../docs/a
 7. **Texture brightness.** Decoded textures follow the Brightness preference.
 8. **Bridges.** They stay for a later issue. The report names the bridge tiles.
 
+The owner settled two more questions in the build and review of issue 41 on 2026-11-14:
+
+9. **Tile colour references.** The expected tile colours of `48_50` come from a scratch Java copy of the client lines, run on RuneLite's terrain and floor references, as in issue 40. The copy stays out of the repo. The test file names the lines it copies.
+10. **No overlay.** A tile with no overlay has no overlay colours (`None`), not a colour that marks a part as not drawn. The client gives `addTile` the overlay colours 0 there (`class24.java` line 239), but `addTile` reads only the underlay colours for it (`Region.java` lines 324 to 325).
+
 ## What this stage found
 
 The evidence is in [Region 48_50 of snapshot 430](../docs/research/region-48-50.md).
@@ -42,7 +47,7 @@ Every rule comes from the 2018 Old School client in `<RuneLite May 2018 tree>/ru
 | Landscape records | `Client.java` 1761 to 1801, `Buffer.java` 550 to 570 | RuneLite `LocationsLoader` |
 | Loc definitions | `ObjectComposition.java` 304 to 322 (`post`) and 347 to 513 (`loadData`) | RuneLite `ObjectLoader` |
 | Underlay and overlay definitions | `FloorUnderlayDefinition.java` 61 to 170, `Overlay.java` 97 to 211 | RuneLite `UnderlayLoader` and `OverlayLoader` |
-| Underlay blending over 11 by 11 tiles | `class24.java` 119 to 216, `class158.java` 81 to 100 | RuneLite `MapImageDumper`, where it agrees with the client |
+| Underlay blending over 10 by 10 tiles, from x - 4 to x + 5 (issue 41 corrected 11 by 11) | `class24.java` 119 to 216, `class158.java` 81 to 100 | RuneLite `MapImageDumper`, where it agrees with the client |
 | Overlay colour, hidden overlay, textured overlay | `class24.java` 238 to 287 | none |
 | Light into a colour | `class16.java` 165 to 178, `KeyFocusListener.java` 242 to 263 | none |
 | Tile shapes and their rotation | `Region.java` 320 to 355 (`addTile`), `SceneTileModel.java` 76 to 77 and the constructor from 80 | none |
@@ -153,11 +158,11 @@ RSPS_SNAPSHOT_430_CACHE=<path to cache> BLENDER_USER_RESOURCES="$PWD/.blender-te
 | `src/rsps_toolkit/formats/floor_definition.py`, `loc_definition.py` | Underlays, overlays and locs. |
 | `src/rsps_toolkit/formats/region.py` | Terrain, landscape, keys and the client's height at a point. |
 | `src/rsps_toolkit/formats/region_shapes.py` | The tile shapes and their rotation (part 7). |
-| `src/rsps_toolkit/formats/region_colours.py` | The underlay blending and the colours of a tile corner (part 7). |
+| `src/rsps_toolkit/formats/region_colours.py` | The underlay blending, the terrain light and the colours of a tile corner (part 7). |
 | `src/rsps_toolkit/formats/region_loc.py` | Which model a loc type uses, and the recolours, retextures, mirror, turn and scale of a placement (part 6). |
 | `src/rsps_toolkit/formats/region_placement.py` | Where a placement stands, its slot and its transform (part 6). |
 | `src/rsps_toolkit/formats/region_contour.py` | The contour of a placement on uneven ground (part 6). |
-| `src/rsps_toolkit/formats/region_light.py` | The terrain light and the loc shadows (parts 6 and 7). |
+| `src/rsps_toolkit/formats/region_light.py` | The loc shadows (part 6). |
 | `src/rsps_toolkit/blender/region_terrain.py` | The terrain mesh and the tile-to-position function. |
 | `src/rsps_toolkit/blender/region_scenery.py` | The scenery objects and their meshes. |
 | `src/rsps_toolkit/blender/region_import.py` | The operator and its menu entry. |
