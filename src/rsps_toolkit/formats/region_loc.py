@@ -13,10 +13,14 @@ from .model import Model
 _NO_TEXTURE = 0xFFFF
 """The value that a retexture would write as the texture -1 of the client's `short`."""
 
+_TEXTURED_FACE_COLOUR = 127
+"""The colour that the client gives a textured face of an old-format model (`ModelData.java` line 943)."""
+
 
 @dataclass(frozen=True)
 class LocModel:
-    """What `ObjectComposition.getModel` picks for one loc type and rotation, with the loc's own changes."""
+    """What `ObjectComposition.getModel` picks for one loc type and rotation. The recolours, retextures, scale and
+    offset of the loc stay on its `LocDefinition`, which the caller already holds."""
 
     model_ids: tuple[int, ...]
     """The cache models to show. The client joins several models into one (`ObjectComposition.java` lines 728 to 733),
@@ -24,11 +28,6 @@ class LocModel:
     mirrored: bool
     """Whether the client mirrors each model before it does anything else with it (`ModelData.method2633`, lines 1380 to
     1390): z is negated and the two corners of each face swap."""
-    recolours: tuple[tuple[int, int], ...]
-    retextures: tuple[tuple[int, int], ...]
-    scale: tuple[int, int, int]
-    """The model scale in x, height and y. 128 is a scale of 1."""
-    offset: tuple[int, int, int]
 
 
 def shown_loc_id(loc_id: int, locs: Mapping[int, LocDefinition]) -> int | None:
@@ -68,14 +67,7 @@ def pick_model(definition: LocDefinition, loc_type: int, rotation: int) -> LocMo
             return None
         model_ids = (definition.models[definition.loc_types.index(loc_type)],)
         mirrored = definition.mirrored != (rotation > 3)
-    return LocModel(
-        model_ids=model_ids,
-        mirrored=mirrored,
-        recolours=definition.recolours,
-        retextures=definition.retextures,
-        scale=definition.scale,
-        offset=definition.offset,
-    )
+    return LocModel(model_ids=model_ids, mirrored=mirrored)
 
 
 def recolour_model(model: Model, recolours: Sequence[tuple[int, int]], retextures: Sequence[tuple[int, int]]) -> Model:
@@ -85,21 +77,28 @@ def recolour_model(model: Model, recolours: Sequence[tuple[int, int]], retexture
     Each pair changes every face that has the colour or texture to find, and the pairs apply in order, so a later pair
     sees what an earlier one wrote. A model of the new format keeps a colour for a textured face too (`ModelData.java`
     line 636), and a recolour changes that colour as well. A retexture to 65535 is refused, because the client then
-    gives the face no texture (-1) and Model cannot hold that with the colour that the face then shows.
+    gives the face no texture (-1) and Model cannot hold that with the colour that the face then shows. A recolour of
+    127 on an old-format model with a textured face is refused too: the client gives such a face the colour 127, Model
+    does not store it, and the recolour would miss that face without a sign.
     """
     for _, replacement in retextures:
         if replacement == _NO_TEXTURE:
             raise ValueError("A retexture to 65535 is not supported")
+    if (
+        model.new_data is None
+        and any(texture is not None for texture in model.face_textures)
+        and any(find == _TEXTURED_FACE_COLOUR for find, _ in recolours)
+    ):
+        raise ValueError("A recolour of 127 on a textured face of an old-format model is not supported")
     colours = list(model.face_colours)
     textures = list(model.face_textures)
     new_data = model.new_data
-    kept = None if new_data is None else list(new_data.textured_face_colours)
+    kept = list(new_data.textured_face_colours) if new_data is not None else []
     for find, replacement in recolours:
         colours = [replacement if colour == find else colour for colour in colours]
-        if kept is not None:
-            kept = [replacement if colour == find else colour for colour in kept]
+        kept = [replacement if colour == find else colour for colour in kept]
     for find, replacement in retextures:
         textures = [replacement if texture == find else texture for texture in textures]
-    if new_data is not None and kept is not None:
+    if new_data is not None:
         new_data = replace(new_data, textured_face_colours=tuple(kept))
     return replace(model, face_colours=colours, face_textures=textures, new_data=new_data)

@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -122,25 +123,6 @@ def test_the_mirror_of_a_loc_without_loc_types_ignores_the_rotation():
     assert [mirror_of(replace(plain, mirrored=True), 10, r) for r in (0, 4)] == [True, True]
 
 
-def test_the_choice_passes_on_the_recolours_retextures_scale_and_offset_of_the_loc():
-    definition = loc(
-        models=(11,),
-        loc_types=(10,),
-        recolours=((1, 2),),
-        retextures=((3, 4),),
-        scale=(256, 64, 128),
-        offset=(-16, 16, 0),
-    )
-    model = pick_model(definition, 10, 0)
-    assert model is not None
-    assert (model.recolours, model.retextures, model.scale, model.offset) == (
-        ((1, 2),),
-        ((3, 4),),
-        (256, 64, 128),
-        (-16, 16, 0),
-    )
-
-
 def test_a_rotation_above_7_is_refused():
     with pytest.raises(ValueError, match="rotation"):
         pick_model(LOCS[83], 0, 8)
@@ -181,6 +163,13 @@ def test_a_retexture_changes_exactly_the_faces_that_have_the_texture_to_find():
     assert result.face_colours == [10, None, None, 10]
 
 
+def test_retextures_apply_in_order_so_a_later_pair_sees_an_earlier_change():
+    # Lines 806 to 811 of ObjectComposition.java loop over the pairs like the recolours.
+    model = triangles(face_textures=[None, 5, 7, None], face_colours=[10, None, None, 10])
+    model = replace(model, face_texture_triangles=[None, 0, 0, None])
+    assert recolour_model(model, (), ((5, 7), (7, 9))).face_textures == [None, 9, 9, None]
+
+
 def test_a_retexture_leaves_a_model_without_textures_as_it_is():
     plain = triangles(face_textures=[None] * 4, face_colours=[10, 20, 30, 10], face_texture_triangles=[None] * 4)
     assert recolour_model(plain, (), ((5, 7),)) == plain
@@ -203,8 +192,9 @@ def test_a_recolour_also_changes_the_colour_that_a_textured_face_keeps():
     result = recolour_model(model, ((127, 500), (9096, 600)), ())
     assert result.new_data is not None
     assert {result.new_data.textured_face_colours[i] for i in textured} == {500}
-    # An untextured face can have the colour 127 too, and it changes as well.
-    assert result.face_colours == [None if c is None else {127: 500, 9096: 600}.get(c, c) for c in model.face_colours]
+    # Untextured faces can have the colour 127 too, and they change as well. Of the 79 faces, 50 have 9096 and 12 have
+    # 127 (from the fixture's RuneLite decoding), 16 have no colour and 1 has 0.
+    assert Counter(result.face_colours) == {600: 50, None: 16, 500: 12, 0: 1}
     assert result.face_textures == model.face_textures
 
 
@@ -212,3 +202,15 @@ def test_a_retexture_to_the_value_65535_is_refused():
     # The client then sets the face texture to -1 (a short), which Model cannot hold with the colour of the face.
     with pytest.raises(ValueError, match="65535"):
         recolour_model(triangles(), (), ((5, 0xFFFF),))
+
+
+def test_a_recolour_of_127_on_an_old_format_model_with_a_textured_face_is_refused():
+    # ModelData.java line 943: the client gives a textured face of an old-format model the colour 127, and Model does not
+    # store it, so the recolour would miss that face.
+    with pytest.raises(ValueError, match="127"):
+        recolour_model(triangles(), ((127, 500),), ())
+
+
+def test_a_recolour_of_127_on_an_old_format_model_without_textured_faces_changes_its_faces():
+    plain = triangles(face_textures=[None] * 4, face_colours=[127, 20, 127, 10], face_texture_triangles=[None] * 4)
+    assert recolour_model(plain, ((127, 500),), ()).face_colours == [500, 20, 500, 10]
