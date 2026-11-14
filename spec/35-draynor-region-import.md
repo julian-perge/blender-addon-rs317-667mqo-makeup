@@ -42,7 +42,7 @@ Every rule comes from the 2018 Old School client in `<RuneLite May 2018 tree>/ru
 | Landscape records | `Client.java` 1761 to 1801, `Buffer.java` 550 to 570 | RuneLite `LocationsLoader` |
 | Loc definitions | `ObjectComposition.java` 304 to 322 (`post`) and 347 to 513 (`loadData`) | RuneLite `ObjectLoader` |
 | Underlay and overlay definitions | `FloorUnderlayDefinition.java` 61 to 170, `Overlay.java` 97 to 211 | RuneLite `UnderlayLoader` and `OverlayLoader` |
-| Underlay blending over 11 by 11 tiles | `class24.java` 119 to 216, `class158.java` 81 to 100 | RuneLite `MapImageDumper`, where it agrees with the client |
+| Underlay blending over 10 by 10 tiles, from x - 4 to x + 5 (issue 41 corrected 11 by 11) | `class24.java` 119 to 216, `class158.java` 81 to 100 | RuneLite `MapImageDumper`, where it agrees with the client |
 | Overlay colour, hidden overlay, textured overlay | `class24.java` 238 to 287 | none |
 | Light into a colour | `class16.java` 165 to 178, `KeyFocusListener.java` 242 to 263 | none |
 | Tile shapes and their rotation | `Region.java` 320 to 355 (`addTile`), `SceneTileModel.java` 76 to 77 and the constructor from 80 | none |
