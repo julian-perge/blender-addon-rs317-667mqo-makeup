@@ -6,10 +6,12 @@ import struct
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from rsps_toolkit.formats.js5 import REFERENCE_INDEX, SECTOR_SIZE, Js5Store
+from rsps_toolkit.formats.js5 import REFERENCE_INDEX, SECTOR_SIZE, Js5Store, name_hash, reference_table, unpack
 
 CONFIG_INDEX, MODEL_INDEX = 2, 7
 REGION_FIXTURES = Path(__file__).parent / "fixtures/region"
+REGION_TERRAINS = tuple(f"m{x}_{y}" for x in (47, 48, 49) for y in (49, 50, 51))
+"""The terrain groups of region `48_50` and its 8 neighbours, which `tests/fixtures/region/` holds as the cache stores them."""
 KIT_GROUP, ENUM_GROUP, ITEM_GROUP = 3, 8, 10
 
 
@@ -147,14 +149,15 @@ def rewrite_cache(folder: Path, change: Callable[[dict[str, dict[int, bytes]]], 
         os.utime(path, ns=(time, time))
 
 
-def build_region_cache(folder: Path) -> None:
-    """Write a disk cache that holds the stored reference table of index 5 and the stored landscape group `l48_50` (group
-    617) of snapshot 430, both as the cache stores them. The landscape is still encrypted."""
+def build_region_cache(folder: Path, terrains: tuple[str, ...] = REGION_TERRAINS) -> None:
+    """Write a disk cache that holds the stored reference table of index 5, the stored landscape group `l48_50` (group
+    617) and the stored terrain groups named in `terrains` of snapshot 430, all as the cache stores them. The landscape is
+    still encrypted. A terrain group that `terrains` leaves out keeps its name in the reference table but has no data, so
+    the cache lacks it."""
     folder.mkdir(parents=True, exist_ok=True)
-    write_store(
-        folder,
-        {
-            (REFERENCE_INDEX, 5): (REGION_FIXTURES / "reference-table-5.dat").read_bytes(),
-            (5, 617): (REGION_FIXTURES / "l48_50.dat").read_bytes(),
-        },
-    )
+    table_data = (REGION_FIXTURES / "reference-table-5.dat").read_bytes()
+    names = reference_table(unpack(table_data)).names
+    stored = {(REFERENCE_INDEX, 5): table_data, (5, 617): (REGION_FIXTURES / "l48_50.dat").read_bytes()}
+    for name in terrains:
+        stored[(5, names[name_hash(name)])] = (REGION_FIXTURES / f"{name}.dat").read_bytes()
+    write_store(folder, stored)

@@ -37,7 +37,7 @@ Every rule comes from the 2018 Old School client in `<RuneLite May 2018 tree>/ru
 
 | Rule | Client lines | Second reader |
 | --- | --- | --- |
-| Terrain records of a region, and the height of a tile with no stored height | `SoundTaskDataProvider.java` 57 to 115 (`loadTerrain`) | RuneLite 1.13.6 `RegionLoader` |
+| Terrain records of a region, and the height of a tile with no stored height | `SoundTaskDataProvider.java` 57 to 115 (`loadTerrain`) | RuneLite 1.9.0 `MapLoader` and `Region.loadTerrain` (1.13.6 reads 16-bit opcodes, issue 37) |
 | A neighbour region that the cache lacks | `CombatInfo1.java` 65 to 89 | none |
 | Landscape records | `Client.java` 1761 to 1801, `Buffer.java` 550 to 570 | RuneLite `LocationsLoader` |
 | Loc definitions | `ObjectComposition.java` 304 to 322 (`post`) and 347 to 513 (`loadData`) | RuneLite `ObjectLoader` |
@@ -86,7 +86,8 @@ The parts are in build order. The planner turns them into tasks.
 
 - The terrain records of the region and its 8 neighbours: the height, the settings, the underlay, the overlay, the overlay shape and the overlay rotation of each tile on each level.
 - The height of a tile with no stored height comes from the client's noise function at the tile's world position.
-- A neighbour that the cache lacks follows `CombatInfo1.java` 65 to 89. When the client calls that function is not fully read (the condition `class54.field495 < 800` at `Client.java` line 1740). Region `48_50` has all 8 neighbours.
+- A neighbour that the cache lacks follows `CombatInfo1.java` 65 to 89. The client calls that function only while the scene centre is below chunk y 800 (`Client.java` line 1740, `ClanMemberManager.java` 277 to 285), so only for a region with y 99 or less. Region `48_50` has all 8 neighbours.
+- The client never sets the heights inside a missing region. The owner chose height 0 for them on 2026-11-14 (issue 37).
 
 ### 5. Landscape
 
