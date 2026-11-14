@@ -92,6 +92,52 @@ _Avoid_: texture mode, mapping type
 A texture mapping whose reference points are the face's own three corners, rather than a separately retained texture triangle.
 _Avoid_: cylindrical fallback, cube fallback
 
+## Regions and scenery
+
+**Region**:
+A square of 64 by 64 tiles that the cache stores as one unit, named by its x and y numbers. Region `48_50` covers tiles x 3072 to 3135 and y 3200 to 3263. The cache names its groups `m<x>_<y>` (terrain) and `l<x>_<y>` (landscape) in index 5.
+_Avoid_: map square, chunk, area
+
+**Tile**:
+One square of the ground. It is 128 game units wide by general knowledge, which is unverified until a client confirms it.
+_Avoid_: cell
+
+**Level**:
+One floor of a region, counted from 0 at the ground. The region import reads level 0 only.
+_Avoid_: plane, floor
+
+**Terrain**:
+The ground of a region: the height of each tile corner, and the underlay and overlay of each tile. It is read from the group `m<x>_<y>`.
+_Avoid_: map, landscape
+
+**Underlay**:
+The base ground colour of a tile (config group 1, 91 definitions in snapshot 430).
+_Avoid_: floor colour
+
+**Overlay**:
+A ground type with its own colour or texture and shape, drawn over the underlay of a tile (config group 4, 137 definitions in snapshot 430).
+_Avoid_: floor type
+
+**Loc**:
+A fixed thing in the game world, such as a tree, a wall or a door. A loc definition (config group 6, 30,386 in snapshot 430) names its model and can carry recolours and retextures.
+_Avoid_: object (reserve for Blender), game object
+
+**Placement**:
+One loc put on one tile, with a type and a rotation. A placement becomes one Blender object. Placements with the same loc model, recolours and retextures share one mesh.
+_Avoid_: spawn, instance
+
+**Landscape**:
+The group `l<x>_<y>` of a region. It lists the placements of the region and is encrypted with landscape keys.
+_Avoid_: scenery file, loc file
+
+**Landscape keys**:
+The four XTEA numbers that decrypt one landscape. An OpenRS2 download holds them as `keys/<group>.txt` next to its `cache/` folder. A region with no key is inferred to be empty.
+_Avoid_: map keys, region keys
+
+**Scenery**:
+The placements of a region as the importer shows them in Blender.
+_Avoid_: props, decorations
+
 ## Animation labels
 
 **Spot effect**:

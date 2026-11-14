@@ -1,0 +1,14 @@
+# The region import checks each value against a second reader of snapshot 430
+
+Issue 35 imports region `48_50` (Draynor Village) of snapshot 430 into Blender, so that a player built with the add-on can stand in a real place. The idea stage settled the scope: one region, level 0 only, terrain and scenery. On 2026-11-14 the owner settled the design questions that the idea stage left open.
+
+- **Landscape keys.** The landscape of a region is encrypted. The add-on reads its keys from `keys/<group>.txt`, in the folder next to the `cache/` folder that the Cache folder preference names, as an OpenRS2 download lays it out. There is no new preference. When the keys folder is missing, the error names the folder.
+- **Textures.** The region import decodes textures from cache index 9 and the sprites of index 8. It does not read the texture folder. This is the first sub-issue. It replaces the sentence "Decoding textures from cache index 9 is a separate spec" in [ADR 0017](0017-read-caches-directly-without-317-and-667-code.md). The texture folder preference stays for model import. This ADR does not decide whether model import also decodes textures.
+- **Texture oracle.** A RuneLite reference file in `tests/fixtures/` holds the decoded pixels of some textures. It is made like the files of `ModelReference.java`. A test matches the pixels exactly. `texture_dump.zip` is not the oracle. It differs from a decoded texture by 4 to 9 of 255 per channel, so a tolerance would be a number that we invent.
+- **Terrain oracle.** A RuneLite dump of every tile of `m48_50` (height, underlay, overlay, shape and rotation) checks the decoding. The underlay blending and the overlay shapes cite named lines of an Old School client from [Model format references](../research/model-formats.md). Where RuneLite and the client disagree, the client wins.
+- **Terrain light.** The importer bakes the client's light for each tile into the vertex colours of the terrain, so that a render looks like the game. The light rule cites client lines too.
+- **Scenery.** One Blender object per placement. Placements share one mesh when they have the same loc model, the same recolours and the same retextures. Scale, rotation and position stay on the object. Scenery has no baked loc light and keeps the look of model import.
+- **Live client.** The owner's live RuneLite client runs build 242, so its scene data can differ from snapshot 430. It is not a data oracle. It gives a reference picture of Draynor for the done check.
+- **Done check.** The owner compares a viewport render with the live-client picture by eye. It is not a test, and nothing is committed for it.
+
+The Spec stage reads the rules for loc type placement and rotation, the light rule and the height rule of the tile-to-position function from the client source, and picks the client for each rule. It also checks the tile size, which is 128 game units by general knowledge and is unverified until then.

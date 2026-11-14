@@ -8,7 +8,7 @@ The owner decided four questions in the spec interview:
 
 - The old model format stays. It is also the format of Old School revision 1 (2013), the format the exporter writes, and the format of the 2013 animation bundle and of the `osrs` and `worn` fixtures. Only the 667 importer, the `rs667` fixtures and the 317 and 667 cache files went.
 - Old School revision 1 models are tested only through the committed fixtures, because the repo holds no raw revision 1 cache.
-- Textures still come from PNG files in the texture folder and `texture_dump.zip`. Decoding textures from cache index 9 is a separate spec.
+- Textures still come from PNG files in the texture folder and `texture_dump.zip`. Decoding textures from cache index 9 is a separate spec. [ADR 0022](0022-the-region-import-checks-each-value-against-a-second-reader.md) settles it for the region import.
 - Blender 5.2 is the manifest floor (`blender_version_min = "5.2.0"`). The tests run on Blender 5.3, and no Blender 5.2 binary is tested.
 
 `scripts/generate-item-wear.py` now uses the add-on's item decoder (`formats/item_definition.py`). Its output for caches 2757 and 430 is byte-equal to the committed `data/item_wear.json`, so the decoder needed no opcode that the add-on lacked.
