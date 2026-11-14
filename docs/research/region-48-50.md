@@ -39,6 +39,15 @@ The landscape has 2,545 placements, of which 1,874 are on level 0.
 - 28 bridge tiles: x 3112 to 3115 and y 3200 to 3206, bit 2 of the level 1 settings.
 - The terrain groups of `48_50` and its 8 neighbours store each opcode as one byte, as `loadTerrain` reads them (`SoundTaskDataProvider.java` line 63). Read that way, each of the 9 groups ends on its last byte. Read with 16-bit opcodes, as RuneLite 1.13.6's `MapLoader` does since the commit "cache: update 209" (aef9c8fa5, 7 October 2022), each one runs past its end. RuneLite 1.9.0 is the last release before that commit, so `RegionReference.java` reads terrain with 1.9.0 (issue 37).
 
+## Textures
+
+Measured on 2026-11-14 for issue 39, with a scratch script that is not in the repo.
+
+- Group 0 of index 9 holds 59 texture definitions, with ids 0 to 59 except 54. Each one has one sprite and colour 0, so no texture of snapshot 430 uses the tint of `Texture.java` lines 114 to 125 or a second sprite.
+- Every sprite of these textures has frame flag 0 or 1. The canvas of textures 7, 37 and 38 is 64 by 64, and the client doubles each pixel. All the other canvases are 128 by 128, and the frames of textures 8, 17, 21, 28, 29, 33, 34, 41 and 52 are smaller than their canvas.
+- Region `48_50` shows 17 textures: 1, 2, 3, 4, 7, 8, 9, 11, 12, 13, 16, 19, 22, 23, 25, 30 and 43. The overlays of the 9 terrains, on every level, give 1, 3, 25 and 43 (overlays 5, 4, 6 and 173). The models give the others. The script read every model of each loc of the level 0 placements, or of its impostor for value 0, and applied the loc's retextures. It did not pick the models by loc type, so the list can hold a texture that the region does not draw.
+- The owner chose to commit all 59 (issue 39, Decisions). The texture definitions are 708 bytes, the sprite groups 0.93 MB, and the reference `tests/fixtures/region/textures.txt.gz` 1.93 MB. The 17 alone would be 0.27 MB of sprites and 0.54 MB of reference.
+
 ## Client facts found on the way
 
 All in the 2018 client, `runescape-client/src/main/java/` of the RuneLite May 2018 tree.
