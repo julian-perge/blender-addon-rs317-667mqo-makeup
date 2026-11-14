@@ -42,9 +42,10 @@ class TileColours:
 
     underlay: tuple[int, int, int, int]
     """`HIDDEN` at every corner when the tile has no underlay."""
-    overlay: tuple[int, int, int, int]
-    """`HIDDEN` at every corner when the tile has no overlay or a hidden overlay. For a textured overlay, each corner
-    holds the light alone, from 2 to 126, which shades the texture."""
+    overlay: tuple[int, int, int, int] | None
+    """None when the tile has no overlay, so it has no overlay part (spec 35, decision 10). `HIDDEN` at every corner for a
+    hidden overlay. For a textured overlay, each corner holds the light alone, from 2 to 126, which shades the
+    texture."""
     texture: int
     """The texture of the overlay, or -1 for none."""
 
@@ -118,7 +119,9 @@ def tile_colours(
     (`class24.java` line 189). `underlays` and `overlays` hold the floor definitions by id, and `shadows` is as
     `corner_light` takes it.
 
-    The underlay colour takes the light of each corner as its lightness (`class16.java` lines 165 to 178). An overlay
+    The underlay colour takes the light of each corner as its lightness (`class16.java` lines 165 to 178). A tile with no
+    overlay has no overlay colours. The client gives `addTile` the overlay colours 0 there (line 239), but `addTile` reads
+    only the underlay colours for it (`Region.java` lines 324 to 325). An overlay
     with a texture gives the light alone (`class24.java` lines 249 to 251, `KeyFocusListener.java` lines 245 to 252). An
     overlay with the colour 0xFF00FF is not drawn (lines 252 to 255). Any other overlay colour takes the light as the
     underlay colour does (lines 257 and 287). The other colour of an overlay and the random hue and lightness offsets
@@ -131,7 +134,7 @@ def tile_colours(
     blended = blended_underlay(terrain, x, y, underlays)
     underlay = _lit(blended, lights)
     if tile.overlay == 0:
-        return TileColours(underlay, (HIDDEN,) * 4, -1)
+        return TileColours(underlay, None, -1)
     overlay = overlays[tile.overlay - 1]
     if overlay.texture >= 0:
         return TileColours(underlay, _lit_texture(lights), overlay.texture)
