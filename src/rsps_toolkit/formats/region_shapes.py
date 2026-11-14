@@ -27,7 +27,8 @@ class TilePoint:
     """Game units north of the tile's south edge, from 0 to 128."""
     corners: tuple[Corner, ...]
     """The one or two corners that give the point its height and colours, in the order SW, SE, NE, NW. For two
-    corners, the client takes the sum of their values shifted right by 1 (`SceneTileModel.java` lines 124 to 220)."""
+    corners, the client takes the sum of their heights and the sum of their colours, each shifted right by 1
+    (`SceneTileModel.java` lines 124 to 220)."""
 
 
 @dataclass(frozen=True)
@@ -42,7 +43,7 @@ class TileTriangle:
 
 
 # The 16 points of `SceneTileModel.java` lines 124 to 220, by their number.
-POINTS = {
+_POINTS = {
     1: TilePoint(0, 0, (Corner.SW,)),
     2: TilePoint(64, 0, (Corner.SW, Corner.SE)),
     3: TilePoint(128, 0, (Corner.SE,)),
@@ -63,7 +64,7 @@ POINTS = {
 
 # `SceneTileModel.java` line 76: the point numbers of each shape. The client never builds shapes 0 and 1 from this
 # table, because `addTile` draws them as a `SceneTilePaint` (`Region.java` lines 324 to 325 and 344 to 345).
-SHAPE_POINTS = (
+_SHAPE_POINTS = (
     (1, 3, 5, 7),
     (1, 3, 5, 7),
     (1, 3, 5, 7),
@@ -81,7 +82,7 @@ SHAPE_POINTS = (
 
 # `SceneTileModel.java` line 77: four numbers for each triangle of each shape. The first is 0 for underlay and 1 for
 # overlay, and the other three are indices into the points of the shape.
-SHAPE_TRIANGLES = (
+_SHAPE_TRIANGLES = (
     (0, 1, 2, 3, 0, 0, 1, 3),
     (1, 1, 2, 3, 1, 0, 1, 3),
     (0, 1, 2, 3, 1, 0, 1, 3),
@@ -98,35 +99,37 @@ SHAPE_TRIANGLES = (
 )
 
 # `Region.java` lines 1853 and 1880 (`drawTileUnderlay`): the north-east triangle, then the south-west triangle.
-PAINT_POINTS = (
-    (POINTS[5], POINTS[7], POINTS[3]),
-    (POINTS[1], POINTS[3], POINTS[7]),
+_PAINT_POINTS = (
+    (_POINTS[5], _POINTS[7], _POINTS[3]),
+    (_POINTS[1], _POINTS[3], _POINTS[7]),
 )
 
 
 def tile_triangles(tile: Tile) -> tuple[TileTriangle, ...]:
     """The triangles of one tile. `class24.java` lines 238 to 241 give `addTile` shape 0 for a tile with no overlay
-    and the overlay shape + 1 for the others. A tile with no underlay and no overlay still gets two triangles here,
-    though the client builds nothing for it (`class24.java` line 189), so the caller drops it."""
+    and the overlay shape + 1 for the others. A tile with no underlay and no overlay gets no triangles, because
+    `class24.java` line 189 does not call `addTile` for it."""
+    if tile.underlay == 0 and tile.overlay == 0:
+        return ()
     if tile.overlay == 0:
-        return tuple(TileTriangle(False, points) for points in PAINT_POINTS)
+        return tuple(TileTriangle(False, points) for points in _PAINT_POINTS)
     shape = tile.overlay_shape + 1
     if shape == 1:
-        return tuple(TileTriangle(True, points) for points in PAINT_POINTS)
+        return tuple(TileTriangle(True, points) for points in _PAINT_POINTS)
     rotation = tile.overlay_rotation
-    points = [POINTS[rotate_point(number, rotation)] for number in SHAPE_POINTS[shape]]
-    table = SHAPE_TRIANGLES[shape]
+    points = [_POINTS[_rotate_point(number, rotation)] for number in _SHAPE_POINTS[shape]]
+    table = _SHAPE_TRIANGLES[shape]
     triangles = []
     for start in range(0, len(table), 4):
         part, a, b, c = table[start : start + 4]
-        a, b, c = (rotate_index(index, rotation) for index in (a, b, c))
+        a, b, c = (_rotate_index(index, rotation) for index in (a, b, c))
         triangles.append(TileTriangle(part == 1, (points[a], points[b], points[c])))
     return tuple(triangles)
 
 
-def rotate_point(number: int, rotation: int) -> int:
+def _rotate_point(number: int, rotation: int) -> int:
     """The number that point `number` takes at this rotation (`SceneTileModel.java` lines 112 to 122). The corner
-    points 1, 3, 5 and 7 keep their numbers, because `rotate_index` rotates the corner indices of the triangle table
+    points 1, 3, 5 and 7 keep their numbers, because `_rotate_index` rotates the corner indices of the triangle table
     instead."""
     if number % 2 == 0 and number <= 8:
         return ((number - 2 * rotation - 1) & 7) + 1
@@ -137,6 +140,6 @@ def rotate_point(number: int, rotation: int) -> int:
     return number
 
 
-def rotate_index(index: int, rotation: int) -> int:
+def _rotate_index(index: int, rotation: int) -> int:
     """`SceneTileModel.java` lines 249 to 259. An index below 4 names a corner point, and the rotation moves it."""
     return (index - rotation) & 3 if index < 4 else index

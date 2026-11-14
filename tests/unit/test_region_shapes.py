@@ -322,3 +322,10 @@ def test_a_tile_with_an_overlay_byte_of_0_has_no_overlay_whatever_its_shape():
     # overlay.
     tile = Tile(0, 0, 1, 0, 5, 2)
     assert triangles(tile) == [(UNDERLAY, *points) for points in DRAW_TILE_UNDERLAY]
+
+
+@pytest.mark.parametrize(("shape", "rotation"), [(0, 0), (5, 2)])
+def test_a_tile_without_an_underlay_or_an_overlay_gets_no_triangles(shape, rotation):
+    # `class24.java` line 189 calls `addTile` only when the underlay id or the overlay id is above 0.
+    tile = Tile(0, 0, 0, 0, shape, rotation)
+    assert triangles(tile) == []
