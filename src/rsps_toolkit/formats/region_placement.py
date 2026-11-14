@@ -128,6 +128,11 @@ def place_scenery(
             raise ValueError(f"A placement is on level {placement.level}, and only level 0 is placed")
         if not 0 <= placement.rotation <= 3:
             raise ValueError(f"A placement has the rotation {placement.rotation}, outside 0 to 3")
+        slot_of(placement.loc_type)
+        if placement.loc not in locs:
+            raise ValueError(
+                f"A placement at ({placement.x}, {placement.y}) names the loc {placement.loc}, which is unknown"
+            )
         raw = locs[placement.loc]
         shown_id = shown_loc_id(placement.loc, locs)
         shown = None if shown_id is None else locs[shown_id]
@@ -150,18 +155,17 @@ def place_scenery(
                 decorations[tile] = record
         elif loc_type == 9:
             _rescale_decoration(decorations.get(tile), raw.decor_displacement)
-    return [
-        PlacedLoc(
-            record.placement,
-            tuple(_transform(record, index, height) for index in range(len(record.parts))),
-        )
-        for record in records
-    ]
+    return [_place(record, height) for record in records]
 
 
 def _models(shown: LocDefinition | None, loc_type: int, rotation: int) -> list[tuple[int, int, LocModel]]:
-    """The `getModel` calls of `PacketBuffer.addObject` for a placement, as (type, rotation, model). A call that gives no
-    model leaves the placement with none."""
+    """The `getModel` calls of `PacketBuffer.addObject` for a placement, as (type, rotation, model), without the calls
+    that give no model.
+
+    Whether `getModel` gives a model depends on the loc type only (`ObjectComposition.java` lines 694 to 751), and the
+    two calls of a placement have the same type. So both calls give a model or neither does. For a wall of type 2 the
+    client would also keep one model if only one existed (`Region.addBoundary`, lines 420 to 421), which this code does
+    as well."""
     if shown is None:
         return []
     if loc_type == 2:
@@ -178,10 +182,11 @@ def _models(shown: LocDefinition | None, loc_type: int, rotation: int) -> list[t
         calls = [(10, rotation)]
     else:
         calls = [(loc_type, rotation)]
-    models = [pick_model(shown, model_type, model_rotation) for model_type, model_rotation in calls]
-    if any(model is None for model in models):
-        return []
-    return [(t, r, m) for (t, r), m in zip(calls, models, strict=True) if m is not None]
+    picked = [
+        (model_type, model_rotation, pick_model(shown, model_type, model_rotation))
+        for model_type, model_rotation in calls
+    ]
+    return [(model_type, model_rotation, model) for model_type, model_rotation, model in picked if model is not None]
 
 
 def _decoration_offset(loc_type: int, rotation: int, wall: LocDefinition | None) -> tuple[int, int]:
@@ -191,7 +196,7 @@ def _decoration_offset(loc_type: int, rotation: int, wall: LocDefinition | None)
         displacement = DEFAULT_DISPLACEMENT if wall is None else wall.decor_displacement
         return displacement * (1, 0, -1, 0)[rotation], displacement * (0, -1, 0, 1)[rotation]
     if loc_type in (6, 8):
-        displacement = 8 if wall is None else _divide(wall.decor_displacement, 2)
+        displacement = DEFAULT_DISPLACEMENT // 2 if wall is None else _divide(wall.decor_displacement, 2)
         return displacement * (1, -1, -1, 1)[rotation], displacement * (-1, -1, 1, 1)[rotation]
     return 0, 0
 
@@ -241,24 +246,46 @@ def _turn(units: int) -> Matrix:
     return ((c, -s, 0), (s, c, 0), (0, 0, 1))
 
 
+def _dot(row: tuple[float, float, float], vector: tuple[float, float, float]) -> float:
+    return row[0] * vector[0] + row[1] * vector[1] + row[2] * vector[2]
+
+
 def _multiply(a: Matrix, b: Matrix) -> Matrix:
-    rows = tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)) for i in range(3))
-    return rows  # type: ignore[return-value]
+    columns = [(b[0][j], b[1][j], b[2][j]) for j in range(3)]
+    return (
+        (_dot(a[0], columns[0]), _dot(a[0], columns[1]), _dot(a[0], columns[2])),
+        (_dot(a[1], columns[0]), _dot(a[1], columns[1]), _dot(a[1], columns[2])),
+        (_dot(a[2], columns[0]), _dot(a[2], columns[1]), _dot(a[2], columns[2])),
+    )
 
 
 def _apply(matrix: Matrix, vector: tuple[float, float, float]) -> tuple[float, float, float]:
-    return tuple(sum(matrix[i][k] * vector[k] for k in range(3)) for i in range(3))  # type: ignore[return-value]
+    return _dot(matrix[0], vector), _dot(matrix[1], vector), _dot(matrix[2], vector)
 
 
-def _transform(record: _Record, index: int, height: Callable[[int, int], int]) -> PlacedPart:
-    placement, raw = record.placement, record.raw
-    model_type, model_rotation, model = record.parts[index]
+def _place(record: _Record, height: Callable[[int, int], int]) -> PlacedLoc:
     shown = record.shown
-    assert shown is not None
-    x, z = _position(raw, placement)
-    floor = _tile_height(raw, placement, height)
-    # Region.java lines 1438 to 1463: the offset moves only the first model of a wall decoration.
-    offset_x, offset_z = record.offset if record.offset is not None and index == 0 else (0, 0)
+    if shown is None or not record.parts:
+        return PlacedLoc(record.placement, ())
+    x, z = _position(record.raw, record.placement)
+    floor = _tile_height(record.raw, record.placement, height)
+    parts = []
+    for index, part in enumerate(record.parts):
+        # Region.java lines 1438 to 1463: the offset moves only the first model of a wall decoration.
+        offset = record.offset if record.offset is not None and index == 0 else (0, 0)
+        parts.append(_transform(record.placement, shown, part, (x + offset[0], z + offset[1], -floor)))
+    return PlacedLoc(record.placement, tuple(parts))
+
+
+def _transform(
+    placement: Placement,
+    shown: LocDefinition,
+    part: tuple[int, int, LocModel],
+    origin: tuple[float, float, float],
+) -> PlacedPart:
+    """The part of a placement with its transform. `origin` is the ground position with the wall decoration offset and
+    the height, in Blender units."""
+    model_type, model_rotation, model = part
     orientation = DIAGONAL_TURN if placement.loc_type == 11 else 0
     diagonal = model_type == 4 and model_rotation > 3
     quarters = model_rotation & 3
@@ -280,9 +307,9 @@ def _transform(record: _Record, index: int, height: Callable[[int, int], int]) -
     shown_offset = (shown.offset[0], shown.offset[2], -shown.offset[1])
     turned_offset = _apply(orient, shown_offset)
     location = (
-        x + offset_x + own[0] + turned_offset[0],
-        z + offset_z + own[1] + turned_offset[1],
-        -floor + own[2] + turned_offset[2],
+        origin[0] + own[0] + turned_offset[0],
+        origin[1] + own[1] + turned_offset[1],
+        origin[2] + own[2] + turned_offset[2],
     )
 
     # A quarter turn swaps the scale on x and z. A scale that differs between x and z cannot follow a turn of 45 degrees.
