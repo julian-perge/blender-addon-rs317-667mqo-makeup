@@ -24,7 +24,7 @@ REGION_SIZE = 64
 LEVELS = 4
 AREA_SIZE = 3 * REGION_SIZE
 LEVEL_STEP = 240
-SURFACE_REGION_Y_LIMIT = 100
+EDGE_COPY_REGION_Y_LIMIT = 100
 
 
 @dataclass(frozen=True)
@@ -232,7 +232,7 @@ def assemble_terrain(x: int, y: int, groups: Mapping[tuple[int, int], bytes | No
         for level in range(LEVELS):
             for tile_x in range(REGION_SIZE):
                 columns[level][left + tile_x][bottom : bottom + REGION_SIZE] = tiles[level][tile_x]
-    if y < SURFACE_REGION_Y_LIMIT:
+    if y < EDGE_COPY_REGION_Y_LIMIT:
         for region_x, region_y in missing:
             copy_edge_heights(columns[0], (region_x - x + 1) * REGION_SIZE, (region_y - y + 1) * REGION_SIZE)
     return Terrain(
