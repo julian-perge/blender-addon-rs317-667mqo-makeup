@@ -95,12 +95,16 @@ _Avoid_: cylindrical fallback, cube fallback
 ## Regions and scenery
 
 **Region**:
-A square of 64 by 64 tiles that the cache stores as one unit, named by its x and y numbers. Region `48_50` covers tiles x 3072 to 3135 and y 3200 to 3263. The cache names its groups `m<x>_<y>` (terrain) and `l<x>_<y>` (landscape) in index 5.
+A square of 64 by 64 tiles that the cache stores as one unit, named by its x and y numbers. Region `48_50` covers tiles x 3072 to 3135 and y 3200 to 3263. The cache names its groups `m<x>_<y>` (terrain) and `l<x>_<y>` (landscape) in index 5. Its region id is `x * 256 + y`, such as 12338 for `48_50`.
 _Avoid_: map square, chunk, area
 
 **Tile**:
-One square of the ground. It is 128 game units wide by general knowledge, which is unverified until a client confirms it.
+One square of the ground, 128 game units wide. The 2018 client's `getTileHeight` splits a position into a tile and an offset by 128 (`class264.java` lines 96 to 108).
 _Avoid_: cell
+
+**Bridge tile**:
+A tile whose level 1 the client draws at level 0, marked by bit 2 of the tile's level 1 settings (`class24.java` lines 318 to 324). The region import does not handle bridge tiles yet.
+_Avoid_: bridge level
 
 **Level**:
 One floor of a region, counted from 0 at the ground. The region import reads level 0 only.
@@ -123,15 +127,31 @@ A fixed thing in the game world, such as a tree, a wall or a door. A loc definit
 _Avoid_: object (reserve for Blender), game object
 
 **Placement**:
-One loc put on one tile, with a type and a rotation. A placement becomes one Blender object. Placements with the same loc model, recolours and retextures share one mesh.
+One loc put on one tile, with a loc type and a rotation. A placement becomes one Blender object. Placements with the same loc model, recolours and retextures share one mesh, except a contoured loc on uneven ground.
 _Avoid_: spawn, instance
+
+**Loc type**:
+The number from 0 to 22 of a placement that decides which model of the loc the client uses and where the client puts it. Types 0 to 3 go to the wall slot of the tile, 4 to 8 to the wall decoration slot, 9 to 21 to the object slot, and 22 to the ground decoration slot (`PacketBuffer.java` lines 160 to 503).
+_Avoid_: object type, shape
+
+**Contoured loc**:
+A loc whose model the client bends to the terrain under each placement, by moving each vertex to the terrain height under it (`contouredGround`, `ObjectComposition.java` lines 600 to 606).
+_Avoid_: ground-hugging loc, terrain-following loc
+
+**Impostor**:
+A loc that the client shows in place of another loc, picked by the value of a varbit or varp (`ObjectComposition.java` lines 830 to 846). The region import shows the impostor for value 0.
+_Avoid_: transform, morph
+
+**Loc shadow**:
+The darkness that a placement adds to the terrain light at the tile corners it covers. Walls write 50, and objects write up to 30 (`PacketBuffer.java` lines 252 to 493).
+_Avoid_: ambient occlusion, shade
 
 **Landscape**:
 The group `l<x>_<y>` of a region. It lists the placements of the region and is encrypted with landscape keys.
 _Avoid_: scenery file, loc file
 
 **Landscape keys**:
-The four XTEA numbers that decrypt one landscape. An OpenRS2 download holds them as `keys/<group>.txt` next to its `cache/` folder. A region with no key is inferred to be empty.
+The four XTEA numbers that decrypt one landscape. An OpenRS2 download holds them as `keys/<region id>.txt` next to its `cache/` folder, such as `keys/12338.txt` for `l48_50`. A region with no key is inferred to be empty.
 _Avoid_: map keys, region keys
 
 **Scenery**:
