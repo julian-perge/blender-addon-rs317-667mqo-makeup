@@ -32,7 +32,7 @@ The landscape has 2,545 placements, of which 1,874 are on level 0.
 - 19 placements of 7 animated locs: 197, 3474, 5558 (Aggie's Cauldron), 5559 (Charms), 10041 (Tree), 24969 (Fireplace) and 26813.
 - 6 placements of 6 impostor locs with no model of their own: 14908, 26813, 28960, 29008, 29059 and 29495. Their impostors for value 0 are 7102, 26797, 15944, 16018, 28950 and 29496.
 - 6 placements of locs with the mirror flag (opcode 62).
-- No placement of a loc with a model size other than 128, so no loc in the region is scaled.
+- No placed loc has a model size other than 128, but one impostor for value 0 has: the placement of 26813 at (24, 44), loc type 10, shows 26797 with model size 78 in x, height and y (`tests/fixtures/region/locs.json`). So the region shows one scaled loc.
 
 ## Terrain
 
