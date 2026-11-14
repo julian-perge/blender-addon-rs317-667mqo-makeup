@@ -74,6 +74,14 @@ def test_a_texel_of_value_0_in_a_texture_that_is_not_opaque_is_transparent():
     assert rgba_from_the_top(image) == expected
 
 
+def test_a_texel_of_value_0_in_an_opaque_texture_is_drawn_black():
+    # No opaque texture of snapshot 430 has a texel of value 0, so the pixels are made for the test. The client draws
+    # every texel of an opaque texture, 0 included (`Graphics3D.java` line 2116).
+    image = texture_image(0, [0] * (SIZE * SIZE), opaque=True)
+
+    assert rgba_from_the_top(image) == [(0, 0, 0, 255)] * (SIZE * SIZE)
+
+
 def test_the_image_is_packed_so_a_blend_file_holds_its_pixels(tmp_path: Path):
     image = decoded_image(16)
     expected = rgba_from_the_top(image)

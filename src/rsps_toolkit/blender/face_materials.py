@@ -22,8 +22,8 @@ TEXTURE_ID = "rs_texture_id"
 ALPHA = "rs_alpha"
 STACKED = "rs_stacked"
 
-# Model import finds a PNG file of the texture folder. The region import gives an image that it made with texture_image,
-# because it does not read the texture folder (ADR 0022).
+# Model import and PMN texturing find a PNG file of the texture folder. The region import will give an image that it
+# made with texture_image, because it does not read the texture folder (ADR 0022).
 type FindTexture = Callable[[int], Path | bpy.types.Image | None]
 
 
@@ -135,8 +135,8 @@ def _show_texture(material: bpy.types.Material, texture: int, find_texture: Find
     image = nodes.new("ShaderNodeTexImage")
     image.image = found if isinstance(found, bpy.types.Image) else bpy.data.images.load(str(found), check_existing=True)
     # The client reads one texel per pixel without filtering (Graphics3D.rasterTextureAffineLine in the 2018 client).
-    # The texture PNGs have an alpha channel, so it is linked too; which texels the client draws see-through is
-    # unverified.
+    # The alpha channel is linked too. The alpha of an image from texture_image follows the client, as its docstring
+    # says. Which texels of a texture PNG the client draws see-through is unverified.
     image.interpolation = "Closest"
     material.node_tree.links.new(image.outputs["Color"], bsdf.inputs["Base Color"])
     material.node_tree.links.new(image.outputs["Alpha"], bsdf.inputs["Alpha"])
