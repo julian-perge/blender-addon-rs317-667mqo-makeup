@@ -2,7 +2,7 @@
 
 Read this before any `/agent-skills` command, and before planning, implementing, committing or reporting. The commands default to `SPEC.md` and `tasks/todo.md`. This repo uses the tracker mode of `planning-and-task-breakdown`: GitHub issues hold the tasks, and files under `spec/` hold the specs. [Issue tracker](issue-tracker.md) holds the `gh` commands.
 
-The user types each stage. Run one stage per session. When it ends, name the next stage and stop.
+The user types each stage. Run one stage per session. When it ends, print the next stage's command as the last line, with real issue, PR and file values, and stop. The user pastes that line into a new session, so it must need no edits. `/agent-skills-next` prints the same commands for the whole tracker.
 
 ## Stages
 
@@ -14,7 +14,7 @@ The user types each stage. Run one stage per session. When it ends, name the nex
 | Plan | `/agent-skills:plan <issue>` | One sub-issue per task. |
 | Build | `/agent-skills:build <task issue>` | One branch, one pull request. |
 | Bug | `/agent-skills:test <issue>` | A failing test, then the fix, on one branch with one pull request. |
-| Review | `/agent-skills:review` | Findings against the standards and the spec. |
+| Review | `/agent-skills:review issue #<task>, PR #<pr>, spec <spec file>, standard <standard file>` | Findings against the standards and the spec. |
 
 An issue that is one task with acceptance criteria goes straight to Build.
 
@@ -48,7 +48,7 @@ Publish each task as a sub-issue of the source issue. Add blockers as native `bl
 
 Give every item of a spec's list to one task. A review of each task alone misses an item that two tasks share.
 
-Task body: `Parent`, `What to build`, `Acceptance criteria`, `Verification` (the exact command). Label each task `ready-for-agent`.
+Task body: `Parent`, `Spec` (the spec file's path), `What to build`, `Acceptance criteria`, `Verification` (the exact command). Label each task `ready-for-agent`.
 
 `tasks/plan.md` holds the plan's decisions, risks and an ordered list of the task issue numbers. It is git-ignored scratch. A plan is complete when every issue it lists is closed, and a complete plan can be replaced without asking.
 
@@ -64,7 +64,18 @@ One task, one branch, one pull request. Branch: `<type>/<issue>-<slug>`. Commit 
 
 Implement with `test-driven-development`: one behavior at an approved public seam per red/green cycle. The seams that the spec names give that agreement.
 
-Run the verify command from `AGENTS.md` (`Every task`) before each commit. Implementation stays with the primary agent unless the user chooses delegation. Open the pull request and stop. The user merges.
+Run the verify command from `AGENTS.md` (`Every task`) before each commit. Implementation stays with the primary agent unless the user chooses delegation. Open the pull request, print the review command and stop. The user merges.
+
+The review command is the session's last line:
+
+```
+/agent-skills:review issue #<task>, PR #<pr>, spec <spec file>, standard CODING_STANDARDS.md
+```
+
+- **Spec file**: the `Spec` line of the task body. When the task body has none, use the `spec/` path in the parent issue's body. When neither names one, leave out the `spec` part.
+- In `auto` mode, `<task>` is the source issue.
+
+A Bug session ends with the same command.
 
 ## Commit review
 
@@ -74,7 +85,7 @@ Before each commit, run the review with fixed point `HEAD`. Give it the spec fil
 
 Run the review in a new session, not in the build session. The command starts no subagent, so the build session would review its own work. Check out the PR branch first (`gh pr checkout <pr>`), because the command reviews staged changes or recent commits.
 
-Run `/agent-skills:review` on the branch. Give it the task issue and the spec file as the spec. Name [CODING_STANDARDS.md](../../CODING_STANDARDS.md) as the standard. The review does not read it on its own.
+Run `/agent-skills:review` on the branch with the command that the Build section gives. It names the task issue, the PR, the spec and [CODING_STANDARDS.md](../../CODING_STANDARDS.md), because the review does not read the spec or the standard on its own.
 
 Fix small findings in the review session. Start a new build session for large ones.
 
