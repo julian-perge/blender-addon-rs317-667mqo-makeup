@@ -103,9 +103,9 @@ The parts are in build order. The planner turns them into tasks.
 
 The import puts the level 0 placements in the order of the landscape file, because the offset of a wall decoration depends on the wall on its tile, and the client handles the two orders differently (`PacketBuffer.java` 413 to 468, `Region.java` 656 to 665).
 
-- **Impostor.** A loc with impostors shows the impostor for value 0. An impostor id of -1 shows nothing.
+- **Impostor.** A loc with impostors shows the impostor for value 0. An impostor id of -1 shows nothing. A loc with impostors but no varbit and no varp keeps the value -1 in the client, so it shows the last impostor id (`ObjectComposition.java` 830 to 845). This follows the client, not the owner's answer above.
 - **Model.** The loc type picks the model as `ObjectComposition.getModel` does. A loc with no model for the type shows nothing, and the report counts it.
-- **Recolours and retextures** change the model before its mesh is made.
+- **Recolours and retextures** change the model before its mesh is made. A retexture to 65535, and a recolour of 127 on a textured face of an old-format model, are errors, because `Model` cannot hold the colour that the client gives those faces (`ModelData.java` 943). No loc of `48_50` does either.
 - **Object transform.** The mirror, the turn of diagonal wall decoration (256 units and the offset 45, 0, -45), the rotation, the scale, the offset, the turn of 256 units of type 11, the wall decoration offset and the position on the tile go on the object. One full turn is 2048 units. The mirror is a scale of -1 on the axis that `ModelData.method2633` (line 1380) negates.
 - **Height** is the mean of the four corner heights under the placement's footprint (`PacketBuffer.java` 197 to 198).
 - **Shared mesh.** Placements with the same loc model, recolours and retextures share one mesh (ADR 0022). The mesh is made with `model_to_object`, so it keeps the look of model import and has no baked loc light.
