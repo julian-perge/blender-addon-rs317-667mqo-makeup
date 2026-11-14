@@ -37,6 +37,7 @@ The landscape has 2,545 placements, of which 1,874 are on level 0.
 ## Terrain
 
 - 28 bridge tiles: x 3112 to 3115 and y 3200 to 3206, bit 2 of the level 1 settings.
+- The terrain groups of `48_50` and its 8 neighbours store each opcode as one byte, as `loadTerrain` reads them (`SoundTaskDataProvider.java` line 63). Read that way, each of the 9 groups ends on its last byte. Read with 16-bit opcodes, as RuneLite 1.13.6's `MapLoader` does since the commit "cache: update 209" (aef9c8fa5, 7 October 2022), each one runs past its end. RuneLite 1.9.0 is the last release before that commit, so `RegionReference.java` reads terrain with 1.9.0 (issue 37).
 
 ## Client facts found on the way
 
