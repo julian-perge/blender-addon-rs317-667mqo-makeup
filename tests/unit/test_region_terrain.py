@@ -4,7 +4,7 @@ import pytest
 from js5_builder import REGION_FIXTURES, REGION_TERRAINS, build_region_cache
 
 from rsps_toolkit.formats.js5 import Js5Store, unpack
-from rsps_toolkit.formats.region import Tile, assemble_terrain, decode_terrain, load_terrain
+from rsps_toolkit.formats.region import Terrain, Tile, assemble_terrain, decode_terrain, load_terrain
 
 NEIGHBOURS = [(x, y) for x in (47, 48, 49) for y in (49, 50, 51)]
 
@@ -23,7 +23,7 @@ def values(tile: Tile) -> tuple[int, ...]:
     return (tile.height, tile.settings, tile.underlay, tile.overlay, tile.overlay_shape, tile.overlay_rotation)
 
 
-def region_tile(terrain, level: int, region: tuple[int, int], x: int, y: int) -> Tile:
+def region_tile(terrain: Terrain, level: int, region: tuple[int, int], x: int, y: int) -> Tile:
     """Tile (x, y) of a region of the terrain, counted from that region's south-west corner."""
     return terrain.tile(level, (region[0] - terrain.x) * 64 + x, (region[1] - terrain.y) * 64 + y)
 
@@ -86,9 +86,25 @@ def test_a_missing_east_neighbour_gives_its_west_column_the_heights_west_of_it(t
         assert terrain.tile(0, 64, y).height == centre[(0, 63, y)][0], y
 
 
+def test_two_missing_neighbours_copy_their_edge_heights_in_the_clients_region_order(tmp_path):
+    # Client.java 1735 to 1743 runs CombatInfo1.method1601 for each missing region in the order of mapRegions, x first,
+    # then y (ScriptEvent.java 177 to 186). Tile (0, 64) is on the edge of both 47_50 and 47_51. 47_50 runs first and
+    # gives tile (0, 63) the height of (1, 63) (lines 74 to 76). 47_51 then gives tile (0, 64) the height of (0, 63)
+    # (lines 78 to 80). In the other order, tile (0, 64) would get a height that came from (1, 65).
+    build_region_cache(tmp_path, tuple(name for name in REGION_TERRAINS if name not in ("m47_50", "m47_51")))
+    terrain = load_terrain(Js5Store(tmp_path), 48, 50)
+    centre, north = reference(48, 50), reference(48, 51)
+
+    assert terrain.missing == ((47, 50), (47, 51))
+    assert centre[(0, 1, 63)][0] != north[(0, 1, 1)][0]
+    assert centre[(0, 1, 63)][0] != centre[(0, 0, 63)][0]
+    assert terrain.tile(0, 0, 64).height == centre[(0, 1, 63)][0]
+
+
 def test_a_missing_neighbour_on_the_edge_of_the_9_regions_copies_nothing_from_beyond_them(tmp_path):
-    # The client's bound is the edge of its scene (CombatInfo1.java 70, `var5 > 0`). Here the edge is the west side of the
-    # 9 regions, so x -64 of the missing region 47_50 keeps height 0 and does not take a height from the east side.
+    # The client's bound is the edge of its 104-tile scene (CombatInfo1.java 70, `var5 > 0`). The owner chose the edges of
+    # the 9 regions as the bound on 2026-11-14 (Decisions comment on issue 37). Here the edge is the west side of the 9
+    # regions, so x -64 of the missing region 47_50 keeps height 0 and does not take a height from the east side.
     build_region_cache(tmp_path, tuple(name for name in REGION_TERRAINS if name != "m47_50"))
     terrain = load_terrain(Js5Store(tmp_path), 48, 50)
     assert reference(49, 50)[(0, 63, 30)][0] != 0
