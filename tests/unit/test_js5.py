@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import struct
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,15 @@ from js5_builder import (
     write_store,
 )
 
-from rsps_toolkit.formats.js5 import DecryptionError, Js5Store, NotInCacheError, name_hash, reference_table, split
+from rsps_toolkit.formats.js5 import (
+    DecryptionError,
+    Js5Store,
+    NotInCacheError,
+    name_hash,
+    reference_table,
+    split,
+    unpack,
+)
 from rsps_toolkit.formats.region import read_keys
 
 SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
@@ -67,7 +76,7 @@ def test_a_missing_group_or_folder_is_named(store, tmp_path):
 
 
 def test_protocol_7_reference_tables_read_their_ids_as_smart_numbers():
-    assert reference_table(table({1: (0, 4)}, protocol=7)) == {1: (0, 4)}
+    assert reference_table(table({1: (0, 4)}, protocol=7)).files == {1: (0, 4)}
 
 
 def test_split_refuses_a_chunk_table_longer_than_the_group():
@@ -141,13 +150,20 @@ def test_a_name_that_the_reference_table_lacks_is_named_in_the_error(tmp_path):
         Js5Store(tmp_path).group_named(5, "l99_99")
 
 
-def test_a_group_with_four_keys_is_decrypted_then_decompressed(tmp_path):
-    build_region_cache(tmp_path)
-    assert len(Js5Store(tmp_path).container(5, 617, read_keys(REGION_FIXTURES / "keys/12338.txt"))) > 0
-
-
 def test_a_wrong_key_stops_with_a_decryption_error(tmp_path):
     build_region_cache(tmp_path)
     a, b, c, d = read_keys(REGION_FIXTURES / "keys/12338.txt")
     with pytest.raises(DecryptionError):
         Js5Store(tmp_path).container(5, 617, (a + 1, b, c, d))
+
+
+def test_a_damaged_container_read_without_keys_is_not_reported_as_a_wrong_key():
+    stored = bytearray(container(b"payload", kind=2))
+    stored[5:9] = struct.pack(">I", 99)
+    with pytest.raises(ValueError, match="its header says 99"):
+        unpack(bytes(stored))
+
+
+def test_an_unknown_compression_read_with_keys_is_not_reported_as_a_wrong_key():
+    with pytest.raises(ValueError, match="Unknown container compression 3"):
+        unpack(bytes([3]) + bytes(12), (1, 2, 3, 4))

@@ -6,13 +6,16 @@ next to the cache folder, as an OpenRS2 download lays it out (`GLOSSARY.md`, Lan
 RuneLite's `LocationsLoader` in `tests/fixtures/region/landscape.json`.
 """
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from rsps_toolkit.formats.js5 import DecryptionError, Js5Store, Keys, unpack
+from rsps_toolkit.formats.js5 import DecryptionError, Js5Store, Keys
 
 MAP_INDEX = 5
 KEYS_FOLDER = "keys"
+KEY_LINE = re.compile(r"[+-]?[0-9]+")
+INT32 = range(-(1 << 31), 1 << 31)
 
 
 @dataclass(frozen=True)
@@ -41,11 +44,18 @@ def region_id(x: int, y: int) -> int:
 
 
 def read_keys(path: Path) -> Keys:
-    """The four numbers of a key file, one per line."""
+    """The four numbers of a key file, one per line. Each is a whole number that fits in 32 bits with its sign.
+
+    `tests/fixtures/RegionReference.java` reads a key file with Java's `Integer.parseInt`, which takes the same numbers.
+    """
+    error = f"{path} does not hold four 32-bit whole numbers, one per line"
     try:
-        a, b, c, d = (int(line) for line in path.read_text().split())
-    except ValueError as error:
-        raise ValueError(f"{path} does not hold four whole numbers, one per line") from error
+        lines = [line.strip() for line in path.read_text().splitlines() if line.strip()]
+    except UnicodeDecodeError as cause:
+        raise ValueError(error) from cause
+    if len(lines) != 4 or not all(KEY_LINE.fullmatch(line) and int(line) in INT32 for line in lines):
+        raise ValueError(error)
+    a, b, c, d = (int(line) for line in lines)
     return a, b, c, d
 
 
@@ -64,9 +74,9 @@ def load_landscape(store: Js5Store, x: int, y: int) -> Landscape:
     if not key_file.is_file():
         return Landscape((), has_key=False)
     keys = read_keys(key_file)
-    stored = store.raw(MAP_INDEX, store.group_named(MAP_INDEX, f"l{x}_{y}"))
+    group = store.group_named(MAP_INDEX, f"l{x}_{y}")
     try:
-        data = unpack(stored, keys)
+        data = store.container(MAP_INDEX, group, keys)
     except DecryptionError as error:
         raise ValueError(f"The key in {key_file} does not decrypt the landscape of region {x}_{y}") from error
     return Landscape(decode_landscape(data), has_key=True)
@@ -77,8 +87,10 @@ def decode_landscape(data: bytes) -> tuple[Placement, ...]:
 
     A step of the loc id is an extended smart (`Buffer.java` 560 to 570, `Client.java` 1761 to 1801): each value of 32767 adds
     32767 and the next value ends the step. A step of the position is a smart (`Buffer.java` 550 to 552). A step of 0 ends a
-    loc's list, and a loc id step of 0 ends the file. The position packs the level in bits 12 and 13, x in bits 6 to 11 and y in
-    bits 0 to 5. The attribute byte packs the loc type in its upper 6 bits and the rotation in its lower 2.
+    loc's list, and a loc id step of 0 ends the file. The position packs y in bits 0 to 5, x in bits 6 to 11 and the level in
+    the bits from 12 up (`Client.java` 1780 to 1782). The level is not masked, as in the client. RuneLite's `LocationsLoader`
+    masks it with 3, but no landscape of snapshot 430 has a level above 3. The attribute byte packs the loc type in its upper 6
+    bits and the rotation in its lower 2.
     """
     pos = 0
 
@@ -113,7 +125,7 @@ def decode_landscape(data: bytes) -> tuple[Placement, ...]:
             placements.append(
                 Placement(
                     loc=loc,
-                    level=position >> 12 & 3,
+                    level=position >> 12,
                     x=position >> 6 & 63,
                     y=position & 63,
                     loc_type=attributes >> 2,

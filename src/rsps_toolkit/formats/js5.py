@@ -75,7 +75,7 @@ class Js5Store:
 
     def _table(self, index: int) -> "ReferenceTable":
         if index not in self._tables:
-            self._tables[index] = parse_reference_table(self.container(REFERENCE_INDEX, index))
+            self._tables[index] = reference_table(self.container(REFERENCE_INDEX, index))
         return self._tables[index]
 
     def groups(self, index: int) -> dict[int, tuple[int, ...]]:
@@ -123,10 +123,12 @@ def xtea_decrypt(data: bytes, keys: Keys) -> bytes:
 def unpack(raw: bytes, keys: Keys | None = None) -> bytes:
     """Decompress a container: kind 0 is stored, 1 is bzip2 without its header, 2 is gzip.
 
-    With keys, the bytes after the 5-byte header are XTEA encrypted first, as RuneLite's `Container.decompress` does: the
-    body, and for kinds 1 and 2 the 4 bytes of expanded length in front of it.
+    With keys, `unpack` first decrypts the bytes after the 5-byte header with XTEA, as RuneLite's `Container.decompress`
+    does: the body, and for kinds 1 and 2 the 4 bytes of expanded length in front of it.
     """
     kind = raw[0]
+    if kind not in (0, 1, 2):
+        raise ValueError(f"Unknown container compression {kind}")
     length = struct.unpack(">I", raw[1:5])[0]
     if keys is not None:
         end = 5 + length + (0 if kind == 0 else 4)
@@ -136,12 +138,7 @@ def unpack(raw: bytes, keys: Keys | None = None) -> bytes:
     expanded = struct.unpack(">I", raw[5:9])[0]
     body = raw[9 : 9 + length]
     try:
-        if kind == 1:
-            out = bz2.decompress(b"BZh1" + body)
-        elif kind == 2:
-            out = gzip.decompress(body)
-        else:
-            raise ValueError(f"Unknown container compression {kind}")
+        out = bz2.decompress(b"BZh1" + body) if kind == 1 else gzip.decompress(body)
         if len(out) != expanded:
             raise ValueError(f"A container expanded to {len(out)} bytes, its header says {expanded}")
     except (OSError, EOFError, zlib.error, ValueError) as error:
@@ -159,12 +156,7 @@ class ReferenceTable:
     """Each group's name hash with its group id. An index with no name hashes has none."""
 
 
-def reference_table(data: bytes) -> dict[int, tuple[int, ...]]:
-    """Group ids with their file ids, from an index's reference table. Name hashes and checksums are skipped."""
-    return parse_reference_table(data).files
-
-
-def parse_reference_table(data: bytes) -> ReferenceTable:
+def reference_table(data: bytes) -> ReferenceTable:
     """The group ids with their file ids and name hashes, from an index's reference table. Checksums are skipped."""
     pos = 0
 
