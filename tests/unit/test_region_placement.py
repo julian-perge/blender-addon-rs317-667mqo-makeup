@@ -377,6 +377,54 @@ def test_an_impostor_with_a_scale_scales_the_placement_of_the_loc_that_it_shows(
     assert part.location[:2] == pytest.approx((24 * 128 + placed_width * 64, 44 * 128 + placed_length * 64))
 
 
+def test_an_impostor_takes_the_footprint_and_the_height_of_the_placed_loc_not_of_the_shown_one():
+    # DynamicObject lines 129 to 133 take the model of the shown loc, while PacketBuffer.java lines 169 to 200 read the
+    # width and the length of the loc that the landscape names. Loc 1 is 3 by 2 and shows loc 2, which is 1 by 1.
+    locs = {1: loc(width=3, length=2, impostors=(2, 5), impostor_varbit=3), 2: loc(width=1, length=1)}
+
+    def height(x: int, y: int) -> int:
+        return 10 * x + 3 * y
+
+    part = only_part(place_scenery([at(1, 10)], locs, height)[0])
+    assert part.location[:2] == pytest.approx((5 * 128 + 3 * 64, 7 * 128 + 2 * 64))
+    columns, rows = (6, 7), (8, 8)
+    assert part.location[2] == pytest.approx(-(sum(height(x, y) for x in columns for y in rows) >> 2))
+
+
+@pytest.mark.parametrize(
+    "no_model_wall",
+    [
+        loc(models=(), animation=5, decor_displacement=48),
+        loc(models=(), impostors=(-1,), impostor_varbit=3, decor_displacement=48),
+    ],
+    ids=["animated", "impostors"],
+)
+def test_an_animated_or_impostor_wall_without_a_model_still_replaces_the_wall_of_its_tile(no_model_wall):
+    # PacketBuffer.java lines 270 to 281: an animated loc or a loc with impostors is a DynamicObject, which is not null,
+    # so Region.addBoundary (lines 420 to 440) stores it and the decoration reads its displacement.
+    locs = {1: loc(decor_displacement=32), 2: no_model_wall, 3: typed(4)}
+    placed = place_scenery([at(1, 0), at(2, 0), at(3, 5, rotation=0)], locs, flat)
+    assert placed[1].parts == ()
+    assert only_part(placed[2]).location == pytest.approx((5 * 128 + 64 + 48, 7 * 128 + 64, 0))
+
+
+@pytest.mark.parametrize("loc_type", [2, 8])
+def test_a_wall_of_type_2_and_a_decoration_of_type_8_have_no_parts_when_the_loc_has_no_model_for_them(loc_type):
+    # ObjectComposition.java lines 694 to 751 decide on the loc type only, and both calls of the placement have the same
+    # type (2, or 4 for a decoration), so the two models are both present or both missing.
+    assert place_one(typed(0), loc_type).parts == ()
+
+
+def test_a_loc_type_above_22_in_a_placement_is_refused_even_when_the_loc_has_no_model():
+    with pytest.raises(ValueError, match="loc type"):
+        place_one(typed(0), 23)
+
+
+def test_a_placement_that_names_an_unknown_loc_is_refused_with_its_tile():
+    with pytest.raises(ValueError, match=r"\(5, 7\).*loc 99"):
+        place_scenery([at(99, 0)], {1: typed(0)}, flat)
+
+
 def test_an_impostor_that_shows_nothing_gives_no_parts():
     definition = loc(impostors=(-1, 5), impostor_varbit=3)
     assert place_one(definition, 10).parts == ()
