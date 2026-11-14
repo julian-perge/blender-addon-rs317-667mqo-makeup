@@ -4,12 +4,13 @@ Each material keeps the game values it stands for as custom properties, so expor
 imported values. Its visible colour is the client's palette colour, which Blender holds in linear space.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import bpy
 
 from ..formats import face_colour_to_rgb
+from ..formats.texture import SIZE
 
 # The 317 client starts at brightness 0.8 (client.java line 15624 of the decompile); its settings offer 0.9 to 0.6.
 DEFAULT_BRIGHTNESS = 0.8
@@ -21,7 +22,26 @@ TEXTURE_ID = "rs_texture_id"
 ALPHA = "rs_alpha"
 STACKED = "rs_stacked"
 
-type FindTexture = Callable[[int], Path | None]
+# Model import finds a PNG file of the texture folder. The region import gives an image that it made with texture_image,
+# because it does not read the texture folder (ADR 0022).
+type FindTexture = Callable[[int], Path | bpy.types.Image | None]
+
+
+def texture_image(texture_id: int, pixels: Sequence[int], opaque: bool) -> bpy.types.Image:
+    """A Blender image of a texture's decoded pixels, packed into the .blend so that the file opens on another computer.
+
+    `pixels` are 0xRRGGBB colours, row by row from the top, as `formats.texture.texture_pixels` gives them. When the
+    texture is not opaque, a pixel of value 0 is transparent, because the client does not draw it (`Graphics3D.java`
+    lines 2182 to 2190 of the 2018 client)."""
+    image = bpy.data.images.new(f"RS_Texture_{texture_id}", SIZE, SIZE, alpha=True)
+    channels: list[float] = []
+    for row in reversed(range(SIZE)):
+        for pixel in pixels[row * SIZE : (row + 1) * SIZE]:
+            alpha = 0.0 if pixel == 0 and not opaque else 1.0
+            channels += ((pixel >> 16) / 255, (pixel >> 8 & 0xFF) / 255, (pixel & 0xFF) / 255, alpha)
+    image.pixels.foreach_set(channels)
+    image.pack()
+    return image
 
 
 def face_material(
@@ -105,15 +125,15 @@ def _show_colour(material: bpy.types.Material, colour: int, brightness: float) -
 
 
 def _show_texture(material: bpy.types.Material, texture: int, find_texture: FindTexture | None) -> None:
-    path = find_texture(texture) if find_texture else None
+    found = find_texture(texture) if find_texture else None
     bsdf = _principled(material)
-    if path is None:
+    if found is None:
         material.diffuse_color = MISSING_TEXTURE  # pyrefly: ignore[bad-assignment]
         bsdf.inputs["Base Color"].default_value = MISSING_TEXTURE
         return
     nodes = material.node_tree.nodes
     image = nodes.new("ShaderNodeTexImage")
-    image.image = bpy.data.images.load(str(path), check_existing=True)
+    image.image = found if isinstance(found, bpy.types.Image) else bpy.data.images.load(str(found), check_existing=True)
     # The client reads one texel per pixel without filtering (Graphics3D.rasterTextureAffineLine in the 2018 client).
     # The texture PNGs have an alpha channel, so it is linked too; which texels the client draws see-through is
     # unverified.
