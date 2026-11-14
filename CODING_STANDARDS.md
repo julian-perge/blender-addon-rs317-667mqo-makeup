@@ -7,7 +7,7 @@ Rules a reviewer checks on every diff. Formatting, lint rules and types are enfo
 A test's expected value must come from outside our own code, so that a test can never pass just because the code agrees with itself. Each expected value traces to one of:
 
 - a reference file in `tests/fixtures/` written by a second implementation (`ModelReference.java` for RuneLite, `preset_reference.py` for the original exporter);
-- a line of a game client's code, named in a comment as file and line (the clients are listed in `docs/research/model-formats.md`);
+- a line of a game client's code, named in a comment as file and line (the clients are listed in `docs/research/model-formats.md`), or named in an evidence file in `docs/research/` that the comment points to by file and rule;
 - real game output, such as an item icon or an OSRS Wiki recording;
 - a decision the user made, recorded in an ADR in `docs/adr/` or in the Decisions block of the plan or ticket where it was made.
 

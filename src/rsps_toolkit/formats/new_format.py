@@ -218,8 +218,8 @@ def _encode(model: Model) -> bytes:
     # does, or for a hand-built model, are the choices computed: a single shared priority is stored once in the
     # footer (0 for no faces), and the render type and alpha sections are omitted when every value is 0.
     # The client reads both: a priority byte below 255 is one shared priority, and a section whose flag is not 1 reads
-    # as 0. The 0 for no faces is our own choice. Evidence: docs/research/osrs-149-codec-client-rules.md,
-    # rules 1 and 2.
+    # as 0. The 0 for no faces is the owner's decision in docs/adr/0021. Evidence:
+    # docs/research/osrs-149-codec-client-rules.md, rules 1 and 2.
     flags = source.section_flags
     priorities = set(model.render_priorities)
     shared = next(iter(priorities)) if len(priorities) == 1 and 255 not in priorities else None

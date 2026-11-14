@@ -133,8 +133,9 @@ def _s32(reader: Reader) -> int:
 
 
 def _string(reader: Reader) -> str:
-    """Read text that ends with a zero byte. RuneLite decodes it as Windows-1252."""
+    """Read text that ends with a zero byte. RuneLite decodes it as Windows-1252, with "?" for the five bytes that
+    Windows-1252 leaves undefined (InputStream.readString)."""
     text = bytearray()
     while (byte := reader.u8()) != 0:
         text.append(byte)
-    return text.decode("cp1252", errors="replace")
+    return text.decode("cp1252", errors="replace").replace("\ufffd", "?")

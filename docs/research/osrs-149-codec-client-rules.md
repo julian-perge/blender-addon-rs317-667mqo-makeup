@@ -46,7 +46,7 @@ Verdict: **confirmed**.
 
 - Anchor: class `dv`, method `j`, offsets 2235 to 2240 and 965 to 969. A priority byte of 255 allocates a per-face priority array `dv.p`. Any other value is stored as one shared priority `dv.t`.
 - Also: offsets 404 to 412 and 1537 to 1558 step over and read a per-face priority section only for 255. Class `dv`, method `ae`, offsets 197 to 203 copy `dv.p` to `ej.c`, and offsets 1804 to 1810 copy `dv.t` to `ej.h`.
-- The client has no special case for a model with no faces. A byte of 0 is a shared priority like any value below 255. So "0 for no faces" is valid for the client. The value 0 is the add-on's choice.
+- The client has no special case for a model with no faces. A byte of 0 is a shared priority like any value below 255. So "0 for no faces" is valid for the client. The value 0 is the owner's decision in [ADR 0021](../adr/0021-a-model-with-no-faces-stores-priority-0.md).
 
 ## Rule 2: render type and alpha sections left out when all values are 0
 

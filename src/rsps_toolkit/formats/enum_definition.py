@@ -23,7 +23,11 @@ class EnumDefinition:
 
 
 def decode_enum(enum_id: int, data: bytes) -> EnumDefinition:
-    """Read one enum. The key type, value type and defaults are read and not kept, because nothing uses them."""
+    """Read one enum. The key type, value type and defaults are read and not kept, because nothing uses them.
+
+    An enum with no entries gives empty tuples, where RuneLite gives null. The owner chose this on 2026-11-14, so
+    callers need no check for None. No style enum is empty.
+    """
     reader = Reader(data)
     keys: tuple[int, ...] = ()
     int_values: tuple[int, ...] = ()
@@ -53,8 +57,9 @@ def _s32(reader: Reader) -> int:
 
 
 def _string(reader: Reader) -> str:
-    """Read text that ends with a zero byte. RuneLite decodes it as Windows-1252."""
+    """Read text that ends with a zero byte. RuneLite decodes it as Windows-1252, with "?" for the five bytes that
+    Windows-1252 leaves undefined (InputStream.readString)."""
     text = bytearray()
     while (byte := reader.u8()) != 0:
         text.append(byte)
-    return text.decode("cp1252", errors="replace")
+    return text.decode("cp1252", errors="replace").replace("\ufffd", "?")

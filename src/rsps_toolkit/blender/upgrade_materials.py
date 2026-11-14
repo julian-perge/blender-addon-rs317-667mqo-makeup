@@ -31,7 +31,10 @@ def _pmn_texture_id(name: str) -> int | None:
 
 def _material_alpha(material: bpy.types.Material) -> int | None:
     """The alpha of a blended material, read from its shader's Alpha input as (255 - alpha) / 255, or None if the
-    material is not blended or has no Principled shader."""
+    material is not blended or has no Principled shader.
+
+    Unverified: the formula comes from the removed importers, and no PMN tool export has confirmed it (issue 32).
+    """
     if material.surface_render_method != "BLENDED" or material.node_tree is None:
         return None
     shader = next((n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)

@@ -890,9 +890,10 @@ def rig_clip_strips(rig):
 def assert_strip_shows_the_client_alphas(cache, collection, rig, clip, pose, start):
     """The first frame, the frame where the sequence's alphas differ by label (for 3364) and the last frame of the
     strip show the alphas the client recorded."""
-    kept = kept_faces(cache, FADE_POSE)
+    kept = kept_faces(cache, pose)
     shown = shown_frames(clip)
-    for index in sorted({0, len(shown) // 2, shown.index(10) if clip == SPLIT_CLIP else 0, len(shown) - 1}):
+    split = [shown.index(10)] if clip == SPLIT_CLIP else []
+    for index in sorted({0, len(shown) // 2, *split, len(shown) - 1}):
         bpy.context.scene.frame_set(start + index)  # pyrefly: ignore[missing-attribute]
         recorded = pose["frames"][shown[index]]["o"]
         assert polygon_alphas(collection, rig) == [0 if recorded is None else recorded[i] & 255 for i in kept]

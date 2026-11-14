@@ -25,6 +25,13 @@ def test_an_unknown_opcode_is_refused():
         decode_enum(0, bytes([1, 105, 7, 0]))
 
 
+def test_an_undefined_windows_1252_byte_reads_as_a_question_mark():
+    # RuneLite's InputStream.readString (cache/src/main/java/net/runelite/cache/io/InputStream.java:198-225 at commit
+    # bb0fa42b3) maps 0x80 to the euro sign and 0x81, which its table leaves as 0, to "?".
+    enum = decode_enum(0, bytes([5, 0, 1, 0, 0, 0, 7, 0x41, 0x81, 0x80, 0, 0]))
+    assert enum.string_values == ("A?€",)
+
+
 def test_bytes_after_the_closing_opcode_are_refused():
     with pytest.raises(ValueError, match="1 byte"):
         decode_enum(0, bytes([0, 0]))
