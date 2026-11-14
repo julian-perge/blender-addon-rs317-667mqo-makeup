@@ -10,14 +10,17 @@ from js5_builder import (
     ITEM_GROUP,
     KIT_GROUP,
     MODEL_INDEX,
+    REGION_FIXTURES,
     build_cache,
+    build_region_cache,
     container,
     grouped,
     table,
     write_store,
 )
 
-from rsps_toolkit.formats.js5 import Js5Store, NotInCacheError, reference_table, split
+from rsps_toolkit.formats.js5 import DecryptionError, Js5Store, NotInCacheError, name_hash, reference_table, split
+from rsps_toolkit.formats.region import read_keys
 
 SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
 HAS_SNAPSHOT_430 = "RSPS_SNAPSHOT_430_CACHE" in os.environ and SNAPSHOT_430.is_dir()
@@ -119,3 +122,32 @@ def test_the_snapshot_430_walk_frames_map_and_sequence_match_the_fixture_hashes(
         assert hashlib.sha256(frames[frame["file"]]).hexdigest() == frame["sha256"]
     assert js5.files(1, 0)[0] == (WALK / "maps/0.dat").read_bytes()
     assert hashlib.sha256(js5.files(2, 12)[819]).hexdigest() == manifest["sequence_sha256"]
+
+
+def test_a_group_is_found_by_the_name_that_the_reference_table_hashes(tmp_path):
+    build_region_cache(tmp_path)
+    js5 = Js5Store(tmp_path)
+    assert (js5.group_named(5, "m48_50"), js5.group_named(5, "l48_50")) == (616, 617)
+
+
+def test_the_name_hash_of_l48_50_is_the_one_in_openrs2_keys_json():
+    # OpenRS2's keys.json for snapshot 430 lists archive 5, group 617, name "l48_50", name_hash -1153234614.
+    assert name_hash("l48_50") == -1153234614
+
+
+def test_a_name_that_the_reference_table_lacks_is_named_in_the_error(tmp_path):
+    build_region_cache(tmp_path)
+    with pytest.raises(NotInCacheError, match="l99_99"):
+        Js5Store(tmp_path).group_named(5, "l99_99")
+
+
+def test_a_group_with_four_keys_is_decrypted_then_decompressed(tmp_path):
+    build_region_cache(tmp_path)
+    assert len(Js5Store(tmp_path).container(5, 617, read_keys(REGION_FIXTURES / "keys/12338.txt"))) > 0
+
+
+def test_a_wrong_key_stops_with_a_decryption_error(tmp_path):
+    build_region_cache(tmp_path)
+    a, b, c, d = read_keys(REGION_FIXTURES / "keys/12338.txt")
+    with pytest.raises(DecryptionError):
+        Js5Store(tmp_path).container(5, 617, (a + 1, b, c, d))

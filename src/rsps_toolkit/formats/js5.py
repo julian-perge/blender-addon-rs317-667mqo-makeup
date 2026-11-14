@@ -2,21 +2,33 @@
 
 Nothing here imports bpy. The layout follows RuneLite's cache library (`DiskStorage`, `Container` and `IndexData` in
 `net.runelite.cache.fs.jagex`). Each read seeks to the group's sectors, so the 54 MB data file is never loaded whole.
-Encrypted groups (map landscapes) are not supported; frames, frame maps and configs are not encrypted.
+A group is found by its id or, when its index keeps name hashes, by its name. A group that is encrypted (the landscape of a
+region) is read by passing its four XTEA keys to `container`; frames, frame maps and configs are not encrypted.
 """
 
 import bz2
 import gzip
 import struct
+import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 SECTOR_SIZE = 520
 REFERENCE_INDEX = 255
 DATA_FILE = "main_file_cache.dat2"
+UINT32 = 0xFFFFFFFF
+XTEA_DELTA = 0x9E3779B9
+XTEA_ROUNDS = 32
+
+type Keys = tuple[int, int, int, int]
 
 
 class NotInCacheError(LookupError):
     """The cache has no such group, or its group has no such file."""
+
+
+class DecryptionError(ValueError):
+    """The keys do not decrypt the group: what they give does not decompress."""
 
 
 class Js5Store:
@@ -24,7 +36,7 @@ class Js5Store:
         self.folder = folder
         if not (folder / DATA_FILE).is_file():
             raise FileNotFoundError(f"{folder} holds no {DATA_FILE}; choose the cache folder of an OpenRS2 download")
-        self._tables: dict[int, dict[int, tuple[int, ...]]] = {}
+        self._tables: dict[int, ReferenceTable] = {}
 
     def raw(self, index: int, group: int) -> bytes:
         """The group's stored bytes, still compressed, gathered from its chain of sectors."""
@@ -57,15 +69,25 @@ class Js5Store:
                 part += 1
         return bytes(out)
 
-    def container(self, index: int, group: int) -> bytes:
-        """The group's bytes, decompressed."""
-        return unpack(self.raw(index, group))
+    def container(self, index: int, group: int, keys: Keys | None = None) -> bytes:
+        """The group's bytes, decrypted when it gets its four keys, then decompressed."""
+        return unpack(self.raw(index, group), keys)
+
+    def _table(self, index: int) -> "ReferenceTable":
+        if index not in self._tables:
+            self._tables[index] = parse_reference_table(self.container(REFERENCE_INDEX, index))
+        return self._tables[index]
 
     def groups(self, index: int) -> dict[int, tuple[int, ...]]:
         """Every group of an index with its file ids, from the index's reference table, read once."""
-        if index not in self._tables:
-            self._tables[index] = reference_table(self.container(REFERENCE_INDEX, index))
-        return self._tables[index]
+        return self._table(index).files
+
+    def group_named(self, index: int, name: str) -> int:
+        """The id of the group whose name has the hash that the index's reference table stores, such as `l48_50`."""
+        group = self._table(index).names.get(name_hash(name))
+        if group is None:
+            raise NotInCacheError(f"Index {index} of the cache has no group named {name}")
+        return group
 
     def files(self, index: int, group: int) -> dict[int, bytes]:
         """The files of one group, by file id."""
@@ -75,27 +97,75 @@ class Js5Store:
         return split(self.container(index, group), ids)
 
 
-def unpack(raw: bytes) -> bytes:
-    """Decompress a container: kind 0 is stored, 1 is bzip2 without its header, 2 is gzip."""
+def name_hash(name: str) -> int:
+    """RuneLite's `Djb2.hash`: the hash of djb2 that starts at 0 and is a signed 32-bit number, as a reference table stores it."""
+    value = 0
+    for character in name:
+        value = (ord(character) + (value << 5) - value) & UINT32
+    return value - (1 << 32) if value >= 1 << 31 else value
+
+
+def xtea_decrypt(data: bytes, keys: Keys) -> bytes:
+    """RuneLite's `Xtea.decrypt`: 32 rounds on each block of 8 bytes. The last bytes, fewer than 8, stay as they are."""
+    key = [number & UINT32 for number in keys]
+    out = bytearray(data)
+    for pos in range(0, len(data) - len(data) % 8, 8):
+        v0, v1 = struct.unpack_from(">II", data, pos)
+        total = (XTEA_DELTA * XTEA_ROUNDS) & UINT32
+        for _ in range(XTEA_ROUNDS):
+            v1 = (v1 - ((((v0 << 4) ^ (v0 >> 5)) + v0) ^ (total + key[(total >> 11) & 3]))) & UINT32
+            total = (total - XTEA_DELTA) & UINT32
+            v0 = (v0 - ((((v1 << 4) ^ (v1 >> 5)) + v1) ^ (total + key[total & 3]))) & UINT32
+        struct.pack_into(">II", out, pos, v0, v1)
+    return bytes(out)
+
+
+def unpack(raw: bytes, keys: Keys | None = None) -> bytes:
+    """Decompress a container: kind 0 is stored, 1 is bzip2 without its header, 2 is gzip.
+
+    With keys, the bytes after the 5-byte header are XTEA encrypted first, as RuneLite's `Container.decompress` does: the
+    body, and for kinds 1 and 2 the 4 bytes of expanded length in front of it.
+    """
     kind = raw[0]
     length = struct.unpack(">I", raw[1:5])[0]
+    if keys is not None:
+        end = 5 + length + (0 if kind == 0 else 4)
+        raw = raw[:5] + xtea_decrypt(raw[5:end], keys) + raw[end:]
     if kind == 0:
         return raw[5 : 5 + length]
     expanded = struct.unpack(">I", raw[5:9])[0]
     body = raw[9 : 9 + length]
-    if kind == 1:
-        out = bz2.decompress(b"BZh1" + body)
-    elif kind == 2:
-        out = gzip.decompress(body)
-    else:
-        raise ValueError(f"Unknown container compression {kind}")
-    if len(out) != expanded:
-        raise ValueError(f"A container expanded to {len(out)} bytes, its header says {expanded}")
+    try:
+        if kind == 1:
+            out = bz2.decompress(b"BZh1" + body)
+        elif kind == 2:
+            out = gzip.decompress(body)
+        else:
+            raise ValueError(f"Unknown container compression {kind}")
+        if len(out) != expanded:
+            raise ValueError(f"A container expanded to {len(out)} bytes, its header says {expanded}")
+    except (OSError, EOFError, zlib.error, ValueError) as error:
+        if keys is None:
+            raise
+        raise DecryptionError("The keys do not decrypt the group") from error
     return out
+
+
+@dataclass(frozen=True)
+class ReferenceTable:
+    files: dict[int, tuple[int, ...]]
+    """Each group id with its file ids."""
+    names: dict[int, int]
+    """Each group's name hash with its group id. An index with no name hashes has none."""
 
 
 def reference_table(data: bytes) -> dict[int, tuple[int, ...]]:
     """Group ids with their file ids, from an index's reference table. Name hashes and checksums are skipped."""
+    return parse_reference_table(data).files
+
+
+def parse_reference_table(data: bytes) -> ReferenceTable:
+    """The group ids with their file ids and name hashes, from an index's reference table. Checksums are skipped."""
     pos = 0
 
     def take(count: int) -> bytes:
@@ -120,9 +190,12 @@ def reference_table(data: bytes) -> dict[int, tuple[int, ...]]:
     for _ in range(count):
         last += number(smart)
         ids.append(last)
+    hashes: list[int] = []
     for flag, width in ((1, 4), (0, 4), (8, 4), (2, 64), (4, 8), (0, 4)):
         if flag == 0 or flags & flag:
-            take(width * count)
+            block = take(width * count)
+            if flag == 1:
+                hashes = list(struct.unpack(f">{count}i", block))
     counts = [number(smart) for _ in range(count)]
     table = {}
     for group, files in zip(ids, counts, strict=True):
@@ -131,7 +204,7 @@ def reference_table(data: bytes) -> dict[int, tuple[int, ...]]:
             last += number(smart)
             out.append(last)
         table[group] = tuple(out)
-    return table
+    return ReferenceTable(table, {value: group for group, value in zip(ids, hashes, strict=False)})
 
 
 def split(data: bytes, ids: tuple[int, ...]) -> dict[int, bytes]:
