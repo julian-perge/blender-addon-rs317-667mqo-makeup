@@ -76,6 +76,7 @@ def test_aether_copies_and_pmn_materials_are_read():
 
 
 def test_a_blended_pmn_material_keeps_its_alpha():
+    # Unverified: the shader value uses the same formula as the code, and no PMN tool export confirms it (issue 32).
     material = material_without_values("PMN_16.png")
     material.use_nodes = True
     material.surface_render_method = "BLENDED"

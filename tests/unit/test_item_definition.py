@@ -27,6 +27,12 @@ def test_every_raw_item_decodes_to_the_worn_fields_of_the_runelite_definition(fo
     assert {item_id: item.worn for item_id, item in decoded.items()} == load_items(folder / "ItemDefinitions.json")
 
 
+def test_an_undefined_windows_1252_byte_in_a_name_reads_as_a_question_mark():
+    # RuneLite's InputStream.readString (cache/src/main/java/net/runelite/cache/io/InputStream.java:198-225 at commit
+    # bb0fa42b3) maps 0x80 to the euro sign and 0x81, which its table leaves as 0, to "?".
+    assert decode_item(0, bytes([2, 0x41, 0x81, 0x80, 0, 0])).worn.name == "A?€"
+
+
 # The appearance folder's JSON keeps only the worn-model fields, so it has no wear positions to compare.
 @pytest.mark.parametrize("folder", ITEM_FOLDERS[1:], ids=lambda folder: folder.name)
 def test_wear_positions_match_the_runelite_definition(folder):

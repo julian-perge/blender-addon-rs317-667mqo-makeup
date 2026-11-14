@@ -72,7 +72,7 @@ def rekey_fades(action: bpy.types.Action, fades: dict[str, tuple[float, ...]], k
     """
     bag = action.layers[0].strips[0].channelbags[0]  # pyrefly: ignore[missing-attribute]
     frames = _frames(action)
-    for curve in [c for c in bag.fcurves if _is_fade(c) and _prop(c) not in keep or _prop(c) in fades]:
+    for curve in [c for c in bag.fcurves if (_is_fade(c) and _prop(c) not in keep) or _prop(c) in fades]:
         bag.fcurves.remove(curve)
     for prop, values in fades.items():
         _write_channel(bag, f'["{prop}"]', 0, "Fades", frames, list(values), ["CONSTANT"] * len(frames))

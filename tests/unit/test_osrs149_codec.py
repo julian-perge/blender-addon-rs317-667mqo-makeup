@@ -289,17 +289,26 @@ def test_old_encoder_refuses_a_new_format_model():
         old_format.encode(model)
 
 
-@pytest.mark.parametrize("case", ["section-overrun", "wrong-priority-byte", "truncated-body"])
-def test_malformed_new_format_footers_are_refused(case):
+@pytest.mark.parametrize(
+    ("case", "message"),
+    [
+        ("section-overrun", "sections overlap the footer"),
+        ("wrong-priority-byte", "Truncated OSRS-149 model"),
+        ("truncated-body", "sections overlap the footer"),
+    ],
+)
+def test_malformed_new_format_footers_are_refused(case, message):
     data = bytearray((FIXTURES / "32971.dat").read_bytes())
     footer = len(data) - FOOTER_SIZE
     if case == "section-overrun":
         data[footer + 12 : footer + 14] = b"\xff\xff"
     elif case == "wrong-priority-byte":
+        # Model 32971 stores a priority for each face (byte 255). A byte of 2 makes the client skip that section
+        # (rule 1), so every later section starts earlier than its data, and the reads run past the end.
         data[footer + FOOTER_PRIORITY] = 2
     else:
         data = data[:20] + data[-FOOTER_SIZE:]
-    with pytest.raises(InvalidModelError):
+    with pytest.raises(InvalidModelError, match=message):
         decode(bytes(data), profile="osrs-149")
 
 
@@ -378,7 +387,7 @@ def test_hand_built_faces_with_one_priority_store_it_once_in_the_footer():
 
 
 def test_hand_built_model_without_faces_stores_priority_zero():
-    # The client has no case for a model with no faces, so writing 0 there is our choice. Evidence:
+    # The client has no case for a model with no faces, so the owner chose 0 in docs/adr/0021. Evidence:
     # docs/research/osrs-149-codec-client-rules.md, rule 1.
     empty = Model(
         vertices=[(0, 0, 0), (1, 2, 3)],
@@ -439,7 +448,7 @@ def test_opaque_tail_with_a_nonzero_first_byte_needs_11_bytes(tail, accepted):
 
 
 def _model_with_texture_kinds(kinds):
-    parameters = {0: b"", 1: bytes(11), 2: bytes(13), 3: bytes(11), 4: bytes(11)}
+    parameters = {0: b"", 1: bytes(11), 2: bytes(13), 3: bytes(11)}
     return Model(
         vertices=[(0, 0, 0), (1, 2, 3), (4, 5, 6)],
         texture_triangles=[(0, 1, 2)] * len(kinds),
@@ -499,9 +508,10 @@ def test_decode_refuses_a_footer_flag_of_2_but_not_any_priority_byte(position, n
 
 
 def test_encode_writes_only_0_or_1_for_the_footer_flags_even_for_a_larger_source_flag():
-    # Read from the add-on code, not from the client: `check` takes source flags of 0 to 255, and `encode` builds the
-    # five flags from the data, so a source flag of 2 gives 0 or 1 in the file, and the client reads both.
-    # Evidence: docs/research/osrs-149-codec-client-rules.md, the encode side of rule 6.
+    # The client reads a section only when its flag is 1 (docs/research/osrs-149-codec-client-rules.md, rule 6), and
+    # a render type or alpha section of zeros is left out (rule 2). The hand-built model has no render types or alphas,
+    # and it keeps the other sections of fixture 28634, so a file the client reads as this model has the face skin,
+    # texture and vertex skin flags of 28634.dat's own footer: 0, 1 and 0.
     model = _hand_built()
     assert model.new_data is not None
     model.new_data = replace(model.new_data, section_flags=(2, 7, 2, 2, 2, 2))
@@ -510,8 +520,7 @@ def test_encode_writes_only_0_or_1_for_the_footer_flags_even_for_a_larger_source
     render, priority, alpha, face_skin, texture, vertex_skin = data[
         footer + FOOTER_RENDER_TYPE_FLAG : footer + FOOTER_VERTEX_SKIN_FLAG + 1
     ]
-    assert (render, priority, alpha) == (0, 7, 0)
-    assert {face_skin, texture, vertex_skin} <= {0, 1}
+    assert (render, priority, alpha, face_skin, texture, vertex_skin) == (0, 7, 0, 0, 1, 0)
     assert decode(data, profile="osrs-149").new_data is not None
 
 

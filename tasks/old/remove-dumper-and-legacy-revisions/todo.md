@@ -1,6 +1,6 @@
 # Tasks
 
-Spec: `spec/old/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/plan.md`. Each task ends with `prek run --all-files`, a commit review, and one commit. Tick a task and write its result under it.
+Spec: `spec/old/remove-dumper-and-legacy-revisions.md`. Plan: `tasks/old/remove-dumper-and-legacy-revisions/plan.md`. Each task ends with `prek run --all-files`, a commit review, and one commit. Tick a task and write its result under it.
 
 ## Phase 1: Decoders on committed bytes
 
