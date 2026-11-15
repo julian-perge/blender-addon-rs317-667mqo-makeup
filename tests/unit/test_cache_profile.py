@@ -1,8 +1,9 @@
 import os
+import zlib
 from pathlib import Path
 
 import pytest
-from js5_builder import build_cache, rewrite_cache
+from js5_builder import build_cache, container, damage_group, rewrite_cache, table, write_store
 
 from rsps_toolkit.formats import cache_profile, decode
 from rsps_toolkit.formats.appearance import assemble_body, default_equipment
@@ -13,6 +14,7 @@ from rsps_toolkit.formats.cache_profile import (
     ITEM_GROUP,
     KIT_GROUP,
     CacheProfile,
+    DamagedCacheError,
     MissingResourceError,
 )
 from rsps_toolkit.formats.enum_definition import decode_enum
@@ -104,8 +106,60 @@ def test_a_missing_style_enum_is_named(cache):
 
 def test_a_cut_short_kit_is_a_decoding_error_not_a_missing_resource(cache):
     rewrite_cache(cache, lambda parts: parts["kits"].update({0: parts["kits"][0][:3]}))
-    with pytest.raises(IndexError):
+    with pytest.raises(IndexError, match="Kit 0 ends early"):
         CacheProfile(cache).kits
+
+
+def test_a_cut_short_style_enum_is_named(cache):
+    rewrite_cache(cache, lambda parts: parts["enums"].update({778: parts["enums"][778][:3]}))
+    with pytest.raises(IndexError, match="Enum 778 ends early"):
+        CacheProfile(cache).kit_names
+
+
+def test_a_kit_that_does_not_decode_in_a_cache_whose_checksums_match_is_a_decoding_error(cache):
+    rewrite_cache(cache, lambda parts: parts["kits"].update({0: b"\x63\x00"}))
+    with pytest.raises(ValueError, match="Kit 0 has unknown opcode 99") as raised:
+        CacheProfile(cache).kits
+    assert not isinstance(raised.value, DamagedCacheError)
+
+
+def test_a_damaged_kit_group_names_the_group_and_the_folder(cache):
+    damage_group(cache, CONFIG_INDEX, KIT_GROUP)
+    with pytest.raises(DamagedCacheError, match=r"Group 3 of index 2 is damaged.*in the cache at .*Download the cache"):
+        CacheProfile(cache).kits
+
+
+def test_a_damaged_kit_group_is_named_when_the_kit_names_read_it(cache):
+    damage_group(cache, CONFIG_INDEX, KIT_GROUP)
+    with pytest.raises(DamagedCacheError, match="Group 3 of index 2 is damaged"):
+        CacheProfile(cache).kit_names
+
+
+def test_a_cache_without_kits_still_names_the_missing_group_when_the_kit_names_read_it(tmp_path):
+    with pytest.raises(MissingResourceError, match="no group 3.*Set the Cache folder in the add-on"):
+        CacheProfile(write_cache(tmp_path, kits={})).kit_names
+
+
+def test_an_unreadable_reference_table_is_damage_not_another_snapshot(tmp_path):
+    # Protocol 6 with nothing after it is a reference table that ends early.
+    write_store(tmp_path, {(255, CONFIG_INDEX): container(b"\x06"), (CONFIG_INDEX, KIT_GROUP): container(b"\0")})
+    with pytest.raises(DamagedCacheError, match="Group 2 of index 255 is damaged: The reference table ends early"):
+        CacheProfile(tmp_path).kits
+
+
+def test_a_group_that_does_not_decompress_although_its_crc32_matches_is_damage(tmp_path):
+    # A gzip body of zeros is not gzip, and the reference table holds the CRC32 of exactly these bytes.
+    stored = bytes([2]) + (8).to_bytes(4, "big") + (1).to_bytes(4, "big") + bytes(8)
+    checksums = {KIT_GROUP: zlib.crc32(stored)}
+    write_store(
+        tmp_path,
+        {
+            (255, CONFIG_INDEX): container(table({KIT_GROUP: (0,)}, checksums=checksums)),
+            (CONFIG_INDEX, KIT_GROUP): stored,
+        },
+    )
+    with pytest.raises(DamagedCacheError, match="config group 3 does not decompress although its CRC32 matches"):
+        CacheProfile(tmp_path).kits
 
 
 def test_a_key_error_while_reading_is_not_reported_as_a_missing_resource(cache, monkeypatch):

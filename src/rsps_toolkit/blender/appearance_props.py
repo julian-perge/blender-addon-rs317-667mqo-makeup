@@ -25,7 +25,14 @@ from ..formats.appearance import (
 )
 from ..formats.appearance_colours import colour_choices
 from ..formats.appearance_preset import AppearancePreset
-from ..formats.cache_profile import PALETTE_PATH, REVISION, CacheProfile, MissingResourceError, shared_profile
+from ..formats.cache_profile import (
+    PALETTE_PATH,
+    REVISION,
+    CacheProfile,
+    DamagedCacheError,
+    MissingResourceError,
+    shared_profile,
+)
 from ..formats.item_wear import ItemWear, load_item_wear
 from . import appearance_swatches, preferences
 
@@ -68,6 +75,18 @@ def profile() -> CacheProfile | None:
     return shared_profile(folder)
 
 
+def _decode_failure(cache: CacheProfile, error: ValueError | IndexError) -> str:
+    """The panel's message for a kit or enum that the decoders cannot read, such as one with an opcode that snapshot
+    430 does not have or one cut short. The error's message names the definition, or the damaged group when the cache
+    profile found a group that does not match its CRC32."""
+    if isinstance(error, DamagedCacheError):
+        return str(error)
+    return (
+        f"{error}, in the cache at {cache.cache_folder}. The cache's checksums match, so it is probably the cache of "
+        f"another snapshot. Set the Cache folder in the add-on preferences to the cache of snapshot {SNAPSHOT_ID}."
+    )
+
+
 def kit_choices(props: "RsAppearanceProperties", part: int) -> list[tuple[str, str, str]]:
     """The selectable kits of one body part category for the chosen body type, then an entry for any other value.
 
@@ -91,6 +110,8 @@ def kit_choices(props: "RsAppearanceProperties", part: int) -> list[tuple[str, s
             ]
         except MissingResourceError as error:
             profile_error = str(error)
+        except (ValueError, IndexError) as error:
+            profile_error = _decode_failure(cache, error)
     if not choices:
         choices = [(NONE_KIT, "None", "No kit exists for this body part")]
     choices.append((OTHER, "Other (see raw slots)", "The slot holds an item, nothing, or a kit of the other body type"))
@@ -106,6 +127,9 @@ def _names(cache: CacheProfile) -> dict[int, str]:
         return cache.kit_names
     except MissingResourceError as error:
         profile_error = str(error)
+        return {}
+    except (ValueError, IndexError) as error:
+        profile_error = _decode_failure(cache, error)
         return {}
 
 
@@ -265,12 +289,18 @@ def _female_changed(self, context) -> None:
 
 
 def _kits():
+    """The cache's kits, or None when there are none to read. A kit that does not decode also sets the panel's message,
+    because the covers toggles and the default look can read the kits before any kit dropdown does."""
+    global profile_error
     cache = profile()
     if cache is None:
         return None
     try:
         return cache.kits
     except MissingResourceError:
+        return None
+    except (ValueError, IndexError) as error:
+        profile_error = _decode_failure(cache, error)
         return None
 
 
