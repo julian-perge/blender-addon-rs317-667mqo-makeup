@@ -1,22 +1,37 @@
 import gzip
+import json
 import os
 import re
+import time
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
 import bpy
 import pytest
 from js5_builder import REGION_FIXTURES, build_region_cache
-from runelite_json import load_overlays, load_underlays
+from runelite_json import load_locs, load_overlays, load_underlays
 
 import rsps_toolkit.blender as addon
-from rsps_toolkit.blender import import_item, preferences, region_import, region_terrain
+from rsps_toolkit.blender import import_item, preferences, region_import, region_scenery, region_terrain, rs_layers
 from rsps_toolkit.blender.face_materials import srgb_to_linear, texture_image
-from rsps_toolkit.formats import face_colour_to_rgb
+from rsps_toolkit.blender.mesh import matching_set_aside_faces
+from rsps_toolkit.formats import decode, face_colour_to_rgb
 from rsps_toolkit.formats.cache_profile import SET_CACHE_FOLDER
 from rsps_toolkit.formats.js5 import Js5Store
-from rsps_toolkit.formats.region import AREA_SIZE, EMPTY_TILE, LEVELS, Terrain, Tile, load_terrain
+from rsps_toolkit.formats.loc_definition import read_locs
+from rsps_toolkit.formats.region import (
+    AREA_SIZE,
+    EMPTY_TILE,
+    LEVELS,
+    Placement,
+    Terrain,
+    Tile,
+    load_landscape,
+    load_terrain,
+)
 from rsps_toolkit.formats.region_colours import HIDDEN
+from rsps_toolkit.formats.region_placement import place_scenery
 from rsps_toolkit.formats.region_shapes import Corner, TilePoint, tile_triangles
 from rsps_toolkit.formats.sprite import decode_sprites
 from rsps_toolkit.formats.texture import SIZE, decode_texture, texture_pixels
@@ -407,12 +422,22 @@ def snapshot_430(monkeypatch, operator_registered):
     monkeypatch.setattr(preferences, "cache_folder", lambda: SNAPSHOT_430)
 
 
+def keyless_cache(folder: Path, **groups) -> Path:
+    """A cache folder in `folder` with the groups that `build_region_cache` writes, and a keys folder next to it with no
+    key file. The landscape then has no placements (`GLOSSARY.md`, Landscape keys), so the import needs no loc models,
+    which `tests/fixtures/region/` does not hold."""
+    cache = folder / "cache"
+    build_region_cache(cache, **groups)
+    (folder / "keys").mkdir()
+    return cache
+
+
 @pytest.fixture
 def fixture_cache(monkeypatch, operator_registered, tmp_path):
     # The groups of snapshot 430 that the import of 48_50 reads, from `tests/fixtures/region/`, so the test needs no real
     # cache.
-    build_region_cache(tmp_path, definitions=True)
-    monkeypatch.setattr(preferences, "cache_folder", lambda: tmp_path)
+    cache = keyless_cache(tmp_path, definitions=True)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
 
 
 def import_region(x: int = 48, y: int = 50) -> set[str]:
@@ -434,7 +459,7 @@ def test_the_operator_imports_the_terrain_of_48_50_into_its_own_collection(snaps
     assert region.name == "Region 48_50"
     assert [obj.name for obj in region.objects] == ["Terrain 48_50"]
     (scenery,) = region.children
-    assert not scenery.objects
+    assert scenery.name == "Scenery 48_50"
     assert not scenery.children
     terrain = load_terrain(Js5Store(SNAPSHOT_430), 48, 50)
     expected = sum(len(tile_triangles(terrain.tile(0, x, y))) for x in range(64) for y in range(64))
@@ -494,10 +519,10 @@ def test_without_a_cache_folder_the_operator_stops_with_the_message_of_the_other
 def test_a_region_whose_terrain_the_cache_lacks_is_refused(monkeypatch, operator_registered, tmp_path):
     # The owner chose on 2026-11-14 that the import refuses a region whose own terrain group the cache lacks (issue 47,
     # Decisions). The cache holds the 8 neighbours of 48_50 but not 48_50 itself.
-    build_region_cache(
+    cache = keyless_cache(
         tmp_path, terrains=tuple(f"m{x}_{y}" for x in (47, 48, 49) for y in (49, 50, 51) if (x, y) != (48, 50))
     )
-    monkeypatch.setattr(preferences, "cache_folder", lambda: tmp_path)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
 
     with pytest.raises(RuntimeError, match="The cache has no terrain for region 48_50"):
         import_region()
@@ -508,8 +533,8 @@ def test_a_region_whose_terrain_the_cache_lacks_is_refused(monkeypatch, operator
 def test_an_overlay_texture_that_the_cache_lacks_stops_the_import(monkeypatch, operator_registered, tmp_path):
     # The owner chose on 2026-11-14 that a texture id that index 9 lacks stops the import with a message (issue 47,
     # Decisions). The overlays of 48_50 use textures 1 and 3 (floors.json), and the cache leaves out texture 1.
-    build_region_cache(tmp_path, definitions=True, textures_left_out=(1,))
-    monkeypatch.setattr(preferences, "cache_folder", lambda: tmp_path)
+    cache = keyless_cache(tmp_path, definitions=True, textures_left_out=(1,))
+    monkeypatch.setattr(preferences, "cache_folder", lambda: cache)
 
     with pytest.raises(RuntimeError, match="Group 0 of index 9 of the cache has no texture 1"):
         import_region()
@@ -544,6 +569,327 @@ def test_the_texture_materials_read_decoded_images_not_the_texture_folder(snapsh
         assert image.packed_file is not None
         expected = [(pixel >> 16, pixel >> 8 & 0xFF, pixel & 0xFF) for pixel in reference_pixels(texture_id)]
         assert [rgba[:3] for rgba in rgba_from_the_top(image)] == expected
+
+
+LANDSCAPE_ROWS = json.loads((REGION_FIXTURES / "landscape.json").read_text())
+"""RuneLite's `LocationsLoader` reading of the landscape of 48_50, in the order of the file."""
+LOC_ROWS = {row["id"]: row for row in json.loads((REGION_FIXTURES / "locs.json").read_text())}
+"""RuneLite's `ObjectLoader` reading of the locs of the placements of 48_50 and of their impostors."""
+
+
+def reference_shown_loc(loc_id: int) -> int:
+    """The loc that a placement of `loc_id` shows, from the reference rows: `ObjectComposition.getImpostor` (lines 830 to
+    845) takes the impostor for the value 0 of the varbit or varp, and the last impostor when the loc has neither."""
+    row = LOC_ROWS[loc_id]
+    impostors = row["configChangeDest"]
+    if impostors is None:
+        return loc_id
+    value = 0 if row["varbitID"] != -1 or row["varpID"] != -1 else -1
+    return impostors[value] if 0 <= value < len(impostors) - 1 else impostors[-1]
+
+
+def reference_model(loc_id: int, model_type: int) -> tuple[int, ...] | None:
+    """The models that `ObjectComposition.getModel` (lines 694 to 751) shows for a loc and a model type, from the
+    reference rows. A loc without types shows all its models, only for type 10."""
+    row = LOC_ROWS[loc_id]
+    models, types = row["objectModels"] or [], row["objectTypes"]
+    if types is None:
+        return tuple(models) if model_type == 10 and models else None
+    return (models[types.index(model_type)],) if model_type in types else None
+
+
+type ReferenceKey = tuple[tuple[int, ...], ...]
+RECOLOUR_FIELDS = ("recolorToFind", "recolorToReplace", "retextureToFind", "textureToReplace")
+
+
+def reference_scenery() -> tuple[list[tuple[str, ReferenceKey, bool]], int]:
+    """Each scenery object that the import of 48_50 makes, from the reference rows, and the count of the placements that
+    show nothing. An object is its name, the models, recolours and retextures that it shows, and whether its loc is
+    contoured.
+
+    A wall decoration asks for type 4 and an object of type 11 for type 10 (`PacketBuffer.java` lines 212 to 503). A
+    wall of type 2 and a wall decoration of type 8 ask twice with the same type (`Region.java` from line 1360). The owner
+    chose on 2026-11-14 that each model is one object, and that the second is named with ` part 2` (issue 49,
+    Decisions)."""
+    objects: list[tuple[str, ReferenceKey, bool]] = []
+    nothing = 0
+    for row in LANDSCAPE_ROWS:
+        if row["level"] != 0:
+            continue
+        shown = reference_shown_loc(row["id"])
+        loc_type = row["type"]
+        model_type = 4 if 4 <= loc_type <= 8 else 10 if loc_type == 11 else loc_type
+        models = None if shown == -1 else reference_model(shown, model_type)
+        if models is None:
+            nothing += 1
+            continue
+        loc = LOC_ROWS[shown]
+        key = (models, *(tuple(loc[field] or ()) for field in RECOLOUR_FIELDS))
+        contoured = loc["contouredGround"] != -1
+        name = f"Loc {row['id']} at {row['x']}_{row['y']}"
+        objects.append((name, key, contoured))
+        if loc_type in (2, 8):
+            objects.append((f"{name} part 2", key, contoured))
+    return objects, nothing
+
+
+def scenery_of_48_50() -> bpy.types.Collection:
+    (region,) = region_collections()
+    (scenery,) = region.children
+    return scenery
+
+
+def without_number(name: str) -> str:
+    """The name without the `.001` that Blender adds when the name is taken."""
+    return re.sub(r"\.\d{3}$", "", name)
+
+
+def scenery_object(name: str) -> bpy.types.Object:
+    (obj,) = [obj for obj in scenery_of_48_50().objects if obj.name == name]
+    return obj
+
+
+@needs_snapshot_430
+def test_the_import_of_48_50_makes_one_object_for_each_model_that_a_level_0_placement_shows(snapshot_430):
+    started = time.perf_counter()
+    import_region()
+    print(f"The import of 48_50 took {time.perf_counter() - started:.1f} seconds")
+
+    objects = scenery_of_48_50().objects
+    assert Counter(without_number(obj.name) for obj in objects) == Counter(
+        name for name, _, _ in reference_scenery()[0]
+    )
+    assert all(obj.type == "MESH" for obj in objects)
+
+
+@needs_snapshot_430
+def test_the_import_counts_the_placements_and_meshes_that_it_made(snapshot_430):
+    scene = bpy.context.scene
+    assert scene is not None
+    region, counts = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS)
+
+    objects, nothing = reference_scenery()
+    (scenery,) = region.children
+    own = {mesh_of(obj) for obj in scenery.objects if without_number(mesh_of(obj).name) == without_number(obj.name)}
+    shared = {mesh_of(obj) for obj in scenery.objects} - own
+    assert counts.placements == sum(1 for row in LANDSCAPE_ROWS if row["level"] == 0)
+    assert counts.shown_nothing == nothing
+    assert counts.placements_made == counts.placements - nothing
+    assert counts.objects == len(objects) == len(scenery.objects)
+    assert counts.own_meshes == len(own)
+    assert counts.shared_meshes == len(shared)
+    assert all(mesh.users == 1 for mesh in own)
+
+
+@needs_snapshot_430
+def test_objects_of_locs_that_are_not_contoured_share_a_mesh_exactly_when_they_show_the_same_models_and_colours(
+    snapshot_430,
+):
+    # A loc that is not contoured shares its mesh unless Blender cannot hold its transform, which needs a scale that is
+    # not 128 (`region_contour`), and no loc of 48_50 is scaled (spec 35). A name that two objects have is left out,
+    # because Blender numbers the second.
+    import_region()
+
+    objects, _ = reference_scenery()
+    names = Counter(name for name, _, _ in objects)
+    keys = {name: key for name, key, contoured in objects if not contoured and names[name] == 1}
+    mesh_by_key: dict[ReferenceKey, bpy.types.Mesh] = {}
+    for name, key in keys.items():
+        mesh = mesh_of(scenery_object(name))
+        assert mesh_by_key.setdefault(key, mesh) is mesh, name
+    assert len(set(mesh_by_key.values())) == len(mesh_by_key)
+
+
+def test_a_placement_that_shows_nothing_makes_no_object_and_is_counted():
+    # locs.json: loc 83 has no model for type 10, so a placement of type 10 shows nothing.
+    locs = load_locs(REGION_FIXTURES / "locs.json")
+    placement = Placement(83, 0, 5, 5, 10, 0)
+    placed = place_scenery([placement], locs, lambda x, y: 0)
+    collection = bpy.data.collections.new("Scenery")
+
+    counts = region_scenery.scenery_objects(collection, placed, locs, {}, {}, lambda x, y: 0, BRIGHTNESS)
+
+    assert not collection.objects
+    assert (counts.placements, counts.placements_made, counts.objects, counts.shown_nothing) == (1, 0, 0, 1)
+
+
+@needs_snapshot_430
+def test_an_object_with_a_shared_mesh_holds_the_transform_of_its_placement(snapshot_430):
+    # The transform rules are in `formats/region_placement.py` and its tests. Loc 84 at (16, 46) is a wall of type 2, so
+    # it has two models, and the first is mirrored. Another placement shares the mesh of the first.
+    import_region()
+
+    store = Js5Store(SNAPSHOT_430)
+    terrain = load_terrain(store, 48, 50)
+    placements = [p for p in load_landscape(store, 48, 50).placements if p.level == 0]
+    placed = place_scenery(placements, read_locs(store, {p.loc for p in placements}), terrain_height(terrain))
+    first, second = next(p for p in placed if (p.placement.loc, p.placement.x, p.placement.y) == (84, 16, 46)).parts
+    assert first.model.mirrored
+    assert mesh_of(scenery_object("Loc 84 at 16_46")).users > 1
+    for name, part in (("Loc 84 at 16_46", first), ("Loc 84 at 16_46 part 2", second)):
+        assert part.rotation is not None
+        assert part.scale is not None
+        obj = scenery_object(name)
+        assert xyz(obj.location) == pytest.approx(part.location)
+        assert xyz(obj.rotation_euler) == pytest.approx((0, 0, part.rotation))
+        assert xyz(obj.scale) == pytest.approx(part.scale)
+    assert scenery_object("Loc 84 at 16_46").scale.y == -1
+
+
+def xyz(vector) -> tuple[float, float, float]:
+    return vector.x, vector.y, vector.z
+
+
+def terrain_height(terrain: Terrain):
+    return lambda x, y: terrain.tile(0, x, y).height
+
+
+def mesh_name(loc_id: int, model_type: int) -> str:
+    """The name of a shared mesh, which the owner chose on 2026-11-14 (issue 49, Decisions): the loc that first shows it,
+    its models, and ` recoloured` when the loc has recolours or retextures."""
+    models = reference_model(loc_id, model_type)
+    assert models is not None
+    row = LOC_ROWS[loc_id]
+    recoloured = " recoloured" if row["recolorToFind"] or row["retextureToFind"] else ""
+    return f"Loc {loc_id} model {'+'.join(str(model) for model in models)}{recoloured}"
+
+
+@needs_snapshot_430
+def test_contoured_placements_on_flat_ground_share_one_mesh(snapshot_430):
+    # Loc 1631 is contoured (locs.json, contouredGround 0). Its walls of type 0 at (11, 56) and (11, 57) stand where every
+    # corner that the client tests has the same height, so the client returns the model unchanged (`ModelData.java` line
+    # 1152, ADR 0023).
+    import_region()
+
+    first, second = scenery_object("Loc 1631 at 11_56"), scenery_object("Loc 1631 at 11_57")
+    assert mesh_of(first) is mesh_of(second)
+    assert without_number(mesh_of(first).name) == mesh_name(1631, 0)
+
+
+@needs_snapshot_430
+def test_a_contoured_placement_on_uneven_ground_has_its_own_mesh_and_an_object_with_only_a_position(snapshot_430):
+    # Loc 4735 is contoured (locs.json, contouredGround 0), and its ground decoration at (1, 47) stands on uneven ground.
+    import_region()
+
+    obj = scenery_object("Loc 4735 at 1_47")
+    assert mesh_of(obj).users == 1
+    assert mesh_of(obj).name == obj.name
+    assert xyz(obj.rotation_euler) == (0, 0, 0)
+    assert xyz(obj.scale) == (1, 1, 1)
+    assert len({round(vertex.co.z) for vertex in mesh_of(obj).vertices}) > 1
+
+
+@needs_snapshot_430
+def test_the_stored_data_of_an_own_mesh_holds_its_moved_vertices(snapshot_430):
+    # The owner chose on 2026-11-14 that an own mesh is made from its vertices rounded to whole game units, so that
+    # what model import stores matches the mesh (issue 49, Decisions). Export drops a set-aside face whose stored
+    # corners no longer match the vertices (`mesh.matching_set_aside_faces`).
+    import_region()
+
+    own = [
+        mesh_of(obj)
+        for obj in scenery_of_48_50().objects
+        if without_number(mesh_of(obj).name) == without_number(obj.name)
+    ]
+    assert own
+    for mesh in own:
+        assert matching_set_aside_faces(mesh)[1] == 0
+        coordinates = [0.0] * (3 * len(mesh.vertices))
+        mesh.vertices.foreach_get("co", coordinates)
+        assert all(value == round(value) for value in coordinates)
+    assert any(rs_layers.read_set_aside_faces(mesh) for mesh in own)
+
+
+@needs_snapshot_430
+def test_the_own_mesh_of_a_mirrored_placement_swaps_the_first_and_last_corner_of_each_face(snapshot_430):
+    # Loc 12686 at (40, 7) is mirrored (locs.json, isRotated) and stands on uneven ground, so its mesh holds the
+    # mirrored vertices, and `ModelData.method2633` (lines 1380 to 1390) swaps the corners. Its model is 13536.
+    import_region()
+
+    mesh = mesh_of(scenery_object("Loc 12686 at 40_7"))
+    model = decode(Js5Store(SNAPSHOT_430).container(7, 13536), profile="osrs-149")
+    expected = [(c, b, a) for a, b, c in model.faces if len({a, b, c}) == 3]
+    corners = [
+        tuple(mesh.loops[polygon.loop_start + i].vertex_index for i in range(polygon.loop_total))
+        for polygon in mesh.polygons
+    ]
+    assert corners == expected
+
+
+@needs_snapshot_430
+def test_an_impostor_shows_the_loc_for_value_0(snapshot_430):
+    # locs.json: loc 14908 has varbit 2098 and the impostor 7102 for value 0. Its placement at (15, 51) is a wall
+    # decoration of type 5, which asks for type 4.
+    import_region()
+
+    assert without_number(mesh_of(scenery_object("Loc 14908 at 15_51")).name) == mesh_name(
+        reference_shown_loc(14908), 4
+    )
+
+
+@needs_snapshot_430
+def test_an_animated_loc_shows_its_model_with_no_animation(snapshot_430):
+    # locs.json: loc 197 has the animation 481. Its placement at (53, 44) is a wall decoration of type 4.
+    import_region()
+
+    obj = scenery_object("Loc 197 at 53_44")
+    assert without_number(mesh_of(obj).name) == mesh_name(197, 4)
+    assert mesh_of(obj).polygons
+    assert obj.animation_data is None
+
+
+@needs_snapshot_430
+def test_the_scenery_materials_use_the_decoded_images(snapshot_430, monkeypatch):
+    def no_texture_folder(texture_id):
+        raise AssertionError(f"The import looked up texture {texture_id} in the texture folder")
+
+    monkeypatch.setattr(preferences, "find_texture", no_texture_folder)
+
+    import_region()
+
+    images = {
+        image
+        for obj in scenery_of_48_50().objects
+        for material in mesh_of(obj).materials
+        if material is not None
+        for image in [material_image(material)]
+        if image is not None
+    }
+    assert images
+    assert all(image.packed_file is not None and image.name.startswith("RS_Texture_") for image in images)
+
+
+@needs_snapshot_430
+def test_one_undo_removes_the_whole_import_with_its_scenery(snapshot_430):
+    bpy.ops.ed.undo_push(message="Before the import")
+    import_region()
+    bpy.ops.ed.undo_push(message="Region imported")
+    assert scenery_of_48_50().objects
+
+    bpy.ops.ed.undo()
+
+    assert not region_collections()
+    assert not bpy.data.objects
+    assert not bpy.data.meshes
+
+
+@needs_snapshot_430
+def test_a_failure_while_building_the_scenery_leaves_nothing_behind(snapshot_430, monkeypatch):
+    built = region_import.scenery_objects
+
+    def fail(*args):
+        built(*args)
+        raise ValueError("The build failed")
+
+    monkeypatch.setattr(region_import, "scenery_objects", fail)
+
+    with pytest.raises(RuntimeError, match="The build failed"):
+        import_region()
+    assert not bpy.data.collections
+    assert not bpy.data.objects
+    assert not bpy.data.meshes
+    assert not bpy.data.materials
+    assert not bpy.data.images
 
 
 # The entry text, the operator name and the properties are spec 35, decision 6 and part 9.

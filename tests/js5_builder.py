@@ -13,7 +13,7 @@ REGION_FIXTURES = Path(__file__).parent / "fixtures/region"
 REGION_TERRAINS = tuple(f"m{x}_{y}" for x in (47, 48, 49) for y in (49, 50, 51))
 """The terrain groups of region `48_50` and its 8 neighbours, which `tests/fixtures/region/` holds as the cache stores them."""
 KIT_GROUP, ENUM_GROUP, ITEM_GROUP = 3, 8, 10
-UNDERLAY_GROUP, OVERLAY_GROUP = 1, 4
+UNDERLAY_GROUP, OVERLAY_GROUP, LOC_GROUP = 1, 4, 6
 SPRITE_INDEX, TEXTURE_INDEX, TEXTURE_GROUP = 8, 9, 0
 
 
@@ -163,8 +163,8 @@ def build_region_cache(
     still encrypted. A terrain group that `terrains` leaves out keeps its name in the reference table but has no data, so
     the cache lacks it.
 
-    With `definitions`, the cache also holds the files of `tests/fixtures/region/`: the underlays and overlays as config
-    groups 1 and 4 of index 2, the textures as group 0 of index 9 without those in `textures_left_out`, and each sprite
+    With `definitions`, the cache also holds the files of `tests/fixtures/region/`: the underlays, overlays and locs as
+    config groups 1, 4 and 6 of index 2, the textures as group 0 of index 9 without those in `textures_left_out`, and each sprite
     group as a group of index 8."""
     folder.mkdir(parents=True, exist_ok=True)
     table_data = (REGION_FIXTURES / "reference-table-5.dat").read_bytes()
@@ -182,17 +182,18 @@ def _fixture_files(folder: str) -> dict[int, bytes]:
 
 
 def _definition_groups(textures_left_out: tuple[int, ...]) -> dict[tuple[int, int], bytes]:
-    underlays, overlays = _fixture_files("underlays"), _fixture_files("overlays")
+    underlays, overlays, locs = _fixture_files("underlays"), _fixture_files("overlays"), _fixture_files("locs")
     textures = {
         texture: data for texture, data in _fixture_files("textures").items() if texture not in textures_left_out
     }
     sprites = _fixture_files("sprites")
     return {
         (REFERENCE_INDEX, CONFIG_INDEX): container(
-            table({UNDERLAY_GROUP: tuple(underlays), OVERLAY_GROUP: tuple(overlays)})
+            table({UNDERLAY_GROUP: tuple(underlays), OVERLAY_GROUP: tuple(overlays), LOC_GROUP: tuple(locs)})
         ),
         (CONFIG_INDEX, UNDERLAY_GROUP): container(grouped(list(underlays.values())), kind=2),
         (CONFIG_INDEX, OVERLAY_GROUP): container(grouped(list(overlays.values())), kind=2),
+        (CONFIG_INDEX, LOC_GROUP): container(grouped(list(locs.values())), kind=2),
         (REFERENCE_INDEX, TEXTURE_INDEX): container(table({TEXTURE_GROUP: tuple(textures)})),
         (TEXTURE_INDEX, TEXTURE_GROUP): container(grouped(list(textures.values())), kind=2),
         (REFERENCE_INDEX, SPRITE_INDEX): container(table({sprite: (0,) for sprite in sprites})),

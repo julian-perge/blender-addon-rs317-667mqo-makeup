@@ -1,8 +1,9 @@
 import pytest
-from js5_builder import REGION_FIXTURES
+from js5_builder import REGION_FIXTURES, build_region_cache
 from runelite_json import load_locs
 
-from rsps_toolkit.formats.loc_definition import decode_loc
+from rsps_toolkit.formats.js5 import Js5Store, NotInCacheError
+from rsps_toolkit.formats.loc_definition import decode_loc, read_locs
 
 
 def test_every_loc_of_the_level_0_placements_and_their_impostors_equals_runelites_object_loader():
@@ -12,6 +13,23 @@ def test_every_loc_of_the_level_0_placements_and_their_impostors_equals_runelite
     }
     assert len(decoded) == 287
     assert decoded == load_locs(REGION_FIXTURES / "locs.json")
+
+
+def test_read_locs_gives_the_named_locs_and_every_loc_that_their_impostors_name(tmp_path):
+    build_region_cache(tmp_path, definitions=True)
+    reference = load_locs(REGION_FIXTURES / "locs.json")
+
+    locs = read_locs(Js5Store(tmp_path), [83, 26813])
+
+    # locs.json: loc 26813 has the impostors 26797, 26798 and -1, and -1 names no loc.
+    assert locs == {loc_id: reference[loc_id] for loc_id in (83, 26813, 26797, 26798)}
+
+
+def test_read_locs_refuses_a_loc_that_the_cache_lacks(tmp_path):
+    build_region_cache(tmp_path, definitions=True)
+
+    with pytest.raises(NotInCacheError, match="Group 6 of index 2 of the cache has no loc 1"):
+        read_locs(Js5Store(tmp_path), [83, 1])
 
 
 def test_a_loc_that_uses_every_opcode_of_load_data_except_5_and_92_reads_to_its_end():
