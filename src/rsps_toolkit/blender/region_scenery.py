@@ -6,7 +6,9 @@ hold, gets a mesh of its own with the vertices already moved, and its object hol
 meshes are made with `model_to_object`, so they keep the look of model import and have no baked loc light.
 
 A wall of type 2 and a wall decoration of type 8 show two models. Each model is one object, and the second is named with
-` part 2`. The names of the objects and meshes are the owner's choice of 2026-11-14 (issue 49, Decisions).
+` part 2`. The names of the objects and meshes are the owner's choice of 2026-11-14 (issue 49, Decisions). Two
+placements of one loc on one tile get the same name, and Blender adds `.001` to the second, which the owner chose in the
+same comment.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -17,7 +19,6 @@ import bpy
 from ..formats.loc_definition import LocDefinition
 from ..formats.model import Model
 from ..formats.region_contour import own_vertices
-from ..formats.region_loc import shown_loc_id
 from ..formats.region_placement import PlacedLoc, PlacedPart
 from .mesh import model_to_object
 
@@ -67,8 +68,7 @@ def scenery_objects(
     shared: dict[MeshKey, bpy.types.Mesh] = {}
     objects = own = nothing = 0
     for placed_loc in placed:
-        placement = placed_loc.placement
-        shown_id = shown_loc_id(placement.loc, locs)
+        placement, shown_id = placed_loc.placement, placed_loc.shown_id
         if shown_id is None or not placed_loc.parts:
             nothing += 1
             continue
@@ -82,6 +82,8 @@ def scenery_objects(
                 if key not in shared:
                     shared[key] = _mesh(model, _shared_name(shown_id, shown, part), images, brightness)
                 obj = bpy.data.objects.new(name, shared[key])
+                # `own_vertices` gives None only for a part whose transform Blender can hold, and such a part always
+                # has a rotation and a scale (`PlacedPart.own_mesh`).
                 assert part.rotation is not None and part.scale is not None
                 obj.rotation_euler = (0.0, 0.0, part.rotation)
                 obj.scale = part.scale

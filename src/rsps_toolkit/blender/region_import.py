@@ -14,7 +14,7 @@ from ..formats.loc_definition import LocDefinition, read_locs
 from ..formats.model import Model
 from ..formats.region import REGION_SIZE, Terrain, load_landscape, load_terrain
 from ..formats.region_colours import BLEND_AHEAD, BLEND_BEHIND
-from ..formats.region_loc import recolour_model, shown_loc_id
+from ..formats.region_loc import recolour_model
 from ..formats.region_placement import PlacedLoc, place_scenery
 from ..formats.texture import read_textures, texture_pixels
 from . import preferences
@@ -80,7 +80,8 @@ def import_region(
     from the cache first, so a read that fails makes nothing. A failure while building removes what was made so far and
     passes on.
 
-    A loc or a model that the cache lacks stops the import, as a texture does (issue 47, Decisions).
+    A loc or a model that the cache lacks stops the import, as a texture does. The owner chose this on 2026-11-14 (issue
+    49, Decisions).
 
     A region whose own terrain group the cache lacks is refused, and the name of the scenery collection is as above,
     which the owner chose on 2026-11-14 (issue 47, Decisions)."""
@@ -130,7 +131,9 @@ def import_region(
 
 def _loc_models(store: Js5Store, placed: list[PlacedLoc], locs: dict[int, LocDefinition]) -> dict[MeshKey, Model]:
     """The model of each part of the placements, by its `mesh_key`. The cache models of a part are joined as the client
-    joins them (`ObjectComposition.java` lines 728 to 733), and then recoloured and retextured as the loc says."""
+    joins them (`ObjectComposition.java` lines 728 to 733), and then recoloured and retextured as the loc says. The join
+    gives an old-format model, so a recolour of 127 on it is refused, which the owner accepted on 2026-11-14 (issue 49,
+    Decisions)."""
     decoded: dict[int, Model] = {}
 
     def cache_model(model_id: int) -> Model:
@@ -140,10 +143,9 @@ def _loc_models(store: Js5Store, placed: list[PlacedLoc], locs: dict[int, LocDef
 
     models: dict[MeshKey, Model] = {}
     for placed_loc in placed:
-        shown_id = shown_loc_id(placed_loc.placement.loc, locs)
-        if shown_id is None:
+        if placed_loc.shown_id is None:
             continue
-        shown = locs[shown_id]
+        shown = locs[placed_loc.shown_id]
         for part in placed_loc.parts:
             key = mesh_key(part, shown)
             if key in models:

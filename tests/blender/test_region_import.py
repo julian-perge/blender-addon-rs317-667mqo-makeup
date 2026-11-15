@@ -38,6 +38,7 @@ from rsps_toolkit.formats.region import (
     Placement,
     Terrain,
     Tile,
+    ground_height,
     load_landscape,
     load_terrain,
 )
@@ -897,6 +898,45 @@ def test_a_contoured_placement_on_uneven_ground_has_its_own_mesh_and_an_object_w
     assert xyz(obj.rotation_euler) == (0, 0, 0)
     assert xyz(obj.scale) == (1, 1, 1)
     assert len({round(vertex.co.z) for vertex in mesh_of(obj).vertices}) > 1
+
+
+@needs_snapshot_430
+def test_a_contoured_placement_on_uneven_ground_puts_each_vertex_at_the_clients_height(snapshot_430):
+    # Loc 4735 (locs.json) has contouredGround 0, the scale 128, no offset, no mirror and the one model 4401. Its ground
+    # decoration at (1, 47) has rotation 0 and a footprint of 1 by 1, so the client draws the model's own vertices at
+    # the tile centre (`PacketBuffer.java` lines 169 to 200). The client draws the placement at the mean height of the
+    # tile's four corners (lines 197 and 198), and contour 0 adds the ground under each vertex less that same mean
+    # (`ModelData.java` line 1162 onwards). So a vertex (x, y, z) stands at the game height ground + y, where ground is
+    # the height under the vertex (`class264.java` lines 96 to 108, which blends the corners as `Model.method2720` does).
+    import_region()
+
+    obj = scenery_object("Loc 4735 at 1_47")
+    store = Js5Store(SNAPSHOT_430)
+    terrain = load_terrain(store, 48, 50)
+    model = decode(store.container(7, 4401), profile="osrs-149")
+    centre_x, centre_z = 1 * 128 + 64, 47 * 128 + 64
+    expected = [
+        (centre_x + x, centre_z + z, -(ground_height(terrain, centre_x + x, centre_z + z) + y))
+        for x, y, z in model.vertices
+    ]
+    world = [xyz(obj.location + vertex.co) for vertex in mesh_of(obj).vertices]
+    assert world == expected
+
+
+@needs_snapshot_430
+def test_a_scenery_object_keeps_the_vertex_skins_of_its_model(snapshot_430):
+    # The vertex skins are vertex groups. `region_scenery._mesh` removes the object that `model_to_object` made, and
+    # every object of the shared mesh must still read the skins. Loc 5558 at (13, 58) shows model 2241, whose vertex
+    # skins the cache holds.
+    import_region()
+
+    model = decode(Js5Store(SNAPSHOT_430).container(7, 2241), profile="osrs-149")
+    assert model.vertex_skins
+    obj = scenery_object("Loc 5558 at 13_58")
+    assert rs_layers.read_vertex_skins(obj) == model.vertex_skins
+    for other in scenery_of_48_50().objects:
+        if other.data is obj.data:
+            assert rs_layers.read_vertex_skins(other) == model.vertex_skins, other.name
 
 
 @needs_snapshot_430
