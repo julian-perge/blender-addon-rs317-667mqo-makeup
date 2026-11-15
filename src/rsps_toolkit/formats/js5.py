@@ -85,13 +85,18 @@ class Js5Store:
     def check(self, index: int, group: int) -> None:
         """Raise DamagedGroupError when the group's sectors do not chain, or its CRC32 differs from the one in the index's
         reference table. The CRC32 covers the container without the 2-byte version that can follow it, as in
-        RuneLite's `Container`."""
+        RuneLite's `Container`. A reference table that cannot be read is a DamagedGroupError for its own group in
+        index 255, because the check has no CRC32 to compare with."""
+        try:
+            checksums = self._table(index).checksums
+        except (ValueError, IndexError, OSError, EOFError, zlib.error) as error:
+            raise DamagedGroupError(f"Group {index} of index {REFERENCE_INDEX} is damaged: {error}") from error
         try:
             raw = self.raw(index, group)
         except ValueError as error:
             raise DamagedGroupError(f"Group {group} of index {index} is damaged: {error}") from error
         end = 5 + int.from_bytes(raw[1:5], "big") + (0 if raw[0] == 0 else 4)
-        found, expected = zlib.crc32(raw[:end]), self._table(index).checksums.get(group)
+        found, expected = zlib.crc32(raw[:end]), checksums.get(group)
         if found != expected:
             given = "none" if expected is None else f"{expected:08x}"
             raise DamagedGroupError(

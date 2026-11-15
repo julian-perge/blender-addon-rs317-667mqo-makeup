@@ -99,9 +99,11 @@ class CacheProfile:
         preference.
 
         When the load fails in any other way, the config `groups` that the catalog reads are checked against their
-        CRC32 values. A group that does not match becomes a DamagedCacheError. When all match, the error passes
-        unchanged, such as the IndexError of a definition cut short. The check runs only after a load fails, so a
-        cache that loads is never read a second time."""
+        CRC32 values. A group that does not match, or an index 2 reference table that cannot be read, becomes a
+        DamagedCacheError. When all match, a group that does not decompress is a DamagedCacheError too, because the
+        stored bytes are the ones the cache was written with. Any other error passes unchanged, such as the IndexError
+        of a definition cut short. A check that cannot find a group lets the load's own error pass. The check runs
+        only after a load fails, so a cache that loads is never read a second time."""
         times = tuple(path.stat().st_mtime_ns for path in self._config_files())
         kept = self._kept.get(name)
         if kept is not None and kept.times == times:
@@ -111,7 +113,7 @@ class CacheProfile:
             catalog = load(store)
         except NotInCacheError as error:
             raise MissingResourceError(f"{error} in {self.cache_folder}. {SET_CACHE_FOLDER}") from error
-        except DamagedCacheError:
+        except (DamagedCacheError, MissingResourceError):
             raise
         except (ValueError, IndexError, OSError, EOFError, zlib.error) as error:
             for group in groups:
@@ -121,6 +123,14 @@ class CacheProfile:
                     raise DamagedCacheError(
                         f"{damage}, in the cache at {self.cache_folder}. Download the cache again."
                     ) from error
+                except (LookupError, OSError):
+                    raise error from None
+            if isinstance(error, (OSError, EOFError, zlib.error)):
+                listed = " or ".join(str(group) for group in groups)
+                raise DamagedCacheError(
+                    f"{error}: config group {listed} does not decompress although its CRC32 matches, in the cache at "
+                    f"{self.cache_folder}. Download the cache again."
+                ) from error
             raise
         self._kept[name] = _Kept(times, catalog)
         return catalog

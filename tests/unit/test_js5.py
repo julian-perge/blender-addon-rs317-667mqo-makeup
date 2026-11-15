@@ -197,3 +197,9 @@ def test_every_snapshot_430_config_group_matches_its_crc32():
     store = Js5Store(SNAPSHOT_430)
     for group in store.groups(CONFIG_INDEX):
         store.check(CONFIG_INDEX, group)
+
+
+def test_a_reference_table_that_cannot_be_read_is_a_damaged_group(tmp_path):
+    write_store(tmp_path, {(255, CONFIG_INDEX): container(b"\x06"), (CONFIG_INDEX, KIT_GROUP): container(b"\0")})
+    with pytest.raises(DamagedGroupError, match="Group 2 of index 255 is damaged: The reference table ends early"):
+        Js5Store(tmp_path).check(CONFIG_INDEX, KIT_GROUP)
