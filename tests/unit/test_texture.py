@@ -1,10 +1,11 @@
 import gzip
 
 import pytest
-from js5_builder import REGION_FIXTURES
+from js5_builder import REGION_FIXTURES, build_region_cache
 
+from rsps_toolkit.formats.js5 import Js5Store, NotInCacheError
 from rsps_toolkit.formats.sprite import Sprite, decode_sprites
-from rsps_toolkit.formats.texture import TextureDefinition, decode_texture, texture_pixels
+from rsps_toolkit.formats.texture import TextureDefinition, decode_texture, read_textures, texture_pixels
 
 BRIGHTNESS = (0.9, 0.8, 0.7, 0.6)
 
@@ -40,6 +41,26 @@ def test_every_texture_of_snapshot_430_at_each_brightness_equals_runelites_textu
     assert expected.keys() == {(texture_id, brightness) for texture_id in textures for brightness in BRIGHTNESS}
     for (texture_id, brightness), pixels in expected.items():
         assert texture_pixels(textures[texture_id], sprites, brightness) == pixels, (texture_id, brightness)
+
+
+def test_the_cache_reader_gives_each_texture_with_the_sprite_groups_it_names(tmp_path):
+    build_region_cache(tmp_path, definitions=True)
+
+    textures = read_textures(Js5Store(tmp_path), [1, 3])
+
+    opaque, expected = reference()
+    assert set(textures) == {1, 3}
+    for texture_id, (texture, sprites) in textures.items():
+        assert texture.opaque == opaque[texture_id]
+        assert texture_pixels(texture, sprites, 0.8) == expected[texture_id, 0.8]
+
+
+def test_the_cache_reader_refuses_a_texture_that_index_9_lacks(tmp_path):
+    # The owner chose on 2026-11-14 that a texture id that index 9 lacks stops the import (issue 47, Decisions).
+    build_region_cache(tmp_path, definitions=True, textures_left_out=(3,))
+
+    with pytest.raises(NotInCacheError, match="Group 0 of index 9 of the cache has no texture 3"):
+        read_textures(Js5Store(tmp_path), [1, 3])
 
 
 # Every texture of snapshot 430 has one sprite and colour 0, so the tests below build their textures. They use

@@ -1,8 +1,16 @@
 import pytest
-from js5_builder import REGION_FIXTURES
+from js5_builder import REGION_FIXTURES, build_region_cache
 from runelite_json import load_overlays, load_underlays
 
-from rsps_toolkit.formats.floor_definition import Overlay, Underlay, decode_overlay, decode_underlay
+from rsps_toolkit.formats.floor_definition import (
+    Overlay,
+    Underlay,
+    decode_overlay,
+    decode_underlay,
+    read_overlays,
+    read_underlays,
+)
+from rsps_toolkit.formats.js5 import Js5Store
 
 FLOORS = REGION_FIXTURES / "floors.json"
 
@@ -23,6 +31,14 @@ def test_every_overlay_of_the_nine_terrains_equals_runelites_overlay_loader():
     }
     assert len(decoded) == 28
     assert decoded == load_overlays(FLOORS)
+
+
+def test_the_cache_readers_give_every_underlay_and_overlay_of_their_config_group_by_file_id(tmp_path):
+    build_region_cache(tmp_path, definitions=True)
+    store = Js5Store(tmp_path)
+
+    assert read_underlays(store) == load_underlays(FLOORS)
+    assert read_overlays(store) == load_overlays(FLOORS)
 
 
 def test_overlay_opcode_8_reads_no_value():

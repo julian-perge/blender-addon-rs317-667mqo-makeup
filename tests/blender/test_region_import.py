@@ -301,7 +301,7 @@ def test_the_terrain_mesh_stores_no_game_values(terrain):
     assert all(not material.keys() for material in mesh.materials if material is not None)
     assert {attribute.name for attribute in mesh.attributes if not attribute.is_internal} <= {
         region_terrain.TERRAIN_COLOUR,
-        "UVMap",
+        region_terrain.UV_MAP,
         "position",
         "sharp_face",
         "material_index",
@@ -332,6 +332,12 @@ def test_the_terrain_materials_are_unshaded_hide_back_faces_and_leave_transparen
         assert not [node for node in tree.nodes if node.type == "BSDF_PRINCIPLED"]
     assert ("ShaderNodeEmission", "Emission", "ShaderNodeOutputMaterial", "Surface") in surface_links(colour)
     for material in textured:
+        # The client reads one texel for each pixel and does not blend it with the texels next to it (`Graphics3D.java`
+        # line 3294).
+        tree = material.node_tree
+        assert tree is not None
+        (texels,) = [node for node in tree.nodes if isinstance(node, bpy.types.ShaderNodeTexImage)]
+        assert texels.interpolation == "Closest"
         links = surface_links(material)
         assert ("ShaderNodeTexImage", "Alpha", "ShaderNodeMixShader", "Factor") in links
         assert ("ShaderNodeBsdfTransparent", "BSDF", "ShaderNodeMixShader", "Shader") in links
@@ -345,6 +351,38 @@ def test_a_terrain_that_names_a_floor_definition_the_cache_lacks_is_refused():
 
     with pytest.raises(region_import.RefusalError, match=r"no underlay 47, which tile \(10, 10\)"):
         region_import._check_floors(terrain, {}, OVERLAYS)
+
+
+@pytest.mark.parametrize(("x", "y"), [(-4, -4), (68, 68)])
+def test_a_missing_underlay_at_the_edge_of_the_blend_is_refused(x, y):
+    # The blend of tile (x, y) reads the underlays from x - 4 to x + 5 (`class24.java` lines 119 to 216, spec 35), so the
+    # tiles of the region read them from -4 to 68.
+    terrain = made_terrain({(x, y): Tile(0, 0, 48, 0, 0, 0)})
+
+    with pytest.raises(region_import.RefusalError, match=rf"no underlay 47, which tile \({x}, {y}\)"):
+        region_import._check_floors(terrain, {}, OVERLAYS)
+
+
+@pytest.mark.parametrize(("x", "y"), [(-5, 10), (69, 10)])
+def test_a_missing_underlay_outside_the_blend_is_not_refused(x, y):
+    terrain = made_terrain({(x, y): Tile(0, 0, 48, 0, 0, 0)})
+
+    region_import._check_floors(terrain, {}, OVERLAYS)
+
+
+def test_a_missing_overlay_on_a_tile_of_the_region_is_refused():
+    # Tile (10, 10) names overlay 42, which is definition 41.
+    terrain = made_terrain({(10, 10): Tile(0, 0, 48, 42, 1, 0)})
+
+    with pytest.raises(region_import.RefusalError, match=r"no overlay 41, which tile \(10, 10\)"):
+        region_import._check_floors(terrain, UNDERLAYS, {})
+
+
+def test_a_missing_overlay_outside_the_region_is_not_refused():
+    # Only the tiles of the region read their overlays (`class24.java` lines 238 to 287).
+    terrain = made_terrain({(-1, 10): Tile(0, 0, 48, 42, 1, 0), (64, 10): Tile(0, 0, 48, 42, 1, 0)})
+
+    region_import._check_floors(terrain, UNDERLAYS, {})
 
 
 SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
@@ -396,7 +434,9 @@ def test_the_operator_imports_the_terrain_of_48_50_into_its_own_collection(snaps
 
 @needs_snapshot_430
 def test_one_undo_removes_the_whole_import(snapshot_430):
-    # Background Blender pushes undo states only when asked, so the test pushes one before and after the operator.
+    # Background Blender pushes undo states only when asked, so the test pushes one before and after the operator. In
+    # the user interface, Blender pushes the state after the operator only when it has the UNDO option.
+    assert "UNDO" in region_import.RS_OT_import_region.bl_options
     bpy.ops.ed.undo_push(message="Before the import")
     import_region()
     bpy.ops.ed.undo_push(message="Region imported")
@@ -457,6 +497,19 @@ def test_a_region_whose_terrain_the_cache_lacks_is_refused(monkeypatch, operator
         import_region()
     assert not bpy.data.collections
     assert not bpy.data.objects
+
+
+def test_an_overlay_texture_that_the_cache_lacks_stops_the_import(monkeypatch, operator_registered, tmp_path):
+    # The owner chose on 2026-11-14 that a texture id that index 9 lacks stops the import with a message (issue 47,
+    # Decisions). The overlays of 48_50 use textures 1 and 3 (floors.json), and the cache leaves out texture 1.
+    build_region_cache(tmp_path, definitions=True, textures_left_out=(1,))
+    monkeypatch.setattr(preferences, "cache_folder", lambda: tmp_path)
+
+    with pytest.raises(RuntimeError, match="Group 0 of index 9 of the cache has no texture 1"):
+        import_region()
+    assert not bpy.data.collections
+    assert not bpy.data.objects
+    assert not bpy.data.images
 
 
 @needs_snapshot_430
