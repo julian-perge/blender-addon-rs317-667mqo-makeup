@@ -83,7 +83,7 @@ Before each commit, run the review with fixed point `HEAD`. Give it the spec fil
 
 ## Review
 
-Run the review in a new session, not in the build session. The command starts no subagent, so the build session would review its own work. Check out the PR branch first (`gh pr checkout <pr>`), because the command reviews staged changes or recent commits.
+Run the review in a new session, not in the build session. The command starts no subagent, so the build session would review its own work. Check out the PR branch first (`gh pr checkout <pr>`), because the command reviews staged changes or recent commits. Git lets a branch be checked out in only one worktree, so `gh pr checkout` fails when the build session's worktree still holds the branch. Then review and fix in that worktree (`git worktree list` names it), and commit and push the fixes from there.
 
 Run `/agent-skills:review` on the branch with the command that the Build section gives. It names the task issue, the PR, the spec and [CODING_STANDARDS.md](../../CODING_STANDARDS.md), because the review does not read the spec or the standard on its own.
 
