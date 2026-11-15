@@ -63,11 +63,17 @@ def contour_one(
     loc_type: int = 10,
     rotation: int = 0,
     locs: Mapping[int, LocDefinition] | None = None,
+    part_index: int | None = None,
 ) -> list[tuple[float, float, float]] | None:
-    """The absolute Blender vertices of the one part of a placement of loc 1 at tile (5, 7), or None when it shares."""
+    """The absolute Blender vertices of a part of a placement of loc 1 at tile (5, 7), or None when it shares. A
+    placement with two parts needs `part_index`."""
     locs = {1: definition} if locs is None else locs
     placement = Placement(loc=1, level=0, x=5, y=7, loc_type=loc_type, rotation=rotation)
-    (part,) = place_scenery([placement], locs, height)[0].parts
+    parts = place_scenery([placement], locs, height)[0].parts
+    if part_index is None:
+        (part,) = parts
+    else:
+        part = parts[part_index]
     relative = own_vertices(placement, part, locs, vertices, height)
     if relative is None:
         return None
@@ -196,3 +202,93 @@ def test_a_diagonal_wall_decoration_with_a_different_x_and_z_scale_gets_the_clie
 def test_a_diagonal_wall_decoration_with_an_even_scale_shares_its_mesh():
     vertices = [(0, 0, 0), (100, -40, 0)]
     assert contour_one(loc(loc_types=(4,), scale=(64, 128, 64)), vertices, level, loc_type=6) is None
+
+
+def bumps(x: int, y: int) -> int:
+    return -40 * ((3 * x + 5 * y) % 7)
+
+
+def step_east(x: int, _y: int) -> int:
+    return -100 if x >= 7 else 0
+
+
+def step_north(_x: int, y: int) -> int:
+    return -100 if y >= 9 else 0
+
+
+def test_a_turned_loc_of_2_by_1_contours_at_the_middle_of_its_swapped_footprint():
+    # PacketBuffer.java lines 168 to 200: at rotation 1 the footprint is 1 by 2, so the model stands at (704, 1024) with
+    # the height -160, and Model.method2720 contours it there after the quarter turn of method2649. The ground is uneven
+    # and irregular, because on a plane or a smooth curve the contour gives the same heights wherever it stands.
+    definition = loc(contoured_ground=0, width=2)
+    vertices = [(0, 0, 0), (32, -10, -48), (-60, -200, 20)]
+    actual = contour_one(definition, vertices, bumps, rotation=1)
+    assert_vertices(actual, [(704, 1024, 160), (656, 992, 189), (724, 1084, 298)])
+
+
+@pytest.mark.parametrize(
+    ("rotation", "expected"),
+    [
+        # ModelData.method2627 (lines 1311 to 1318): x and z become -x and -z.
+        (2, [(704, 960, 148), (640, 960, 150), (704, 896, 164)]),
+        # ModelData.method2641 (lines 1321 to 1329): x and z become -z and x.
+        (3, [(704, 960, 148), (704, 1024, 162), (640, 960, 160)]),
+    ],
+)
+def test_a_contoured_wall_at_rotation_2_or_3_is_turned_before_the_contour(
+    rotation: int, expected: list[tuple[float, float, float]]
+):
+    # ObjectComposition.java lines 792 to 799 pick the quarter turn from the rotation.
+    definition = loc(loc_types=(0,), contoured_ground=0)
+    actual = contour_one(definition, [(0, 0, 0), (64, -10, 0), (0, -20, 64)], slope, loc_type=0, rotation=rotation)
+    assert_vertices(actual, expected)
+
+
+def test_the_first_model_of_a_type_2_wall_is_mirrored_but_not_turned_diagonally():
+    # PacketBuffer.java line 330 asks for getModel(2, 4). ObjectComposition.java line 753 mirrors it, because the
+    # rotation is above 3, and line 787 turns a model by 256 units only for the loc type 4.
+    definition = loc(loc_types=(2,), contoured_ground=0)
+    actual = contour_one(definition, [(0, 0, 0), (64, -10, 0), (0, -20, 64)], slope, loc_type=2, part_index=0)
+    assert_vertices(actual, [(704, 960, 148), (768, 960, 166), (704, 896, 164)])
+
+
+@pytest.mark.parametrize(
+    ("vertices", "height", "expected"),
+    [
+        ([(0, 0, 0), (70, -30, 0)], step_east, [(704, 960, 0), (774, 960, 35)]),
+        ([(0, 0, 0), (0, -30, 70)], step_north, [(704, 960, 0), (704, 1030, 35)]),
+    ],
+)
+def test_a_lit_contoured_loc_rounds_the_east_and_north_edges_of_its_circle_up_to_the_next_tile_corner(
+    vertices: list[Vertex], height: Callable[[int, int], int], expected: list[tuple[float, float, float]]
+):
+    # Model.java lines 369 to 372: the east and north edges are (edge + 127) >> 7. Here the edge 1030 or 774 reaches
+    # the tile corner 9 or 7, where the ground steps down, so the client contours the model.
+    assert_vertices(contour_one(loc(contoured_ground=0), vertices, height), expected)
+
+
+def test_a_vertex_below_the_origin_is_bent_with_java_integer_division():
+    # Model.java lines 429 to 440: for the vertex at y 10, t is (-10 << 16) / 50, which Java rounds toward zero to
+    # -13107, and the bend (32768 + 13107) * (ground - reference) / 32768 rounds toward zero too.
+    vertices = [(0, 0, 0), (32, -50, 0), (-20, 10, 40)]
+    actual = contour_one(loc(contoured_ground=128 * 256), vertices, slope)
+    assert_vertices(actual, [(704, 960, 148), (736, 960, 148), (684, 1000, 139)])
+
+
+def test_a_vertex_at_exactly_the_contoured_ground_is_not_bent():
+    # Model.java line 431 bends a vertex only when t < contouredGround. The vertex at y -50 of a model of height 100 has
+    # t = 32768, the same as the contoured ground, so it stays at height 0 of the new array, Blender z 148.
+    vertices = [(0, 0, 0), (32, -50, 0), (-20, -100, 40)]
+    actual = contour_one(loc(contoured_ground=128 * 256), vertices, slope)
+    assert_vertices(actual, [(704, 960, 148), (736, 960, 148), (684, 1000, 148)])
+
+
+def test_an_impostor_wall_contours_at_the_footprint_swapped_by_the_rotation_of_its_part():
+    # PacketBuffer.java lines 326 to 334: the second model of a type 2 wall at rotation 0 is a DynamicObject with the
+    # orientation 1. DynamicObject.java lines 139 to 155 swap the 2 by 1 footprint of the impostor by that orientation,
+    # not by the placement's rotation 0, so the contour is at (704, 1024) with the height -160. The wall stands at the
+    # middle of its tile with the height -130 of the placed 1 by 1 loc. The ground is irregular, as in the test of a
+    # turned loc of 2 by 1.
+    locs = {1: loc(impostors=(2,), impostor_varbit=5), 2: loc(loc_types=(2,), contoured_ground=0, width=2)}
+    actual = contour_one(locs[1], [(0, 0, 0), (40, -20, 0)], bumps, loc_type=2, locs=locs, part_index=1)
+    assert_vertices(actual, [(704, 960, 130), (704, 920, 132)])
