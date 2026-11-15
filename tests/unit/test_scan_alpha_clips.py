@@ -12,8 +12,9 @@ SCRIPT = Path(__file__).parents[2] / "scripts/scan-alpha-clips.py"
 
 @pytest.mark.skipif(not HAS_SNAPSHOT_430, reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder")
 def test_scan_of_snapshot_430_finds_only_sequence_3364() -> None:
-    # The fixture README says 3364 is the only one of the 217 player clips with a face alpha transform that gives the
-    # player's face labels more than one curve.
+    # The two label groups of 3364 are the groups that the client's face alphas (`o`) form in the alpha-3364
+    # recordings, for both bodies. The clip count of 217, and that no other clip is printed, come from this scan
+    # alone: the fixture README records them, and no outside source checks them.
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--cache", str(SNAPSHOT_430)], capture_output=True, text=True, check=True
     )
