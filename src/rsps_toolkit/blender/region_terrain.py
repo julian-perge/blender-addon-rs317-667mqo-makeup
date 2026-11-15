@@ -7,7 +7,7 @@ The mesh stores no game values, and export does not read it. Its colours and tex
 the terrain, so a user can edit or delete its vertices freely.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 import bpy
 
@@ -60,8 +60,8 @@ def terrain_object(
             flat = len(set(heights)) == 1
             for triangle in tile_triangles(terrain.tile(0, x, y)):
                 values = lit.overlay if triangle.overlay else lit.underlay
-                if values is None:
-                    raise ValueError(f"Tile ({x}, {y}) has an overlay triangle but no overlay colours")
+                # A tile gets overlay triangles and overlay colours only when it has an overlay, so this never fails.
+                assert values is not None
                 texture = lit.texture if triangle.overlay else NO_TEXTURE
                 if texture == NO_TEXTURE and _point_value(values, triangle.points[0]) == HIDDEN:
                     continue
@@ -92,16 +92,13 @@ def terrain_object(
 
 def _position(x: int, y: int, point: TilePoint, heights: list[int]) -> Position:
     """The game position of a tile point: x east and y north in game units from the region's south-west corner, and the
-    height. A point between two corners has the sum of their heights shifted right by 1 (`SceneTileModel.java` lines
-    124 to 220)."""
-    picked = [heights[_CORNERS.index(corner)] for corner in point.corners]
-    height = picked[0] if len(picked) == 1 else (picked[0] + picked[1]) >> 1
-    return x * TILE_SIZE + point.x, y * TILE_SIZE + point.y, height
+    height, which `_point_value` gives from the heights of the tile's corners."""
+    return x * TILE_SIZE + point.x, y * TILE_SIZE + point.y, _point_value(heights, point)
 
 
-def _point_value(values: tuple[int, int, int, int], point: TilePoint) -> int:
-    """The colour or light of a tile point. A point between two corners has the sum of theirs shifted right by 1
-    (`SceneTileModel.java` lines 124 to 220)."""
+def _point_value(values: Sequence[int], point: TilePoint) -> int:
+    """The height, colour or light of a tile point, from the values of the tile's corners in the order of `Corner`. A
+    point between two corners has the sum of theirs shifted right by 1 (`SceneTileModel.java` lines 124 to 220)."""
     picked = [values[_CORNERS.index(corner)] for corner in point.corners]
     return picked[0] if len(picked) == 1 else (picked[0] + picked[1]) >> 1
 

@@ -13,6 +13,8 @@ REGION_FIXTURES = Path(__file__).parent / "fixtures/region"
 REGION_TERRAINS = tuple(f"m{x}_{y}" for x in (47, 48, 49) for y in (49, 50, 51))
 """The terrain groups of region `48_50` and its 8 neighbours, which `tests/fixtures/region/` holds as the cache stores them."""
 KIT_GROUP, ENUM_GROUP, ITEM_GROUP = 3, 8, 10
+UNDERLAY_GROUP, OVERLAY_GROUP = 1, 4
+SPRITE_INDEX, TEXTURE_INDEX, TEXTURE_GROUP = 8, 9, 0
 
 
 def container(data: bytes, kind: int = 0) -> bytes:
@@ -149,15 +151,50 @@ def rewrite_cache(folder: Path, change: Callable[[dict[str, dict[int, bytes]]], 
         os.utime(path, ns=(time, time))
 
 
-def build_region_cache(folder: Path, terrains: tuple[str, ...] = REGION_TERRAINS) -> None:
+def build_region_cache(
+    folder: Path,
+    terrains: tuple[str, ...] = REGION_TERRAINS,
+    *,
+    definitions: bool = False,
+    textures_left_out: tuple[int, ...] = (),
+) -> None:
     """Write a disk cache that holds the stored reference table of index 5, the stored landscape group `l48_50` (group
     617) and the stored terrain groups named in `terrains` of snapshot 430, all as the cache stores them. The landscape is
     still encrypted. A terrain group that `terrains` leaves out keeps its name in the reference table but has no data, so
-    the cache lacks it."""
+    the cache lacks it.
+
+    With `definitions`, the cache also holds the files of `tests/fixtures/region/`: the underlays and overlays as config
+    groups 1 and 4 of index 2, the textures as group 0 of index 9 without those in `textures_left_out`, and each sprite
+    group as a group of index 8."""
     folder.mkdir(parents=True, exist_ok=True)
     table_data = (REGION_FIXTURES / "reference-table-5.dat").read_bytes()
     names = reference_table(unpack(table_data)).names
     stored = {(REFERENCE_INDEX, 5): table_data, (5, 617): (REGION_FIXTURES / "l48_50.dat").read_bytes()}
     for name in terrains:
         stored[(5, names[name_hash(name)])] = (REGION_FIXTURES / f"{name}.dat").read_bytes()
+    if definitions:
+        stored |= _definition_groups(textures_left_out)
     write_store(folder, stored)
+
+
+def _fixture_files(folder: str) -> dict[int, bytes]:
+    return dict(sorted((int(path.stem), path.read_bytes()) for path in (REGION_FIXTURES / folder).glob("*.dat")))
+
+
+def _definition_groups(textures_left_out: tuple[int, ...]) -> dict[tuple[int, int], bytes]:
+    underlays, overlays = _fixture_files("underlays"), _fixture_files("overlays")
+    textures = {
+        texture: data for texture, data in _fixture_files("textures").items() if texture not in textures_left_out
+    }
+    sprites = _fixture_files("sprites")
+    return {
+        (REFERENCE_INDEX, CONFIG_INDEX): container(
+            table({UNDERLAY_GROUP: tuple(underlays), OVERLAY_GROUP: tuple(overlays)})
+        ),
+        (CONFIG_INDEX, UNDERLAY_GROUP): container(grouped(list(underlays.values())), kind=2),
+        (CONFIG_INDEX, OVERLAY_GROUP): container(grouped(list(overlays.values())), kind=2),
+        (REFERENCE_INDEX, TEXTURE_INDEX): container(table({TEXTURE_GROUP: tuple(textures)})),
+        (TEXTURE_INDEX, TEXTURE_GROUP): container(grouped(list(textures.values())), kind=2),
+        (REFERENCE_INDEX, SPRITE_INDEX): container(table({sprite: (0,) for sprite in sprites})),
+        **{(SPRITE_INDEX, sprite): container(data, kind=2) for sprite, data in sprites.items()},
+    }
