@@ -20,7 +20,7 @@ from ..formats.loc_definition import LocDefinition
 from ..formats.model import Model
 from ..formats.region_contour import own_vertices
 from ..formats.region_placement import PlacedLoc, PlacedPart
-from .mesh import model_to_object
+from .mesh import MaterialKey, model_to_object
 
 type MeshKey = tuple[tuple[int, ...], tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]
 """The models of a part, and the recolours and retextures of the loc that shows them."""
@@ -64,8 +64,12 @@ def scenery_objects(
     model of each `mesh_key`, with its cache models joined and the loc's recolours and retextures applied. `images`
     holds the decoded image of each texture that the models use. `height` is the height of a tile corner, as
     `place_scenery` takes it. `brightness` is the Brightness preference that the face colours are shown at.
+
+    The meshes of one call share one new material for each material key (issue 67). `import_region` calls this once
+    for each import, so no material comes from an earlier import, and its cleanup still removes every material made.
     """
     shared: dict[MeshKey, bpy.types.Mesh] = {}
+    materials: dict[MaterialKey, bpy.types.Material] = {}
     objects = own = nothing = 0
     for placed_loc in placed:
         placement, shown_id = placed_loc.placement, placed_loc.shown_id
@@ -80,7 +84,7 @@ def scenery_objects(
             vertices = own_vertices(placement, part, locs, model.vertices, height)
             if vertices is None:
                 if key not in shared:
-                    shared[key] = _mesh(model, _shared_name(shown_id, shown, part), images, brightness)
+                    shared[key] = _mesh(model, _shared_name(shown_id, shown, part), images, brightness, materials)
                 obj = bpy.data.objects.new(name, shared[key])
                 # `own_vertices` gives None only for a part whose transform Blender can hold, and such a part always
                 # has a rotation and a scale (`PlacedPart.own_mesh`).
@@ -88,7 +92,9 @@ def scenery_objects(
                 obj.rotation_euler = (0.0, 0.0, part.rotation)
                 obj.scale = part.scale
             else:
-                obj = bpy.data.objects.new(name, _mesh(_moved(model, vertices, part), name, images, brightness))
+                obj = bpy.data.objects.new(
+                    name, _mesh(_moved(model, vertices, part), name, images, brightness, materials)
+                )
                 own += 1
             obj.location = part.location
             collection.objects.link(obj)
@@ -113,9 +119,16 @@ def _shared_name(shown_id: int, shown: LocDefinition, part: PlacedPart) -> str:
     return f"Loc {shown_id} model {models}{recoloured}"
 
 
-def _mesh(model: Model, name: str, images: Mapping[int, bpy.types.Image], brightness: float) -> bpy.types.Mesh:
-    """A new mesh of the model, made as model import makes it, with the textures from `images`."""
-    obj = model_to_object(model, name, images.get, brightness)
+def _mesh(
+    model: Model,
+    name: str,
+    images: Mapping[int, bpy.types.Image],
+    brightness: float,
+    materials: dict[MaterialKey, bpy.types.Material],
+) -> bpy.types.Mesh:
+    """A new mesh of the model, made as model import makes it, with the textures from `images`. For each material key
+    of the model that is already in `materials` it uses that material, and it puts each new material in `materials`."""
+    obj = model_to_object(model, name, images.get, brightness, materials=materials)
     mesh = obj.data
     assert isinstance(mesh, bpy.types.Mesh)
     bpy.data.objects.remove(obj)
