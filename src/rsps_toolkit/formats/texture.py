@@ -6,11 +6,16 @@ check them against RuneLite's TextureDefinition and SpriteLoader. Snapshot 430 s
 233, which RuneLite reads with `setRev233(false)`.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from ._stream import Reader
-from .sprite import Sprite, canvas_pixels
+from .js5 import Js5Store, NotInCacheError
+from .sprite import Sprite, canvas_pixels, decode_sprites
+
+SPRITE_INDEX = 8
+TEXTURE_INDEX = 9
+TEXTURE_GROUP = 0
 
 SIZE = 128
 """The width and height of the pixels of a texture. The client makes them at 64 in low memory mode and at 128 otherwise
@@ -34,6 +39,28 @@ class TextureDefinition:
     operations: tuple[int, ...]
     colours: tuple[int, ...]
     opaque: bool
+
+
+def read_textures(
+    store: Js5Store, texture_ids: Iterable[int]
+) -> dict[int, tuple[TextureDefinition, dict[int, tuple[Sprite, ...]]]]:
+    """The texture definitions of the cache with these ids, each with the decoded sprite groups of index 8 that it
+    names, by id. A texture id that the cache lacks is an error, which the owner chose on 2026-11-14 (issue 47,
+    Decisions)."""
+    files = store.files(TEXTURE_INDEX, TEXTURE_GROUP)
+    textures = {}
+    for texture_id in texture_ids:
+        if texture_id not in files:
+            raise NotInCacheError(
+                f"Group {TEXTURE_GROUP} of index {TEXTURE_INDEX} of the cache has no texture {texture_id}"
+            )
+        texture = decode_texture(texture_id, files[texture_id])
+        sprites = {
+            sprite_id: decode_sprites(sprite_id, store.container(SPRITE_INDEX, sprite_id))
+            for sprite_id in texture.sprites
+        }
+        textures[texture_id] = (texture, sprites)
+    return textures
 
 
 def decode_texture(texture_id: int, data: bytes) -> TextureDefinition:

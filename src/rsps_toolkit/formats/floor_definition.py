@@ -9,6 +9,11 @@ and they also refuse bytes after the closing opcode 0, so a wrong parse cannot p
 from dataclasses import dataclass
 
 from ._stream import Reader
+from .js5 import Js5Store
+
+CONFIG_INDEX = 2
+UNDERLAY_GROUP = 1
+OVERLAY_GROUP = 4
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,16 @@ class Overlay:
     other_hue: int
     other_saturation: int
     other_lightness: int
+
+
+def read_underlays(store: Js5Store) -> dict[int, Underlay]:
+    """Every underlay of the cache, by its id, which is its file id in the config group."""
+    return {i: decode_underlay(i, data) for i, data in store.files(CONFIG_INDEX, UNDERLAY_GROUP).items()}
+
+
+def read_overlays(store: Js5Store) -> dict[int, Overlay]:
+    """Every overlay of the cache, by its id, which is its file id in the config group."""
+    return {i: decode_overlay(i, data) for i, data in store.files(CONFIG_INDEX, OVERLAY_GROUP).items()}
 
 
 def decode_underlay(underlay_id: int, data: bytes) -> Underlay:

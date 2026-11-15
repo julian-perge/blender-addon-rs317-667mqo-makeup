@@ -21,6 +21,7 @@ from . import (
     painter,
     pmn_texturing,
     preferences,
+    region_import,
     render_style,
     ui,
     upgrade_materials,
@@ -44,6 +45,7 @@ classes = (
     *aether_materials.classes,
     *import_model.classes,
     *import_item.classes,
+    *region_import.classes,
     *import_animation.classes,
     *export_model.classes,
     *upgrade_materials.classes,
@@ -122,6 +124,7 @@ def register():
     # The stubs type menu draw functions as taking only a context, but Blender passes the menu and the context.
     bpy.types.TOPBAR_MT_file_import.append(import_model.menu_entry)  # pyrefly: ignore[bad-argument-type]
     bpy.types.TOPBAR_MT_file_import.append(import_item.menu_entry)  # pyrefly: ignore[bad-argument-type]
+    bpy.types.TOPBAR_MT_file_import.append(region_import.menu_entry)  # pyrefly: ignore[bad-argument-type]
 
 
 def unregister():
@@ -135,6 +138,7 @@ def unregister():
 
     bpy.types.TOPBAR_MT_file_import.remove(import_model.menu_entry)  # pyrefly: ignore[bad-argument-type]
     bpy.types.TOPBAR_MT_file_import.remove(import_item.menu_entry)  # pyrefly: ignore[bad-argument-type]
+    bpy.types.TOPBAR_MT_file_import.remove(region_import.menu_entry)  # pyrefly: ignore[bad-argument-type]
 
     # Remove draw handlers first
     if label_draw_handler:
