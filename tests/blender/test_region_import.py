@@ -414,10 +414,14 @@ def player_registered():
         bpy.utils.unregister_class(cls)
 
 
+PLAYER_REFERENCE = json.loads((APPEARANCE_FIXTURES / "reference.json").read_text())["cases"][0]
+
+
 def created_player(cache: Path) -> bpy.types.Object:
     """The rig of a new player from Create Player, with the first appearance of the appearance reference file."""
-    reference = json.loads((APPEARANCE_FIXTURES / "reference.json").read_text())["cases"][0]
-    preset = AppearancePreset(149, 430, reference["female"], tuple(reference["equipment"]), tuple(reference["colours"]))
+    preset = AppearancePreset(
+        149, 430, PLAYER_REFERENCE["female"], tuple(PLAYER_REFERENCE["equipment"]), tuple(PLAYER_REFERENCE["colours"])
+    )
     appearance_props.from_preset(bpy.context.scene.rs_appearance, preset)  # pyrefly: ignore[missing-attribute]
     assert bpy.ops.rsps.create_appearance_preview(cache_folder=str(cache)) == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
     collection = appearance_preview.collection_of(bpy.context.active_object)
@@ -438,6 +442,21 @@ def hit_below(obj: bpy.types.Object, x: float, y: float) -> float:
     return location.z
 
 
+def lowest_z(objects: list[bpy.types.Object]) -> float:
+    """The lowest world z of the evaluated vertices of the objects."""
+    bpy.context.view_layer.update()  # pyrefly: ignore[missing-attribute]
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    lowest = []
+    for obj in objects:
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        try:
+            lowest.append(min((evaluated.matrix_world @ v.co).z for v in mesh.vertices))
+        finally:
+            evaluated.to_mesh_clear()
+    return min(lowest)
+
+
 def test_the_tile_to_position_point_is_the_centre_of_the_tile_at_the_clients_height(terrain):
     assert region_terrain.tile_position(terrain, *FLAT_TILE) == FLAT_TILE_POINT
 
@@ -453,6 +472,12 @@ def test_a_player_placed_at_the_tile_to_position_point_of_a_flat_tile_stands_on_
 
     assert (rig.location.x, rig.location.y, rig.location.z) == FLAT_TILE_POINT
     assert hit_below(obj, rig.location.x, rig.location.y) == pytest.approx(rig.location.z)
+    # The client's model of this player has its lowest vertex at game height 6 (`before_lighting` in the appearance
+    # reference file), so its feet are 6 units below the ground point, and the Blender player's lowest vertex is too.
+    feet = max(y for _, y, _ in PLAYER_REFERENCE["before_lighting"]["vertices"])
+    player = appearance_preview.collection_of(rig)
+    assert player is not None
+    assert lowest_z(appearance_collection.parts(player)) == pytest.approx(FLAT_TILE_POINT[2] - feet)
 
 
 def test_after_the_terrain_mesh_is_edited_the_tile_to_position_point_is_the_same(terrain):
