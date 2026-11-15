@@ -1,6 +1,6 @@
 # Workflow
 
-Read this before any `/agent-skills` command, and before planning, implementing, committing or reporting. The commands default to `SPEC.md` and `tasks/todo.md`. This repo uses the tracker mode of `planning-and-task-breakdown`: GitHub issues hold the tasks, and files under `spec/` hold the specs. [Issue tracker](issue-tracker.md) holds the `gh` commands that no helper covers.
+`agent-skills brief <stage> <n>` prints the parts of this file that a stage needs. Read all of it before planning, implementing, committing or reporting outside a stage. The commands default to `SPEC.md` and `tasks/todo.md`. This repo uses the tracker mode of `planning-and-task-breakdown`: GitHub issues hold the tasks, and files under `spec/` hold the specs. [Issue tracker](issue-tracker.md) holds the `gh` commands that no helper covers.
 
 The user types each stage. Run one stage per session. When it ends, print the next stage's command as the last line, with real issue, PR and file values, and stop. The user pastes that line into a new session, so it must need no edits. `/agent-skills:next` prints the same commands for the whole tracker.
 
@@ -10,6 +10,7 @@ The user types each stage. Run one stage per session. When it ends, print the ne
 
 | Verb | Use |
 | --- | --- |
+| `agent-skills brief <stage> [<n>]` | The rules of this file that the stage needs, then the `issue` output, or the `pr` output for `review`. With no number it prints the rules only. `--full` is passed on to `issue` or `pr`. |
 | `agent-skills issue <n>` | The issue with its labels, assignee, parent, spec, blockers, pull requests, sub-issues and comments. `--full` prints all of it. |
 | `agent-skills pr <pr>` | The PR with its task, spec, standard, checks and files, and the review command. |
 | `agent-skills frontier <parent>` | The parent's open sub-issues and the next task to build. |
