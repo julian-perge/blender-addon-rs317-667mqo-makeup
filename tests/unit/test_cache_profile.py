@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
-from js5_builder import build_cache, rewrite_cache
+from js5_builder import build_cache, damage_group, rewrite_cache
 
 from rsps_toolkit.formats import cache_profile, decode
 from rsps_toolkit.formats.appearance import assemble_body, default_equipment
@@ -13,6 +13,7 @@ from rsps_toolkit.formats.cache_profile import (
     ITEM_GROUP,
     KIT_GROUP,
     CacheProfile,
+    DamagedCacheError,
     MissingResourceError,
 )
 from rsps_toolkit.formats.enum_definition import decode_enum
@@ -111,6 +112,25 @@ def test_a_cut_short_kit_is_a_decoding_error_not_a_missing_resource(cache):
 def test_a_cut_short_style_enum_is_named(cache):
     rewrite_cache(cache, lambda parts: parts["enums"].update({778: parts["enums"][778][:3]}))
     with pytest.raises(IndexError, match="Enum 778 ends early"):
+        CacheProfile(cache).kit_names
+
+
+def test_a_kit_that_does_not_decode_in_a_cache_whose_checksums_match_is_a_decoding_error(cache):
+    rewrite_cache(cache, lambda parts: parts["kits"].update({0: b"\x63\x00"}))
+    with pytest.raises(ValueError, match="Kit 0 has unknown opcode 99") as raised:
+        CacheProfile(cache).kits
+    assert not isinstance(raised.value, DamagedCacheError)
+
+
+def test_a_damaged_kit_group_names_the_group_and_the_folder(cache):
+    damage_group(cache, CONFIG_INDEX, KIT_GROUP)
+    with pytest.raises(DamagedCacheError, match=r"Group 3 of index 2 is damaged.*in the cache at .*Download the cache"):
+        CacheProfile(cache).kits
+
+
+def test_a_damaged_kit_group_is_named_when_the_kit_names_read_it(cache):
+    damage_group(cache, CONFIG_INDEX, KIT_GROUP)
+    with pytest.raises(DamagedCacheError, match="Group 3 of index 2 is damaged"):
         CacheProfile(cache).kit_names
 
 

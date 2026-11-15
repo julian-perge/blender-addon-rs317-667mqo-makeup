@@ -3,6 +3,7 @@
 import gzip
 import os
 import struct
+import zlib
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
@@ -24,7 +25,9 @@ def container(data: bytes, kind: int = 0) -> bytes:
     return bytes([2]) + struct.pack(">II", len(body), len(data)) + body
 
 
-def table(groups: dict[int, tuple[int, ...]], protocol: int = 6) -> bytes:
+def table(groups: dict[int, tuple[int, ...]], protocol: int = 6, checksums: Mapping[int, int] | None = None) -> bytes:
+    """A reference table with each group's CRC32 from `checksums`, 0 for a group it leaves out, and revision 0."""
+
     def number(value: int) -> bytes:
         return struct.pack(">H", value)
 
@@ -33,7 +36,8 @@ def table(groups: dict[int, tuple[int, ...]], protocol: int = 6) -> bytes:
     for group in groups:
         out += number(group - last)
         last = group
-    out += b"\0" * 8 * len(groups)
+    out += b"".join(struct.pack(">I", (checksums or {}).get(group, 0)) for group in groups)
+    out += b"\0" * 4 * len(groups)
     out += b"".join(number(len(files)) for files in groups.values())
     for files in groups.values():
         last = 0
@@ -82,7 +86,8 @@ def build_cache(
 ) -> None:
     """Write a disk cache that holds each model as file 0 of its own group in index 7. The kits, enums and items become
     config groups 3, 8 and 10 in index 2, and each definition's id is its file id. A config group with one file has no
-    size table, as in a real cache. A group with no files is left out."""
+    size table, as in a real cache. A group with no files is left out. The reference table of index 2 holds each config
+    group's CRC32, as in a real cache."""
     config = {
         group: dict(sorted(files.items()))
         for group, files in ((KIT_GROUP, kits), (ENUM_GROUP, enums), (ITEM_GROUP, items))
@@ -90,13 +95,13 @@ def build_cache(
     }
     folder.mkdir(parents=True, exist_ok=True)
     models = dict(sorted((models or {}).items()))
-    stored = {
-        (REFERENCE_INDEX, CONFIG_INDEX): container(table({group: tuple(files) for group, files in config.items()})),
-        (REFERENCE_INDEX, MODEL_INDEX): container(table({model: (0,) for model in models})),
-    }
+    stored = {(REFERENCE_INDEX, MODEL_INDEX): container(table({model: (0,) for model in models}))}
     for group, files in config.items():
         data = grouped(list(files.values())) if len(files) > 1 else next(iter(files.values()))
         stored[(CONFIG_INDEX, group)] = container(data, kind=2)
+    checksums = {group: zlib.crc32(stored[(CONFIG_INDEX, group)]) for group in config}
+    groups = {group: tuple(files) for group, files in config.items()}
+    stored[(REFERENCE_INDEX, CONFIG_INDEX)] = container(table(groups, checksums=checksums))
     for model, data in models.items():
         stored[(MODEL_INDEX, model)] = container(data, kind=2)
     write_store(folder, stored)
@@ -199,3 +204,21 @@ def _definition_groups(textures_left_out: tuple[int, ...]) -> dict[tuple[int, in
         (REFERENCE_INDEX, SPRITE_INDEX): container(table({sprite: (0,) for sprite in sprites})),
         **{(SPRITE_INDEX, sprite): container(data, kind=2) for sprite, data in sprites.items()},
     }
+
+
+def damage_group(folder: Path, index: int, group: int) -> None:
+    """Change the last stored byte of a group in the data file, as a bad disk or download would. The reference table
+    keeps the group's old CRC32."""
+    store = Js5Store(folder)
+    size = len(store.raw(index, group))
+    entry = (folder / f"main_file_cache.idx{index}").read_bytes()[group * 6 : group * 6 + 6]
+    sector = int.from_bytes(entry[3:6], "big")
+    head = 10 if group > 0xFFFF else 8
+    capacity = SECTOR_SIZE - head
+    data_path = folder / "main_file_cache.dat2"
+    data = bytearray(data_path.read_bytes())
+    for _ in range((size - 1) // capacity):
+        sector = int.from_bytes(data[sector * SECTOR_SIZE + head - 4 : sector * SECTOR_SIZE + head - 1], "big")
+    offset = sector * SECTOR_SIZE + head + (size - 1) % capacity
+    data[offset] ^= 0xFF
+    data_path.write_bytes(bytes(data))

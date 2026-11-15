@@ -5,6 +5,7 @@ groups 3, 10 and 8 of index 2, as RuneLite's ConfigType (IDENTKIT, ITEM, ENUM) n
 the group with its id in index 7. The colour palette ships with the extension.
 """
 
+import zlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -16,7 +17,7 @@ from .appearance import Kit, Palette, WornItem, assemble_body, assemble_slots, l
 from .appearance_preset import AppearancePreset
 from .enum_definition import EnumDefinition, decode_enum
 from .item_definition import decode_item
-from .js5 import DATA_FILE, REFERENCE_INDEX, Js5Store, NotInCacheError
+from .js5 import DATA_FILE, REFERENCE_INDEX, DamagedGroupError, Js5Store, NotInCacheError
 from .kit_definition import decode_kit
 from .kit_names import STYLE_ENUMS, load_kit_names
 from .model import Model
@@ -30,6 +31,10 @@ SET_CACHE_FOLDER = "Set the Cache folder in the add-on preferences."
 
 class MissingResourceError(FileNotFoundError):
     """Something the appearance needs is not in the cache folder."""
+
+
+class DamagedCacheError(ValueError):
+    """A config group that a catalog reads does not match its CRC32, so the cache files are damaged."""
 
 
 def read_kits(store: Js5Store) -> dict[int, Kit]:
@@ -88,36 +93,54 @@ class CacheProfile:
                 raise MissingResourceError(f"Missing {path}. {SET_CACHE_FOLDER}")
         return files
 
-    def _kept_unless_changed[T](self, name: str, load: Callable[[Js5Store], T]) -> T:
+    def _kept_unless_changed[T](self, name: str, load: Callable[[Js5Store], T], groups: tuple[int, ...]) -> T:
         """The catalog parsed from a new store, which reads the cache's reference tables again, whenever the files'
         modified times change. A group or definition the cache lacks becomes a MissingResourceError that names the
-        preference. Every other error passes unchanged, such as the IndexError of a definition cut short, because
-        setting another folder would not fix it."""
+        preference.
+
+        When the load fails in any other way, the config `groups` that the catalog reads are checked against their
+        CRC32 values. A group that does not match becomes a DamagedCacheError. When all match, the error passes
+        unchanged, such as the IndexError of a definition cut short. The check runs only after a load fails, so a
+        cache that loads is never read a second time."""
         times = tuple(path.stat().st_mtime_ns for path in self._config_files())
         kept = self._kept.get(name)
         if kept is not None and kept.times == times:
             return kept.catalog
+        store = Js5Store(self.cache_folder)
         try:
-            catalog = load(Js5Store(self.cache_folder))
+            catalog = load(store)
         except NotInCacheError as error:
             raise MissingResourceError(f"{error} in {self.cache_folder}. {SET_CACHE_FOLDER}") from error
+        except DamagedCacheError:
+            raise
+        except (ValueError, IndexError, OSError, EOFError, zlib.error) as error:
+            for group in groups:
+                try:
+                    store.check(CONFIG_INDEX, group)
+                except DamagedGroupError as damage:
+                    raise DamagedCacheError(
+                        f"{damage}, in the cache at {self.cache_folder}. Download the cache again."
+                    ) from error
+            raise
         self._kept[name] = _Kept(times, catalog)
         return catalog
 
     @property
     def kits(self) -> dict[int, Kit]:
-        return self._kept_unless_changed("kits", read_kits)
+        return self._kept_unless_changed("kits", read_kits, (KIT_GROUP,))
 
     @property
     def kit_names(self) -> dict[int, str]:
         # Kits are named by the models they use, so a changed kit group can rename them as well as changed enums can.
         # The kits are read only inside the load, after the files' times are taken, so names built from kits that
         # changed meanwhile are kept under the older time and named again at the next use.
-        return self._kept_unless_changed("kit_names", lambda store: load_kit_names(read_style_enums(store), self.kits))
+        return self._kept_unless_changed(
+            "kit_names", lambda store: load_kit_names(read_style_enums(store), self.kits), (ENUM_GROUP, KIT_GROUP)
+        )
 
     @property
     def items(self) -> dict[int, WornItem]:
-        return self._kept_unless_changed("items", read_items)
+        return self._kept_unless_changed("items", read_items, (ITEM_GROUP,))
 
     @cached_property
     def palette(self) -> Palette:

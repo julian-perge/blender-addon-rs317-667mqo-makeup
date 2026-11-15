@@ -31,6 +31,10 @@ class DecryptionError(ValueError):
     """The keys do not decrypt the group: what they give does not decompress."""
 
 
+class DamagedGroupError(ValueError):
+    """The group's stored bytes do not have the CRC32 that the index's reference table gives for them."""
+
+
 class Js5Store:
     def __init__(self, folder: Path) -> None:
         self.folder = folder
@@ -77,6 +81,22 @@ class Js5Store:
         if index not in self._tables:
             self._tables[index] = reference_table(self.container(REFERENCE_INDEX, index))
         return self._tables[index]
+
+    def check(self, index: int, group: int) -> None:
+        """Raise DamagedGroupError when the group's sectors do not chain, or its CRC32 differs from the one in the index's
+        reference table. The CRC32 covers the container without the 2-byte version that can follow it, as in
+        RuneLite's `Container`."""
+        try:
+            raw = self.raw(index, group)
+        except ValueError as error:
+            raise DamagedGroupError(f"Group {group} of index {index} is damaged: {error}") from error
+        end = 5 + int.from_bytes(raw[1:5], "big") + (0 if raw[0] == 0 else 4)
+        found, expected = zlib.crc32(raw[:end]), self._table(index).checksums.get(group)
+        if found != expected:
+            given = "none" if expected is None else f"{expected:08x}"
+            raise DamagedGroupError(
+                f"Group {group} of index {index} is damaged: its CRC32 is {found:08x}, the reference table gives {given}"
+            )
 
     def groups(self, index: int) -> dict[int, tuple[int, ...]]:
         """Every group of an index with its file ids, from the index's reference table, read once."""
@@ -154,10 +174,13 @@ class ReferenceTable:
     """Each group id with its file ids."""
     names: dict[int, int]
     """Each group's name hash with its group id. An index with no name hashes has none."""
+    checksums: dict[int, int]
+    """Each group id with the CRC32 of its stored container, as an unsigned number."""
 
 
 def reference_table(data: bytes) -> ReferenceTable:
-    """The group ids with their file ids and name hashes, from an index's reference table. Checksums are skipped."""
+    """The group ids with their file ids, name hashes and CRC32 values, from an index's reference table. The other
+    hashes, the sizes and the versions are skipped."""
     pos = 0
 
     def take(count: int) -> bytes:
@@ -182,12 +205,11 @@ def reference_table(data: bytes) -> ReferenceTable:
     for _ in range(count):
         last += number(smart)
         ids.append(last)
-    hashes: list[int] = []
-    for flag, width in ((1, 4), (0, 4), (8, 4), (2, 64), (4, 8), (0, 4)):
+    hashes = struct.unpack(f">{count}i", take(4 * count)) if flags & 1 else ()
+    crcs = struct.unpack(f">{count}I", take(4 * count))
+    for flag, width in ((8, 4), (2, 64), (4, 8), (0, 4)):
         if flag == 0 or flags & flag:
-            block = take(width * count)
-            if flag == 1:
-                hashes = list(struct.unpack(f">{count}i", block))
+            take(width * count)
     counts = [number(smart) for _ in range(count)]
     table = {}
     for group, files in zip(ids, counts, strict=True):
@@ -196,7 +218,8 @@ def reference_table(data: bytes) -> ReferenceTable:
             last += number(smart)
             out.append(last)
         table[group] = tuple(out)
-    return ReferenceTable(table, {value: group for group, value in zip(ids, hashes, strict=False)})
+    names = {value: group for group, value in zip(ids, hashes, strict=False)}
+    return ReferenceTable(table, names, dict(zip(ids, crcs, strict=True)))
 
 
 def split(data: bytes, ids: tuple[int, ...]) -> dict[int, bytes]:

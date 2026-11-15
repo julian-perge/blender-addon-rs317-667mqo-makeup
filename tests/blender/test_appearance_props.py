@@ -1,6 +1,6 @@
 import bpy
 import pytest
-from js5_builder import rewrite_cache
+from js5_builder import damage_group, rewrite_cache
 
 from rsps_toolkit.blender import appearance_props
 from rsps_toolkit.formats import cache_profile
@@ -137,7 +137,20 @@ def test_the_panel_names_a_kit_that_does_not_decode_and_the_preference(props, ki
     assert [name for name, _, _ in choices] == [appearance_props.NONE_KIT, appearance_props.OTHER]
     assert failure in appearance_props.profile_error
     assert str(kits_folder) in appearance_props.profile_error
-    assert "Set the Cache folder in the add-on preferences" in appearance_props.profile_error
+    assert "checksums match" in appearance_props.profile_error
+    assert (
+        "Set the Cache folder in the add-on preferences to the cache of snapshot 430" in appearance_props.profile_error
+    )
+
+
+def test_the_panel_says_a_damaged_kit_group_is_damaged_and_names_it(props, kits_folder):
+    damage_group(kits_folder, cache_profile.CONFIG_INDEX, cache_profile.KIT_GROUP)
+    choices = appearance_props.kit_choices(props, 5)
+    assert [name for name, _, _ in choices] == [appearance_props.NONE_KIT, appearance_props.OTHER]
+    assert "Group 3 of index 2 is damaged" in appearance_props.profile_error
+    assert str(kits_folder) in appearance_props.profile_error
+    assert "Download the cache again" in appearance_props.profile_error
+    assert "snapshot 430" not in appearance_props.profile_error
 
 
 def test_the_covers_toggles_say_why_when_the_kits_do_not_decode(props, kits_folder):

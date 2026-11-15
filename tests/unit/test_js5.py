@@ -15,12 +15,14 @@ from js5_builder import (
     build_cache,
     build_region_cache,
     container,
+    damage_group,
     grouped,
     table,
     write_store,
 )
 
 from rsps_toolkit.formats.js5 import (
+    DamagedGroupError,
     DecryptionError,
     Js5Store,
     NotInCacheError,
@@ -167,3 +169,31 @@ def test_a_damaged_container_read_without_keys_is_not_reported_as_a_wrong_key():
 def test_an_unknown_compression_read_with_keys_is_not_reported_as_a_wrong_key():
     with pytest.raises(ValueError, match="Unknown container compression 3"):
         unpack(bytes([3]) + bytes(12), (1, 2, 3, 4))
+
+
+def test_the_reference_table_holds_each_groups_crc32():
+    assert reference_table(table({1: (0,), 4: (0, 2)}, checksums={1: 0xDEADBEEF, 4: 7})).checksums == {
+        1: 0xDEADBEEF,
+        4: 7,
+    }
+
+
+def test_a_group_whose_crc32_matches_the_reference_table_passes_the_check(tmp_path):
+    build_cache(tmp_path, kits={0: b"\0"})
+    Js5Store(tmp_path).check(CONFIG_INDEX, KIT_GROUP)
+
+
+def test_a_damaged_group_is_named_with_both_crc32_values(tmp_path):
+    build_cache(tmp_path, kits={0: b"\0"})
+    damage_group(tmp_path, CONFIG_INDEX, KIT_GROUP)
+    with pytest.raises(
+        DamagedGroupError, match="Group 3 of index 2 is damaged: its CRC32 is [0-9a-f]{8}, the reference"
+    ):
+        Js5Store(tmp_path).check(CONFIG_INDEX, KIT_GROUP)
+
+
+@pytest.mark.skipif(not HAS_SNAPSHOT_430, reason="needs RSPS_SNAPSHOT_430_CACHE")
+def test_every_snapshot_430_config_group_matches_its_crc32():
+    store = Js5Store(SNAPSHOT_430)
+    for group in store.groups(CONFIG_INDEX):
+        store.check(CONFIG_INDEX, group)

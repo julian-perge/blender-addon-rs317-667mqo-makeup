@@ -25,7 +25,14 @@ from ..formats.appearance import (
 )
 from ..formats.appearance_colours import colour_choices
 from ..formats.appearance_preset import AppearancePreset
-from ..formats.cache_profile import PALETTE_PATH, REVISION, CacheProfile, MissingResourceError, shared_profile
+from ..formats.cache_profile import (
+    PALETTE_PATH,
+    REVISION,
+    CacheProfile,
+    DamagedCacheError,
+    MissingResourceError,
+    shared_profile,
+)
 from ..formats.item_wear import ItemWear, load_item_wear
 from . import appearance_swatches, preferences
 
@@ -70,10 +77,13 @@ def profile() -> CacheProfile | None:
 
 def _decode_failure(cache: CacheProfile, error: ValueError | IndexError) -> str:
     """The panel's message for a kit or enum that the decoders cannot read, such as one with an opcode that snapshot
-    430 does not have or one cut short. The decoder's message names the definition."""
+    430 does not have or one cut short. The error's message names the definition, or the damaged group when the cache
+    profile found a group that does not match its CRC32."""
+    if isinstance(error, DamagedCacheError):
+        return str(error)
     return (
-        f"{error}, in the cache at {cache.cache_folder}. "
-        f"Set the Cache folder in the add-on preferences to the cache of snapshot {SNAPSHOT_ID}."
+        f"{error}, in the cache at {cache.cache_folder}. The cache's checksums match, so it is probably the cache of "
+        f"another snapshot. Set the Cache folder in the add-on preferences to the cache of snapshot {SNAPSHOT_ID}."
     )
 
 
