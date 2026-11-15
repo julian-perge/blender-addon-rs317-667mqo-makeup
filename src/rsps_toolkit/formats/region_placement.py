@@ -72,6 +72,10 @@ class PlacedPart:
     location: tuple[float, float, float]
     """Where the model's origin goes, in Blender units: the position on the tile, the height, the wall decoration
     offset, and the model's own offset and diagonal move."""
+    ground: tuple[float, float, float]
+    """Where the client draws the model, in Blender units: the position on the tile, the height and the wall decoration
+    offset. The model's own offset and diagonal move are not in it, because the client puts them in the model's
+    vertices."""
     rotation: float | None
     """The turn about Blender z in radians, or None when the transform is not a location, a rotation and a scale."""
     scale: tuple[float, float, float] | None
@@ -326,6 +330,7 @@ def _transform(
         model_rotation,
         model,
         location,
+        origin,
         rotation,
         plain_scale,
         linear,
