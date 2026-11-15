@@ -74,6 +74,10 @@ _Avoid_: RSPRI, priority layer, draw order, z-index
 Two or more textured faces whose corners are at the same three positions, in any order and whichever vertices they name. A material with any such face draws blended and culled.
 _Avoid_: overlapping faces, coplanar faces, z-fighting
 
+**Material key**:
+The values that decide which material a face gets: face colour, texture ID, face alpha, the shown colour when it differs from the face colour, and whether the mesh has stacked faces with those values. Faces with the same key share one material ([ADR 0024](docs/adr/0024-model-to-object-shares-materials-through-a-dict-that-the-caller-owns.md)).
+_Avoid_: material signature, material hash
+
 ## Texturing
 
 **Texture triangle**:

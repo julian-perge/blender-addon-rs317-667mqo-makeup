@@ -12,6 +12,10 @@ from .face_materials import FindTexture
 # The original exporter gave faces without a stored priority this value.
 DEFAULT_PRIORITY = 1
 
+# Face colour, texture ID, face alpha, the shown colour when it differs from the face colour, and whether the mesh has
+# stacked faces with these values (ADR 0024).
+type MaterialKey = tuple[int | None, int | None, int, int | None, bool]
+
 
 def model_to_object(
     model: Model,
@@ -19,11 +23,16 @@ def model_to_object(
     find_texture: FindTexture | None = None,
     brightness: float = face_materials.DEFAULT_BRIGHTNESS,
     shown_colours: Sequence[int | None] | None = None,
+    materials: dict[MaterialKey, bpy.types.Material] | None = None,
 ) -> bpy.types.Object:
     """Create a mesh object for the model and link it to the active collection.
 
     Face colours show as the client's palette colours at the given brightness setting. `shown_colours`, one per face
     of the model, replaces the colour a face shows; the face still stores the model's own colour as its game value.
+
+    Each material key of the mesh gets a new material, unless `materials` is given. The caller owns that dict: a key
+    already in it uses its material unchanged, and a new material goes into it. One dict is valid only for one
+    `find_texture` and one brightness.
 
     Game y points down, so a game vertex (x, y, z) becomes Blender (x, z, -y), with Blender's z up. Faces that
     repeat a vertex are kept beside the mesh rather than in it, and object_to_model puts them back.
@@ -41,25 +50,31 @@ def model_to_object(
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.collection.objects.link(obj)
 
-    slots: dict[tuple[int | None, int | None, int, int | None], int] = {}
-    materials: list[bpy.types.Material] = []
     stacked = _stacked_textured_faces(model)
     shown_per_face = [None] * len(model.faces) if shown is None else shown
-    for face, (polygon, colour, texture, alpha, shown_colour) in enumerate(
-        zip(mesh.polygons, model.face_colours, model.face_textures, model.face_alphas, shown_per_face, strict=True)
-    ):
+    face_values = [
         # A face that shows its own colour has the key of a plain import, so that import keeps its materials.
-        shown_instead = None if shown_colour == colour else shown_colour
-        key = (colour, texture, alpha, shown_instead)
+        (colour, texture, alpha, None if shown_colour == colour else shown_colour)
+        for colour, texture, alpha, shown_colour in zip(
+            model.face_colours, model.face_textures, model.face_alphas, shown_per_face, strict=True
+        )
+    ]
+    stacked_values = {face_values[face] for face in stacked}
+    keys: list[MaterialKey] = [(*values, values in stacked_values) for values in face_values]
+    by_key = {} if materials is None else materials
+    slots: dict[MaterialKey, int] = {}
+    for polygon, key in zip(mesh.polygons, keys, strict=True):
         if key not in slots:
-            slots[key] = len(materials)
-            materials.append(
-                face_materials.face_material(colour, texture, alpha, find_texture, brightness, shown_instead)
-            )
-            mesh.materials.append(materials[-1])
+            slots[key] = len(slots)
+            if key not in by_key:
+                colour, texture, alpha, shown_instead, is_stacked = key
+                by_key[key] = face_materials.face_material(
+                    colour, texture, alpha, find_texture, brightness, shown_instead
+                )
+                if is_stacked:
+                    face_materials.show_stacked(by_key[key])
+            mesh.materials.append(by_key[key])
         polygon.material_index = slots[key]
-        if face in stacked:
-            face_materials.show_stacked(materials[slots[key]])
     for polygon, flat in zip(mesh.polygons, model.flat_shaded, strict=True):
         polygon.use_smooth = not flat
     vertex_records = (

@@ -6,7 +6,7 @@ import bpy
 import pytest
 
 from rsps_toolkit.blender.face_materials import material_values
-from rsps_toolkit.blender.mesh import model_to_object, object_to_model
+from rsps_toolkit.blender.mesh import MaterialKey, model_to_object, object_to_model
 from rsps_toolkit.formats import Model, decode
 
 MODELS = Path(__file__).parent.parent / "fixtures" / "models"
@@ -202,3 +202,95 @@ def test_stacked_faces_keep_their_game_values_after_the_user_edits_the_stack():
 
     assert exported.face_textures == [model.face_textures[i] for i in (0, 2, 3, 4, 5, 6)]
     assert exported.face_colours == [model.face_colours[i] for i in (0, 2, 3, 4, 5, 6)]
+
+
+def drawn(material: bpy.types.Material | None) -> tuple[int | None, int | None, int, str, bool]:
+    assert material is not None
+    return (*material_values(material), material.surface_render_method, material.use_backface_culling)
+
+
+def one_texture_model(stacked: bool) -> Model:
+    # With `stacked`, a second face with the same texture lies on the corners of the first.
+    faces = [(0, 1, 2), (0, 1, 2)] if stacked else [(0, 1, 2)]
+    return Model(
+        vertices=[(0, 0, 0), (1, 0, 0), (0, 1, 0)],
+        faces=faces,
+        face_colours=[None] * len(faces),
+        face_textures=[1] * len(faces),
+        render_priorities=[0] * len(faces),
+        face_alphas=[0] * len(faces),
+        face_texture_triangles=[None] * len(faces),
+        flat_shaded=[False] * len(faces),
+    )
+
+
+def test_two_imports_without_a_dict_make_separate_materials_that_look_the_same():
+    first = model_to_object(stacked_model(), "first").data
+    second = model_to_object(stacked_model(), "second").data
+    assert isinstance(first, bpy.types.Mesh)
+    assert isinstance(second, bpy.types.Mesh)
+
+    assert not set(first.materials) & set(second.materials)
+    # The names that model import gave these faces before ADR 0024. Materials left by earlier tests add a suffix.
+    assert [m.name.split(".")[0] for m in first.materials if m is not None] == [
+        "RS_Texture_1_0",
+        "RS_Texture_2_0",
+        "RS_Texture_3_0",
+        "RS_Texture_4_0",
+        "RS_Texture_5_0",
+        "RS_Colour_100_0",
+    ]
+    assert [drawn(m) for m in first.materials] == [drawn(m) for m in second.materials]
+
+
+def test_two_imports_with_one_dict_share_one_set_of_materials():
+    own = model_to_object(stacked_model(), "own").data
+    assert isinstance(own, bpy.types.Mesh)
+    materials = {}
+    before = len(bpy.data.materials)
+
+    first = model_to_object(stacked_model(), "first", materials=materials).data
+    second = model_to_object(stacked_model(), "second", materials=materials).data
+    assert isinstance(first, bpy.types.Mesh)
+    assert isinstance(second, bpy.types.Mesh)
+
+    assert len(bpy.data.materials) - before == len(materials) == len(own.materials)
+    assert list(first.materials) == list(second.materials)
+    assert set(first.materials) == set(materials.values())
+
+
+@pytest.mark.parametrize("stacked_first", [True, False], ids=["stacked-first", "plain-first"])
+def test_a_shared_dict_keeps_stacked_and_plain_materials_apart(stacked_first: bool):
+    # Without the stacked part of the key, the first mesh would decide how the other draws (spec 67, Material key).
+    materials = {}
+    order = [True, False] if stacked_first else [False, True]
+    meshes = {s: model_to_object(one_texture_model(s), f"stacked_{s}", materials=materials).data for s in order}
+    stacked, plain = meshes[True], meshes[False]
+    assert isinstance(stacked, bpy.types.Mesh)
+    assert isinstance(plain, bpy.types.Mesh)
+
+    assert len(materials) == 2
+    assert drawn(stacked.materials[0]) == (None, 1, 0, "BLENDED", True)
+    assert drawn(plain.materials[0]) == (None, 1, 0, "DITHERED", False)
+
+
+def test_a_mesh_with_shared_materials_exports_the_same_game_values():
+    model = stacked_model()
+    materials = {}
+    model_to_object(model, "other", materials=materials)
+
+    shared = model_to_object(model, "shared", materials=materials)
+    own = model_to_object(model, "own")
+
+    assert object_to_model(shared) == object_to_model(own) == model
+
+
+def test_a_material_from_the_dict_is_not_changed():
+    material = bpy.data.materials.new("given")
+    materials: dict[MaterialKey, bpy.types.Material] = {(None, 1, 0, None, True): material}
+
+    mesh = model_to_object(one_texture_model(stacked=True), "stacked", materials=materials).data
+    assert isinstance(mesh, bpy.types.Mesh)
+
+    assert list(mesh.materials) == [material]
+    assert (material.surface_render_method, material.use_backface_culling) == ("DITHERED", False)
