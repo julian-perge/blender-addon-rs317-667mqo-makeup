@@ -121,6 +121,32 @@ def leg_labels(props):
     return {name: label for name, label, _ in appearance_props.kit_choices(props, 5)}
 
 
+# Kit 101 uses the model of the Leggings style (see test_kit_names.py). Opcode 99 is not a kit opcode, and opcode 1
+# with no byte after it is a kit cut short.
+UNKNOWN_OPCODE, CUT_SHORT = b"\x63\x00", b"\x01"
+
+
+@pytest.mark.parametrize(
+    ("data", "failure"),
+    [(UNKNOWN_OPCODE, "Kit 101 has unknown opcode 99"), (CUT_SHORT, "Kit 101 ends early")],
+    ids=["unknown opcode", "cut short"],
+)
+def test_the_panel_names_a_kit_that_does_not_decode_and_the_preference(props, kits_folder, data, failure):
+    rewrite_cache(kits_folder, lambda parts: parts["kits"].update({101: data}))
+    choices = appearance_props.kit_choices(props, 5)
+    assert [name for name, _, _ in choices] == [appearance_props.NONE_KIT, appearance_props.OTHER]
+    assert failure in appearance_props.profile_error
+    assert str(kits_folder) in appearance_props.profile_error
+    assert "Set the Cache folder in the add-on preferences" in appearance_props.profile_error
+
+
+def test_the_covers_toggles_say_why_when_the_kits_do_not_decode(props, kits_folder):
+    rewrite_cache(kits_folder, lambda parts: parts["kits"].update({101: UNKNOWN_OPCODE}))
+    appearance_props.profile_error = ""
+    assert appearance_props.has_kits(props, appearance_props.JAW_SLOT)
+    assert "Kit 101 has unknown opcode 99" in appearance_props.profile_error
+
+
 def test_the_kit_dropdowns_see_a_kit_a_changed_cache_added_by_its_style_name(props, kits_folder):
     # The user chose that each catalog whose files' modified times change is parsed again at the next use (issue 29,
     # decision 3, 2026-11-10).

@@ -33,7 +33,15 @@ class MissingResourceError(FileNotFoundError):
 
 
 def read_kits(store: Js5Store) -> dict[int, Kit]:
-    return {kit_id: decode_kit(kit_id, data) for kit_id, data in store.files(CONFIG_INDEX, KIT_GROUP).items()}
+    """Decode every kit. The decoder's IndexError for a kit cut short does not say which kit, so it is raised again
+    with the kit's id."""
+    kits = {}
+    for kit_id, data in store.files(CONFIG_INDEX, KIT_GROUP).items():
+        try:
+            kits[kit_id] = decode_kit(kit_id, data)
+        except IndexError as error:
+            raise IndexError(f"Kit {kit_id} ends early") from error
+    return kits
 
 
 def read_items(store: Js5Store) -> dict[int, WornItem]:
@@ -42,13 +50,17 @@ def read_items(store: Js5Store) -> dict[int, WornItem]:
 
 
 def read_style_enums(store: Js5Store) -> dict[int, EnumDefinition]:
-    """Decode only the enums that name kit styles. The other enums of the group are not needed."""
+    """Decode only the enums that name kit styles. The other enums of the group are not needed. An enum cut short is
+    an IndexError that names the enum, as in `read_kits`."""
     files = store.files(CONFIG_INDEX, ENUM_GROUP)
     enums = {}
     for enum_id in (enum_id for pair in STYLE_ENUMS.values() for enum_id in pair):
         if enum_id not in files:
             raise NotInCacheError(f"Group {ENUM_GROUP} of the cache has no enum {enum_id}")
-        enums[enum_id] = decode_enum(enum_id, files[enum_id])
+        try:
+            enums[enum_id] = decode_enum(enum_id, files[enum_id])
+        except IndexError as error:
+            raise IndexError(f"Enum {enum_id} ends early") from error
     return enums
 
 

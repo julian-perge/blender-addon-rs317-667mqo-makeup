@@ -104,8 +104,14 @@ def test_a_missing_style_enum_is_named(cache):
 
 def test_a_cut_short_kit_is_a_decoding_error_not_a_missing_resource(cache):
     rewrite_cache(cache, lambda parts: parts["kits"].update({0: parts["kits"][0][:3]}))
-    with pytest.raises(IndexError):
+    with pytest.raises(IndexError, match="Kit 0 ends early"):
         CacheProfile(cache).kits
+
+
+def test_a_cut_short_style_enum_is_named(cache):
+    rewrite_cache(cache, lambda parts: parts["enums"].update({778: parts["enums"][778][:3]}))
+    with pytest.raises(IndexError, match="Enum 778 ends early"):
+        CacheProfile(cache).kit_names
 
 
 def test_a_key_error_while_reading_is_not_reported_as_a_missing_resource(cache, monkeypatch):
