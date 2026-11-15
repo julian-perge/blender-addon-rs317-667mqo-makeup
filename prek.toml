@@ -43,14 +43,21 @@ hooks = [
         pass_filenames = false,
         types = ["python"],
     },
-    # Blender takes a few seconds to start, so the tests inside it run only before a push.
+    # The Blender tests take minutes, so they run only before a push, and only when the push changes a file that they
+    # read. A Blender test that starts to read another file outside src/ and tests/ must add that file to this list.
     {
         id = "blender-tests",
         name = "Blender tests",
         entry = "scripts/test-blender.sh",
         language = "system",
         pass_filenames = false,
-        types = ["python"],
+        files = '''(?x)^(
+            src/
+            | tests/(blender/|fixtures/|conftest\.py$|js5_builder\.py$|runelite_json\.py$)
+            | scripts/(test-blender\.sh|animation-showcase\.py|round-trip-cache\.py)$
+            | pyproject\.toml$
+            | uv\.lock$
+        )''',
         stages = ["pre-push"],
     },
 ]
