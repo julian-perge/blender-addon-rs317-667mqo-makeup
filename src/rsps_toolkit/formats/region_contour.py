@@ -55,7 +55,7 @@ def own_vertices(
     contoured = shown.contoured_ground >= 0
     if not contoured and not part.own_mesh:
         return None
-    game = [_client_vertex(vertex, part, shown) for vertex in vertices]
+    game = [client_vertex(vertex, part, shown) for vertex in vertices]
     if contoured:
         contour = _contour(placement, part, raw, shown, game, height)
         if contour is None and not part.own_mesh:
@@ -65,7 +65,7 @@ def own_vertices(
     return tuple(_to_blender(vertex, placement, part) for vertex in game)
 
 
-def _client_vertex(vertex: Vertex, part: PlacedPart, shown: LocDefinition) -> Vertex:
+def client_vertex(vertex: Vertex, part: PlacedPart, shown: LocDefinition) -> Vertex:
     """A vertex after the steps of `ObjectComposition.getModel` (lines 786 to 819), in game axes and whole units: the
     mirror (`ModelData.method2633`), the diagonal turn and move (`method2663` and `method2630`), the quarter turns
     (`method2649`, `method2627` and `method2641`), the scale (`method2674`) and the offset (`method2630`)."""
