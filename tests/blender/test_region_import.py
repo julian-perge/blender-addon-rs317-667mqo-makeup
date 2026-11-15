@@ -24,8 +24,8 @@ from rsps_toolkit.blender import (
     region_terrain,
     rs_layers,
 )
-from rsps_toolkit.blender.face_materials import srgb_to_linear, texture_image
-from rsps_toolkit.blender.mesh import matching_set_aside_faces
+from rsps_toolkit.blender.face_materials import material_values, srgb_to_linear, texture_image
+from rsps_toolkit.blender.mesh import matching_set_aside_faces, model_to_object
 from rsps_toolkit.formats import decode, face_colour_to_rgb
 from rsps_toolkit.formats.appearance import merge
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
@@ -1307,6 +1307,69 @@ def test_the_scenery_materials_use_the_decoded_images(snapshot_430, monkeypatch)
     }
     assert images
     assert all(image.packed_file is not None and image.name.startswith("RS_Texture_") for image in images)
+
+
+def drawn(material: bpy.types.Material | None) -> tuple[object, ...]:
+    """The game values of a material and how it draws: its colour, its image, its render method and its culling."""
+    assert material is not None
+    image = material_image(material)
+    rgba = [0.0] * 4
+    material.diffuse_color.foreach_get(rgba)
+    return (
+        *material_values(material),
+        tuple(round(c, 6) for c in rgba),
+        None if image is None else image.name,
+        material.surface_render_method,
+        material.use_backface_culling,
+    )
+
+
+def scenery_meshes_of_48_50() -> list[bpy.types.Mesh]:
+    scene = bpy.context.scene
+    assert scene is not None
+    region, _ = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS)
+    (scenery,) = region.children
+    return list({mesh_of(obj): None for obj in scenery.objects})
+
+
+@needs_snapshot_430
+def test_the_scenery_of_48_50_has_one_material_for_each_material_key(snapshot_430):
+    # Issue 67 measured 325 material keys in the scenery of 48_50 on snapshot 430. Scenery passes no shown colours, so
+    # the values, the image and the draw settings of a material give its key.
+    meshes = scenery_meshes_of_48_50()
+
+    materials = {material for mesh in meshes for material in mesh.materials}
+    assert None not in materials
+    assert len(materials) == len({drawn(material) for material in materials}) == 325
+
+
+def drawn_scenery_faces_of_48_50() -> dict[str, list[tuple[object, ...]]]:
+    """How each face of each scenery object of 48_50 draws, by object name."""
+    scene = bpy.context.scene
+    assert scene is not None
+    region, _ = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS)
+    (scenery,) = region.children
+    return {
+        obj.name: [drawn(mesh_of(obj).materials[polygon.material_index]) for polygon in mesh_of(obj).polygons]
+        for obj in scenery.objects
+    }
+
+
+@needs_snapshot_430
+def test_each_scenery_face_draws_as_the_material_of_its_own_model_import_would(snapshot_430, monkeypatch):
+    def own_materials(*args, materials=None, **kwargs):
+        return model_to_object(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(region_scenery, "model_to_object", own_materials)
+        own = drawn_scenery_faces_of_48_50()
+    # The second import starts from an empty file, so that its objects and images get the same names as the first.
+    bpy.ops.wm.read_homefile(use_empty=True)
+    shared = drawn_scenery_faces_of_48_50()
+
+    assert own.keys() == shared.keys()
+    for name, faces in shared.items():
+        assert faces == own[name], name
 
 
 @needs_snapshot_430
