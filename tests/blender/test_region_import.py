@@ -1,4 +1,5 @@
 import gzip
+import json
 import os
 import re
 from pathlib import Path
@@ -10,9 +11,18 @@ from js5_builder import REGION_FIXTURES, build_region_cache
 from runelite_json import load_overlays, load_underlays
 
 import rsps_toolkit.blender as addon
-from rsps_toolkit.blender import import_item, preferences, region_import, region_terrain
+from rsps_toolkit.blender import (
+    appearance_collection,
+    appearance_preview,
+    appearance_props,
+    import_item,
+    preferences,
+    region_import,
+    region_terrain,
+)
 from rsps_toolkit.blender.face_materials import srgb_to_linear, texture_image
 from rsps_toolkit.formats import face_colour_to_rgb
+from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.cache_profile import SET_CACHE_FOLDER
 from rsps_toolkit.formats.js5 import Js5Store
 from rsps_toolkit.formats.region import AREA_SIZE, EMPTY_TILE, LEVELS, Terrain, Tile, load_terrain
@@ -22,6 +32,7 @@ from rsps_toolkit.formats.sprite import decode_sprites
 from rsps_toolkit.formats.texture import SIZE, decode_texture, texture_pixels
 
 FLOORS = REGION_FIXTURES / "floors.json"
+APPEARANCE_FIXTURES = Path(__file__).parent.parent / "fixtures" / "appearance"
 UNDERLAYS = load_underlays(FLOORS)
 OVERLAYS = load_overlays(FLOORS)
 BRIGHTNESS = 0.8
@@ -384,6 +395,89 @@ def test_a_missing_overlay_outside_the_region_is_not_refused():
     terrain = made_terrain({(-1, 10): Tile(0, 0, 48, 42, 1, 0), (64, 10): Tile(0, 0, 48, 42, 1, 0)})
 
     region_import._check_floors(terrain, UNDERLAYS, {})
+
+
+# Tile (3, 48) of 48_50 is flat at height -280 (`tests/unit/test_region_terrain.py`), so `class264.java` lines 106 to 108
+# give -280 at its centre, and the Blender z is 280.
+FLAT_TILE = (3, 48)
+FLAT_TILE_POINT = (3 * 128 + 64, 48 * 128 + 64, 280)
+
+
+@pytest.fixture
+def player_registered():
+    for cls in (*appearance_props.classes, *appearance_collection.classes):
+        bpy.utils.register_class(cls)
+    appearance_props.register_properties()
+    yield
+    appearance_props.unregister_properties()
+    for cls in reversed((*appearance_props.classes, *appearance_collection.classes)):
+        bpy.utils.unregister_class(cls)
+
+
+def created_player(cache: Path) -> bpy.types.Object:
+    """The rig of a new player from Create Player, with the first appearance of the appearance reference file."""
+    reference = json.loads((APPEARANCE_FIXTURES / "reference.json").read_text())["cases"][0]
+    preset = AppearancePreset(149, 430, reference["female"], tuple(reference["equipment"]), tuple(reference["colours"]))
+    appearance_props.from_preset(bpy.context.scene.rs_appearance, preset)  # pyrefly: ignore[missing-attribute]
+    assert bpy.ops.rsps.create_appearance_preview(cache_folder=str(cache)) == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    collection = appearance_preview.collection_of(bpy.context.active_object)
+    assert collection is not None
+    return appearance_collection.armature_of(collection)
+
+
+def linked(obj: bpy.types.Object) -> None:
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.objects.link(obj)
+
+
+def hit_below(obj: bpy.types.Object, x: float, y: float) -> float:
+    """The z where a ray straight down from far above (x, y) first hits the object, which stands at the origin."""
+    hit, location, _, _ = obj.ray_cast((x, y, 10_000.0), (0.0, 0.0, -1.0))
+    assert hit
+    return location.z
+
+
+def test_the_tile_to_position_point_is_the_centre_of_the_tile_at_the_clients_height(terrain):
+    assert region_terrain.tile_position(terrain, *FLAT_TILE) == FLAT_TILE_POINT
+
+
+def test_a_player_placed_at_the_tile_to_position_point_of_a_flat_tile_stands_on_the_terrain_mesh(
+    terrain, player_registered, cache
+):
+    obj = terrain_of_48_50(terrain)
+    linked(obj)
+    rig = created_player(cache)
+
+    rig.location = region_terrain.tile_position(terrain, *FLAT_TILE)
+
+    assert (rig.location.x, rig.location.y, rig.location.z) == FLAT_TILE_POINT
+    assert hit_below(obj, rig.location.x, rig.location.y) == pytest.approx(rig.location.z)
+
+
+def test_after_the_terrain_mesh_is_edited_the_tile_to_position_point_is_the_same(terrain):
+    obj = terrain_of_48_50(terrain)
+    linked(obj)
+    mesh = mesh_of(obj)
+    for vertex in mesh.vertices:
+        vertex.co.z += 500
+    mesh.update()
+
+    assert hit_below(obj, FLAT_TILE_POINT[0], FLAT_TILE_POINT[1]) == pytest.approx(FLAT_TILE_POINT[2] + 500)
+    assert region_terrain.tile_position(terrain, *FLAT_TILE) == FLAT_TILE_POINT
+
+
+def test_a_bridge_tile_gives_the_ground_under_the_bridge(terrain):
+    # Tile (40, 0) is a bridge tile with level 0 ground at height 0 and the bridge at level 1 height -240
+    # (`tests/unit/test_region_terrain.py`). `class264.java` lines 99 to 101 would give the bridge, but the import has no
+    # level 1 (spec 35, part 8).
+    assert region_terrain.tile_position(terrain, 40, 0) == (40 * 128 + 64, 64, 0)
+
+
+@pytest.mark.parametrize(("x", "y"), [(-1, 0), (64, 0), (0, -1), (0, 64)])
+def test_a_tile_outside_the_region_has_no_tile_to_position_point(terrain, x, y):
+    with pytest.raises(ValueError, match="outside region 48_50"):
+        region_terrain.tile_position(terrain, x, y)
 
 
 SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
