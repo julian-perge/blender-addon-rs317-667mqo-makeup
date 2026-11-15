@@ -15,7 +15,7 @@ import bpy
 from ..formats import face_colour_to_rgb
 from ..formats.floor_definition import Overlay, Underlay
 from ..formats.region import REGION_SIZE, Terrain, ground_height
-from ..formats.region_colours import HIDDEN, tile_colours
+from ..formats.region_colours import HIDDEN, NO_SHADOWS, tile_colours
 from ..formats.region_shapes import Corner, TilePoint, tile_triangles
 from ..formats.texture_uvs import projected_uvs
 from .face_materials import srgb_to_linear
@@ -37,11 +37,14 @@ def terrain_object(
     overlays: Mapping[int, Overlay],
     images: Mapping[int, bpy.types.Image],
     brightness: float,
+    shadows: Mapping[tuple[int, int], int] = NO_SHADOWS,
 ) -> bpy.types.Object:
     """A new object, linked to no collection, with the level 0 tiles of the terrain's region.
 
     `underlays` and `overlays` hold the floor definitions by id. `images` holds the decoded image of each texture that an
     overlay of the region uses, by texture id. `brightness` is the Brightness preference that the colours are shown at.
+    `shadows` is the loc shadow at each tile corner (`region_light.loc_shadows`), which the terrain light takes away, as
+    `region_colours.corner_light` takes it. It gives a terrain with no scenery when it is empty.
 
     Each tile gets the triangles of `region_shapes.tile_triangles`. A triangle whose first point has the colour `HIDDEN`
     and no texture is not drawn, because the client checks only that colour (`Region.java` lines 1852, 1879 and 1967).
@@ -54,7 +57,7 @@ def terrain_object(
     uvs: list[float] = []
     for x in range(REGION_SIZE):
         for y in range(REGION_SIZE):
-            lit = tile_colours(terrain, x, y, underlays, overlays)
+            lit = tile_colours(terrain, x, y, underlays, overlays, shadows)
             if lit is None:
                 continue
             heights = [terrain.tile(0, x + dx, y + dy).height for dx, dy in (corner.value for corner in _CORNERS)]
@@ -89,6 +92,14 @@ def terrain_object(
     mesh.uv_layers.new(name=UV_MAP).data.foreach_set("uv", uvs)
     mesh.update()
     return bpy.data.objects.new(name, mesh)
+
+
+def drawn_tiles(obj: bpy.types.Object) -> int:
+    """The number of tiles of a terrain object that have at least one face. The mesh stores no tile numbers, so each face
+    is placed by its centre, which lies inside its tile."""
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    return len({(int(polygon.center.x // TILE_SIZE), int(polygon.center.y // TILE_SIZE)) for polygon in mesh.polygons})
 
 
 def tile_position(terrain: Terrain, x: int, y: int) -> tuple[float, float, float]:

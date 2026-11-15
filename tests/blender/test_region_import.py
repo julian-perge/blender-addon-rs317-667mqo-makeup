@@ -27,8 +27,9 @@ from rsps_toolkit.blender import (
 from rsps_toolkit.blender.face_materials import srgb_to_linear, texture_image
 from rsps_toolkit.blender.mesh import matching_set_aside_faces
 from rsps_toolkit.formats import decode, face_colour_to_rgb
+from rsps_toolkit.formats.appearance import merge
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
-from rsps_toolkit.formats.cache_profile import SET_CACHE_FOLDER
+from rsps_toolkit.formats.cache_profile import MODEL_INDEX, SET_CACHE_FOLDER
 from rsps_toolkit.formats.js5 import Js5Store
 from rsps_toolkit.formats.loc_definition import read_locs
 from rsps_toolkit.formats.region import (
@@ -42,7 +43,8 @@ from rsps_toolkit.formats.region import (
     load_landscape,
     load_terrain,
 )
-from rsps_toolkit.formats.region_colours import HIDDEN
+from rsps_toolkit.formats.region_colours import HIDDEN, tile_colours
+from rsps_toolkit.formats.region_light import loc_shadows
 from rsps_toolkit.formats.region_placement import place_scenery
 from rsps_toolkit.formats.region_shapes import Corner, TilePoint, tile_triangles
 from rsps_toolkit.formats.sprite import decode_sprites
@@ -232,6 +234,28 @@ def test_each_face_corner_of_a_tile_shows_the_lit_colour_of_the_client(terrain, 
         shown = shown_shade if textured else shown_colour
         expected = [channel for point in triangle.points for channel in shown(point_value(values, point))]
         actual = [channel for colour in corner_colours(obj, face) for channel in colour]
+        assert actual == pytest.approx(expected, abs=1e-6)
+
+
+@pytest.mark.parametrize(("x", "y"), [(11, 56), (60, 3)])
+def test_the_loc_shadows_darken_the_corner_colours_as_the_colour_module_gives_them(terrain, x, y):
+    # Tile (11, 56) has an overlay with a plain colour and tile (60, 3) an overlay with texture 1. A wall shadow of 50 sits
+    # on the south-west corner of the tile and an object shadow of 20 on its north-east corner.
+    shadows = {(x, y): 50, (x + 1, y + 1): 20}
+    images = {texture: decoded_image(texture) for texture in (1, 3)}
+    shadowed = region_terrain.terrain_object("Terrain 48_50", terrain, UNDERLAYS, OVERLAYS, images, BRIGHTNESS, shadows)
+    lit = tile_colours(terrain, x, y, UNDERLAYS, OVERLAYS, shadows)
+    unlit = tile_colours(terrain, x, y, UNDERLAYS, OVERLAYS)
+    assert lit is not None and lit.overlay is not None and lit != unlit
+    faces = faces_by_corners(shadowed)
+
+    for triangle in tile_triangles(terrain.tile(0, x, y)):
+        values = lit.overlay if triangle.overlay else lit.underlay
+        face = faces[tuple(point_position(terrain, x, y, point) for point in triangle.points)]
+        textured = triangle.overlay and (x, y) in TEXTURED
+        shown = shown_shade if textured else shown_colour
+        expected = [channel for point in triangle.points for channel in shown(point_value(values, point))]
+        actual = [channel for colour in corner_colours(shadowed, face) for channel in colour]
         assert actual == pytest.approx(expected, abs=1e-6)
 
 
@@ -587,6 +611,123 @@ def test_the_operator_imports_the_terrain_of_48_50_into_its_own_collection(snaps
     assert len(mesh_of(region.objects[0]).polygons) == expected
 
 
+def expected_tiles(terrain: Terrain) -> int:
+    """The tiles of the region that have a triangle to draw, from the colour module and the tile shapes: a tile with no
+    underlay and no overlay has none, and a triangle is not drawn when it has no texture and its first point has the
+    colour `HIDDEN` (`Region.java` lines 1852, 1879 and 1967)."""
+    count = 0
+    for x in range(64):
+        for y in range(64):
+            lit = tile_colours(terrain, x, y, UNDERLAYS, OVERLAYS)
+            if lit is None:
+                continue
+            for triangle in tile_triangles(terrain.tile(0, x, y)):
+                values = lit.overlay if triangle.overlay else lit.underlay
+                assert values is not None
+                if (triangle.overlay and lit.texture != -1) or point_value(values, triangle.points[0]) != HIDDEN:
+                    count += 1
+                    break
+    return count
+
+
+def reported_info(capfd) -> str:
+    """The one INFO message that the operator reported. Blender prints it to its standard output as `Info: <message>`,
+    which a call through `bpy.ops` does not hand back otherwise."""
+    lines = [line for line in capfd.readouterr().out.splitlines() if line.startswith("Info: Imported region")]
+    assert len(lines) == 1
+    return lines[0].removeprefix("Info: ")
+
+
+def test_the_report_text_gives_each_number_and_names_the_bridge_tiles():
+    report = region_import.RegionReport(
+        tiles=4000,
+        scenery=region_scenery.SceneryCounts(placements=10, objects=12, shared_meshes=3, own_meshes=2, shown_nothing=1),
+        bridge_tiles=tuple((3112 + dx, 3200 + dy) for dx in range(4) for dy in range(7)),
+        has_key=True,
+    )
+
+    assert region_import.report_text(48, 50, report) == (
+        "Imported region 48_50: 4000 tiles, 9 placements made as 12 objects, 3 shared meshes, 2 own meshes, 1 placements "
+        "that showed nothing, the region had a key. 28 bridge tiles are left out: x 3112 to 3115, y 3200 to 3206"
+    )
+
+
+def test_the_report_text_says_when_the_region_had_no_key_and_has_no_bridge_tiles_to_name():
+    report = region_import.RegionReport(
+        tiles=5, scenery=region_scenery.SceneryCounts(0, 0, 0, 0, 0), bridge_tiles=(), has_key=False
+    )
+
+    assert region_import.report_text(1, 2, report) == (
+        "Imported region 1_2: 5 tiles, 0 placements made as 0 objects, 0 shared meshes, 0 own meshes, 0 placements that "
+        "showed nothing, the region had no key"
+    )
+
+
+def test_bridge_tiles_that_are_not_one_rectangle_are_named_by_runs_of_columns():
+    tiles = ((10, 5), (10, 6), (11, 5), (11, 6), (12, 9), (13, 9), (14, 9), (14, 10))
+
+    assert region_import.bridge_text(tiles) == "x 10 to 11, y 5 to 6; x 12 to 13, y 9; x 14, y 9 to 10"
+
+
+def test_a_region_with_no_key_file_gets_its_terrain_and_no_scenery_and_the_report_says_so(fixture_cache, terrain):
+    # `fixture_cache` has a keys folder with no key file for 48_50 (`GLOSSARY.md`, Landscape keys).
+    scene = bpy.context.scene
+    assert scene is not None
+    cache = preferences.cache_folder()
+    assert cache is not None
+
+    region, report = region_import.import_region(scene.collection, cache, 48, 50, BRIGHTNESS)
+
+    assert report.has_key is False
+    assert report.scenery == region_scenery.SceneryCounts(0, 0, 0, 0, 0)
+    (terrain_obj,) = region.objects
+    assert terrain_obj.name == "Terrain 48_50"
+    assert report.tiles == expected_tiles(terrain) > 0
+    (scenery,) = region.children
+    assert not scenery.objects
+    assert "the region had no key" in region_import.report_text(48, 50, report)
+
+
+@needs_snapshot_430
+def test_the_report_of_48_50_equals_the_counts_of_the_scene_and_names_the_28_bridge_tiles(snapshot_430, terrain):
+    scene = bpy.context.scene
+    assert scene is not None
+    region, report = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS)
+
+    (scenery,) = region.children
+    assert report.has_key is True
+    assert report.tiles == expected_tiles(terrain)
+    assert report.scenery.objects == len(scenery.objects)
+    assert report.scenery.placements == len(level_0_rows())
+    objects, nothing = reference_scenery()
+    assert report.scenery.shown_nothing == nothing
+    assert report.scenery.placements_made == len(level_0_rows()) - nothing
+    assert report.scenery.objects == len(objects)
+    assert report.bridge_tiles == tuple((x, y) for x in range(3112, 3116) for y in range(3200, 3207))
+    text = region_import.report_text(48, 50, report)
+    assert "28 bridge tiles" in text
+    assert "x 3112 to 3115, y 3200 to 3206" in text
+    assert f"{report.tiles} tiles" in text
+
+
+@needs_snapshot_430
+def test_the_operator_reports_the_text_of_the_report_with_the_bridge_tiles(snapshot_430, capfd):
+    assert import_region() == {"FINISHED"}
+
+    message = reported_info(capfd)
+    assert message.startswith("Imported region 48_50: ")
+    assert "the region had a key" in message
+    assert "28 bridge tiles are left out: x 3112 to 3115, y 3200 to 3206" in message
+
+
+def test_the_operator_reports_that_a_region_had_no_key(fixture_cache, capfd):
+    assert import_region() == {"FINISHED"}
+
+    message = reported_info(capfd)
+    assert "0 placements made as 0 objects" in message
+    assert "the region had no key" in message
+
+
 def test_one_undo_removes_the_whole_import(fixture_cache):
     # Background Blender pushes undo states only when asked, so the test pushes one before and after the operator. In
     # the user interface, Blender pushes the state after the operator only when it has the UNDO option.
@@ -787,8 +928,9 @@ def test_the_import_of_48_50_makes_one_object_for_each_model_that_a_level_0_plac
 def test_the_import_counts_the_placements_and_meshes_that_it_made(snapshot_430):
     scene = bpy.context.scene
     assert scene is not None
-    region, counts = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS)
+    region, report = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS)
 
+    counts = report.scenery
     objects, nothing = reference_scenery()
     (scenery,) = region.children
     own = {mesh_of(obj) for obj in scenery.objects if without_number(mesh_of(obj).name) == without_number(obj.name)}
@@ -800,6 +942,140 @@ def test_the_import_counts_the_placements_and_meshes_that_it_made(snapshot_430):
     assert counts.own_meshes == len(own)
     assert counts.shared_meshes == len(shared)
     assert all(mesh.users == 1 for mesh in own)
+
+
+WALL_SHADOW_CORNERS = {
+    # PacketBuffer.java lines 254 to 284 (type 0) and 307 to 316 and 370 to 379 (types 1 and 3), by rotation.
+    0: {0: ((0, 0), (0, 1)), 1: ((0, 1), (1, 1)), 2: ((1, 0), (1, 1)), 3: ((0, 0), (1, 0))},
+    1: {0: ((0, 1),), 1: ((1, 1),), 2: ((1, 0),), 3: ((0, 0),)},
+    3: {0: ((0, 1),), 1: ((1, 1),), 2: ((1, 0),), 3: ((0, 0),)},
+}
+
+
+def level_0_rows() -> list[dict]:
+    return [row for row in LANDSCAPE_ROWS if row["level"] == 0]
+
+
+def reference_wall_shadows() -> dict[tuple[int, int], int]:
+    """The shadow 50 that each wall of type 0, 1 and 3 of 48_50 with a shadow writes at its corners, from the reference
+    rows. A wall writes 50 whatever the corner held."""
+    shadows = {}
+    for row in level_0_rows():
+        if row["type"] in WALL_SHADOW_CORNERS and LOC_ROWS[row["id"]]["shadow"]:
+            for dx, dy in WALL_SHADOW_CORNERS[row["type"]][row["rotation"]]:
+                shadows[(row["x"] + dx, row["y"] + dy)] = 50
+    return shadows
+
+
+def object_shadow_corners() -> set[tuple[int, int]]:
+    """The corners of the footprints of the objects of 48_50 with a shadow, which swap width and length at the rotations
+    1 and 3 (`PacketBuffer.java` lines 169 to 177). These objects write a shadow that depends on their model, which the
+    reference rows do not give."""
+    corners = set()
+    for row in level_0_rows():
+        loc = LOC_ROWS[row["id"]]
+        if row["type"] in (10, 11) and loc["shadow"]:
+            width, length = (loc["sizeY"], loc["sizeX"]) if row["rotation"] in (1, 3) else (loc["sizeX"], loc["sizeY"])
+            corners |= {(row["x"] + dx, row["y"] + dy) for dx in range(width + 1) for dy in range(length + 1)}
+    return corners
+
+
+def wall_corner_away_from_objects() -> tuple[int, int]:
+    """The first corner of a wall of type 0 of 48_50 with no object corner within 2 corners of it, so the 4 tiles that
+    share it have only wall shadows in their light."""
+    objects = object_shadow_corners()
+    for row in level_0_rows():
+        if row["type"] != 0 or not LOC_ROWS[row["id"]]["shadow"]:
+            continue
+        dx, dy = WALL_SHADOW_CORNERS[0][row["rotation"]][0]
+        x, y = row["x"] + dx, row["y"] + dy
+        if 3 <= x <= 60 and 3 <= y <= 60 and not any(abs(ox - x) <= 2 and abs(oy - y) <= 2 for ox, oy in objects):
+            return x, y
+    raise AssertionError("48_50 has no wall of type 0 away from the objects that cast shadows")
+
+
+def assert_tile_shows(obj: bpy.types.Object, terrain: Terrain, x: int, y: int, shadows: dict[tuple[int, int], int]):
+    """Each face of tile (x, y) has the colours that `tile_colours` gives with `shadows`."""
+    lit = tile_colours(terrain, x, y, UNDERLAYS, OVERLAYS, shadows)
+    assert lit is not None
+    faces = faces_by_corners(obj)
+    for triangle in tile_triangles(terrain.tile(0, x, y)):
+        values = lit.overlay if triangle.overlay else lit.underlay
+        assert values is not None
+        if values[0] == HIDDEN:
+            continue
+        face = faces[tuple(point_position(terrain, x, y, point) for point in triangle.points)]
+        shown = shown_shade if triangle.overlay and lit.texture != -1 else shown_colour
+        expected = [channel for point in triangle.points for channel in shown(point_value(values, point))]
+        actual = [channel for colour in corner_colours(obj, face) for channel in colour]
+        assert actual == pytest.approx(expected, abs=1e-6), (x, y)
+
+
+@needs_snapshot_430
+def test_the_terrain_corners_next_to_a_wall_of_48_50_have_the_colour_with_the_shadow_of_the_wall(snapshot_430, terrain):
+    # The corner light reads the shadows of the corner and of the 4 corners next to it (`class24.java` lines 107 to 115).
+    # The 4 tiles that share a corner of the wall read only wall shadows, which come from the reference rows.
+    corner_x, corner_y = wall_corner_away_from_objects()
+    shadows = reference_wall_shadows()
+    assert shadows[(corner_x, corner_y)] == 50
+    import_region()
+
+    (region,) = region_collections()
+    tiles = [(corner_x - 1 + dx, corner_y - 1 + dy) for dx in (0, 1) for dy in (0, 1)]
+    for x, y in tiles:
+        assert_tile_shows(region.objects[0], terrain, x, y, shadows)
+    assert any(
+        tile_colours(terrain, x, y, UNDERLAYS, OVERLAYS, shadows) != tile_colours(terrain, x, y, UNDERLAYS, OVERLAYS)
+        for x, y in tiles
+    )
+
+
+@needs_snapshot_430
+def test_a_terrain_corner_far_from_any_placement_has_the_colour_with_no_shadow(snapshot_430, terrain):
+    rows = level_0_rows()
+    # A placement reaches the tiles within 3 of its tile, and an object with a wider footprint reaches 3 from each corner.
+    origins = {(row["x"], row["y"]) for row in rows} | object_shadow_corners()
+    near = {(x, y) for ox, oy in origins for x in range(ox - 3, ox + 4) for y in range(oy - 3, oy + 4)}
+    far = [
+        (x, y)
+        for x in range(64)
+        for y in range(64)
+        if (x, y) not in near and tile_colours(terrain, x, y, UNDERLAYS, OVERLAYS) is not None
+    ]
+    assert len(far) > 100
+    import_region()
+
+    (region,) = region_collections()
+    for x, y in far:
+        assert_tile_shows(region.objects[0], terrain, x, y, {})
+
+
+@needs_snapshot_430
+def test_the_terrain_of_48_50_has_the_colours_with_the_wall_and_object_shadows_of_its_placements(snapshot_430, terrain):
+    # The anchor tests above check the wall shadows and the far tiles against the reference rows. The shadow of an object
+    # depends on its model, so this test builds the shadows with `loc_shadows` from the models of the cache and checks
+    # that the import passes them on to every tile.
+    store = Js5Store(SNAPSHOT_430)
+    placements = [placement for placement in load_landscape(store, 48, 50).placements if placement.level == 0]
+    locs = read_locs(store, {placement.loc for placement in placements})
+    placed = place_scenery(placements, locs, terrain_height(terrain))
+
+    def model_vertices(loc_model):
+        parts = [decode(store.container(MODEL_INDEX, model_id), profile="osrs-149") for model_id in loc_model.model_ids]
+        return (parts[0] if len(parts) == 1 else merge(parts)).vertices
+
+    shadows = loc_shadows(placed, locs, model_vertices)
+    assert max(shadows.values()) == 50 and any(0 < shadow < 50 for shadow in shadows.values())
+    expected = region_terrain.terrain_object(
+        "Terrain", terrain, UNDERLAYS, OVERLAYS, {1: decoded_image(1), 3: decoded_image(3)}, BRIGHTNESS, shadows
+    )
+    unlit = terrain_of_48_50(terrain)
+    import_region()
+
+    (region,) = region_collections()
+    imported = [corner_colours(region.objects[0], face.index) for face in mesh_of(region.objects[0]).polygons]
+    assert imported == [corner_colours(expected, face.index) for face in mesh_of(expected).polygons]
+    assert imported != [corner_colours(unlit, face.index) for face in mesh_of(unlit).polygons]
 
 
 @needs_snapshot_430
