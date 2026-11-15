@@ -200,6 +200,13 @@ def test_the_height_at_the_centre_of_a_sloped_tile_is_the_clients_blend_of_its_c
     assert ground_height(terrain_48_50, 64, 53 * 128 + 64) == -158
 
 
+def test_the_height_at_a_point_blends_east_by_the_x_offset_and_north_by_the_y_offset(terrain_48_50):
+    # On tile (0, 53), at the offset (32, 96), class264.java line 106 gives (96 * -184 + 32 * -192) >> 7 = -186 on the
+    # south edge, line 107 gives (-112 * 96 + 32 * -144) >> 7 = -120 on the north edge, and line 108 gives
+    # (-120 * 96 + -186 * 32) >> 7 = -137. Offsets swapped between x and y would give -177.
+    assert ground_height(terrain_48_50, 32, 53 * 128 + 96) == -137
+
+
 def test_the_height_at_a_point_rounds_each_blend_down_as_the_client_does(terrain_48_50):
     # Tile (0, 47) has the corner heights -296, -312, -272 and -280. At the offset (1, 1), class264.java line 106 gives
     # (127 * -296 + 1 * -312) >> 7 = -297, line 107 gives (-272 * 127 + 1 * -280) >> 7 = -273, and line 108 gives
