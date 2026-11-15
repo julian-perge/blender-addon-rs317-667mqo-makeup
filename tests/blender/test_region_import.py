@@ -25,7 +25,7 @@ from rsps_toolkit.blender import (
     rs_layers,
 )
 from rsps_toolkit.blender.face_materials import material_values, srgb_to_linear, texture_image
-from rsps_toolkit.blender.mesh import matching_set_aside_faces, model_to_object, object_to_model
+from rsps_toolkit.blender.mesh import matching_set_aside_faces, model_to_object
 from rsps_toolkit.formats import decode, face_colour_to_rgb
 from rsps_toolkit.formats.appearance import merge
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
@@ -1343,27 +1343,33 @@ def test_the_scenery_of_48_50_has_one_material_for_each_material_key(snapshot_43
     assert len(materials) == len({drawn(material) for material in materials}) == 325
 
 
+def drawn_scenery_faces_of_48_50() -> dict[str, list[tuple[object, ...]]]:
+    """How each face of each scenery object of 48_50 draws, by object name."""
+    scene = bpy.context.scene
+    assert scene is not None
+    region, _ = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS)
+    (scenery,) = region.children
+    return {
+        obj.name: [drawn(mesh_of(obj).materials[polygon.material_index]) for polygon in mesh_of(obj).polygons]
+        for obj in scenery.objects
+    }
+
+
 @needs_snapshot_430
-def test_each_scenery_face_draws_as_the_material_of_its_own_model_import_would(snapshot_430):
-    meshes = scenery_meshes_of_48_50()
+def test_each_scenery_face_draws_as_the_material_of_its_own_model_import_would(snapshot_430, monkeypatch):
+    def own_materials(*args, materials=None, **kwargs):
+        return model_to_object(*args, **kwargs)
 
-    def find_texture(texture_id: int) -> bpy.types.Image | None:
-        return bpy.data.images.get(f"RS_Texture_{texture_id}")
+    with monkeypatch.context() as patch:
+        patch.setattr(region_scenery, "model_to_object", own_materials)
+        own = drawn_scenery_faces_of_48_50()
+    # The second import starts from an empty file, so that its objects and images get the same names as the first.
+    bpy.ops.wm.read_homefile(use_empty=True)
+    shared = drawn_scenery_faces_of_48_50()
 
-    for mesh in meshes:
-        obj = bpy.data.objects.new("Shared", mesh)
-        own = model_to_object(object_to_model(obj), "Own", find_texture, BRIGHTNESS)
-        shared_faces = [drawn(mesh.materials[polygon.material_index]) for polygon in mesh.polygons]
-        own_faces = [drawn(mesh_of(own).materials[polygon.material_index]) for polygon in mesh_of(own).polygons]
-        assert shared_faces == own_faces, mesh.name
-        own_mesh = mesh_of(own)
-        own_materials = set(own_mesh.materials)
-        bpy.data.objects.remove(obj)
-        bpy.data.objects.remove(own)
-        bpy.data.meshes.remove(own_mesh)
-        for material in own_materials:
-            if material is not None:
-                bpy.data.materials.remove(material)
+    assert own.keys() == shared.keys()
+    for name, faces in shared.items():
+        assert faces == own[name], name
 
 
 @needs_snapshot_430
