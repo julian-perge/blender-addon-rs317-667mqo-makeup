@@ -11,6 +11,11 @@ east or north edge of the region writes at corner 64, and an object wider than o
 client does. The client's two tests that can stop an object from being added (`Region.addEntityMarker`, lines 538 to
 551) are left out: no footprint leaves the region's scene, and no tile of region 48_50 holds the 5 objects that the
 second test needs. A region with a tile of 5 or more objects would get shadows that the client does not write.
+
+Only the placements of the region itself write shadows, because the import does not read neighbour scenery (decision 1
+of the spec of issue 35). The client also writes the shadows of the neighbour regions' locs, and `corner_light` reads
+the shadows one corner west and south of a corner. So a corner at the region's edge is lighter than in the client where
+a neighbour loc stands next to that edge.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -92,6 +97,7 @@ def _object_shadow(
     if raw.non_flat_shading:
         return DEFAULT_OBJECT_SHADOW
     (part,) = placed_loc.parts
+    # A loc with impostors returned above, so the loc that the placement shows is the loc that the landscape names.
     vertices = [client_vertex(vertex, part, raw) for vertex in model_vertices(part.model)]
     return min(_xyz_mag(vertices) // 4, MAX_OBJECT_SHADOW)
 

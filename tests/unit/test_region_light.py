@@ -134,11 +134,15 @@ def test_the_xyzmag_reads_the_vertices_after_the_scale_and_the_offset_of_the_loc
     assert set(written.values()) == {25}
 
 
-def test_an_object_writes_at_every_corner_of_its_footprint_swapped_at_rotation_1():
-    # PacketBuffer.java lines 169 to 177 and 487 to 493: a loc 2 wide and 1 long at rotation 1 covers 1 by 2 tiles, so 2
-    # by 3 corners.
-    written = shadows([at(5, 5, 10, 1)], {1: loc(width=2, length=1)})
-    assert set(written) == {(x, y) for x in (5, 6) for y in (5, 6, 7)}
+@pytest.mark.parametrize(
+    ("rotation", "xs", "ys"),
+    [(0, (5, 6, 7), (5, 6)), (1, (5, 6), (5, 6, 7)), (2, (5, 6, 7), (5, 6)), (3, (5, 6), (5, 6, 7))],
+)
+def test_an_object_writes_at_every_corner_of_its_footprint_swapped_at_rotations_1_and_3(rotation, xs, ys):
+    # PacketBuffer.java lines 169 to 177 and 487 to 493: a loc 2 wide and 1 long covers 2 by 1 tiles, so 3 by 2 corners,
+    # at rotations 0 and 2, and 1 by 2 tiles, so 2 by 3 corners, at rotations 1 and 3.
+    written = shadows([at(5, 5, 10, rotation)], {1: loc(width=2, length=1)})
+    assert set(written) == {(x, y) for x in xs for y in ys}
 
 
 def test_overlapping_objects_keep_the_larger_shadow_and_a_wall_writes_50_over_them():
