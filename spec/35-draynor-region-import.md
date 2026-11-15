@@ -249,3 +249,6 @@ The done check is by eye, with a viewport render and the live-client picture of 
 3. The names: collection `Region <x>_<y>`, object `Terrain <x>_<y>`, scenery objects `Loc <id> at <x>_<y>`, shared meshes `Loc <id>` with a suffix for recolours and retextures.
 4. The fixtures commit the groups of 9 terrains, one landscape and one key file. The keys are public in OpenRS2.
 5. The import's run time is unknown. The pull request of the operator records it.
+6. The report's number of tiles is the number of tiles that have at least one drawn face. For `48_50` it is 4096. The owner chose this on 2026-11-14 in the build session of issue 50.
+7. The report names the bridge tiles as world tiles in ranges, such as `x 3112 to 3115, y 3200 to 3206`. A column with several runs of y, or columns with different runs, give several pieces joined with `; `. The owner chose this on 2026-11-14 in the build session of issue 50.
+8. A region with no key file reports at INFO, like every other success. The owner chose this on 2026-11-14 in the build session of issue 50.

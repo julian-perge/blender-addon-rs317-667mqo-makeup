@@ -1,10 +1,22 @@
 import gzip
+from dataclasses import replace
 
 import pytest
 from js5_builder import REGION_FIXTURES, REGION_TERRAINS, build_region_cache
 
 from rsps_toolkit.formats.js5 import Js5Store, unpack
-from rsps_toolkit.formats.region import Terrain, Tile, assemble_terrain, decode_terrain, ground_height, load_terrain
+from rsps_toolkit.formats.region import (
+    AREA_SIZE,
+    EMPTY_TILE,
+    LEVELS,
+    Terrain,
+    Tile,
+    assemble_terrain,
+    bridge_tiles,
+    decode_terrain,
+    ground_height,
+    load_terrain,
+)
 
 NEIGHBOURS = [(x, y) for x in (47, 48, 49) for y in (49, 50, 51)]
 
@@ -223,3 +235,24 @@ def test_the_height_on_a_bridge_tile_is_the_ground_under_the_bridge(terrain_48_5
     assert [terrain_48_50.tile(0, 40 + dx, 0 + dy).height for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1))] == [0] * 4
     assert terrain_48_50.tile(1, 40, 0).height == -240
     assert ground_height(terrain_48_50, 40 * 128 + 64, 64) == 0
+
+
+def test_the_bridge_tiles_of_48_50_are_the_tiles_whose_level_1_settings_have_the_flag_2(terrain_48_50):
+    # class24.java lines 318 to 324 mark a bridge where bit 2 of the level 1 settings is set. The expected tiles come
+    # from RuneLite's reading of the terrain, which holds the settings, and from the research note: x 3112 to 3115 and
+    # y 3200 to 3206 of the world, which are the tiles 40 to 43 and 0 to 6 of region 48_50.
+    expected = sorted((x, y) for (level, x, y), value in reference(48, 50).items() if level == 1 and value[1] & 2)
+    assert expected == [(x, y) for x in range(40, 44) for y in range(7)]
+
+    assert bridge_tiles(terrain_48_50) == tuple(expected)
+
+
+def test_a_level_1_flag_other_than_2_or_outside_the_region_makes_no_bridge_tile():
+    columns = [[[EMPTY_TILE] * AREA_SIZE for _ in range(AREA_SIZE)] for _ in range(LEVELS)]
+    columns[1][64 + 5][64 + 5] = replace(EMPTY_TILE, settings=1 | 4)
+    columns[1][64 - 1][64 + 5] = replace(EMPTY_TILE, settings=2)
+    columns[1][64 + 64][64 + 5] = replace(EMPTY_TILE, settings=2)
+    columns[0][64 + 7][64 + 7] = replace(EMPTY_TILE, settings=2)
+    terrain = Terrain(48, 50, tuple(tuple(tuple(column) for column in level) for level in columns), ())
+
+    assert bridge_tiles(terrain) == ()

@@ -348,6 +348,13 @@ def ground_height(terrain: Terrain, x: int, y: int) -> int:
     return (north * offset_y + south * (128 - offset_y)) >> 7
 
 
+def bridge_tiles(terrain: Terrain) -> tuple[tuple[int, int], ...]:
+    """The bridge tiles of the terrain's own region, as (x, y) counted from its south-west corner, in the order of x and
+    then y. A tile is a bridge tile when bit 2 of its level 1 settings is set (`class24.java` lines 318 to 324). The
+    neighbour regions do not count, because the import makes only the tiles of its own region."""
+    return tuple((x, y) for x in range(REGION_SIZE) for y in range(REGION_SIZE) if terrain.tile(1, x, y).settings & 2)
+
+
 def terrain_noise(x: int, y: int) -> int:
     """The client's terrain noise at (x, y), from 10 to 60 (`class83.java` lines 107 to 117)."""
     value = (
