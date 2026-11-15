@@ -326,6 +326,28 @@ def decode_terrain(data: bytes, x: int, y: int) -> RegionTiles:
     return tuple(levels)
 
 
+def ground_height(terrain: Terrain, x: int, y: int) -> int:
+    """The level 0 height in game units at the game point (x, y), counted from the south-west corner of the terrain's
+    region, as `getTileHeight` blends the heights of the four corners of the point's tile (`class264.java` lines 96 to
+    108).
+
+    On a bridge tile the client reads the heights of level 1 instead (lines 99 to 101), which is the bridge. This function
+    reads level 0 there, the ground under the bridge, because the import has no level 1 (spec 35, part 8).
+
+    The point's tile and the tiles east and north of it must be in the region or its neighbours, or `Terrain.tile` raises
+    `IndexError`.
+    """
+    tile_x, tile_y = x >> 7, y >> 7
+    offset_x, offset_y = x & 127, y & 127
+
+    def corner(dx: int, dy: int) -> int:
+        return terrain.tile(0, tile_x + dx, tile_y + dy).height
+
+    south = ((128 - offset_x) * corner(0, 0) + offset_x * corner(1, 0)) >> 7
+    north = (corner(0, 1) * (128 - offset_x) + offset_x * corner(1, 1)) >> 7
+    return (north * offset_y + south * (128 - offset_y)) >> 7
+
+
 def terrain_noise(x: int, y: int) -> int:
     """The client's terrain noise at (x, y), from 10 to 60 (`class83.java` lines 107 to 117)."""
     value = (
