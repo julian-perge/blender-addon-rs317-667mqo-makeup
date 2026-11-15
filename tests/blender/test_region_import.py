@@ -285,6 +285,20 @@ def test_a_tile_with_no_underlay_and_no_overlay_has_no_faces():
     assert len(mesh_of(obj).polygons) == 2
 
 
+def test_the_tiles_of_a_terrain_that_have_a_face_are_counted_once_each():
+    # Tile (10, 10) has an underlay and no shape, so it has 2 faces. Tile (11, 10) has a hidden overlay (overlay 42,
+    # colour 0xFF00FF in floors.json) and no underlay, so all its parts are hidden. Tile (12, 10) has nothing. Tile (13, 10)
+    # has an underlay and a hidden overlay of shape 2, so it has the underlay triangle only. Region 48_50 has none of these.
+    terrain = made_terrain(
+        {(10, 10): Tile(0, 0, 48, 0, 0, 0), (11, 10): Tile(0, 0, 0, 42, 0, 0), (13, 10): Tile(0, 0, 48, 42, 1, 0)}
+    )
+
+    obj = region_terrain.terrain_object("Terrain", terrain, UNDERLAYS, OVERLAYS, {}, BRIGHTNESS)
+
+    assert len(mesh_of(obj).polygons) == 3
+    assert region_terrain.drawn_tiles(obj) == 2
+
+
 def test_the_hidden_overlay_part_of_a_tile_is_not_drawn():
     # Overlay 42 is definition 41, with colour 0xFF00FF (floors.json), which `class24.java` lines 252 to 255 hide. Shape 2
     # (stored shape 1) at rotation 0 has an underlay triangle and an overlay triangle (`SceneTileModel.java` line 77).
@@ -1318,6 +1332,23 @@ def test_a_failure_while_building_the_scenery_leaves_nothing_behind(snapshot_430
         raise ValueError("The build failed")
 
     monkeypatch.setattr(region_import, "scenery_objects", fail)
+
+    with pytest.raises(RuntimeError, match="The build failed"):
+        import_region()
+    assert not bpy.data.collections
+    assert not bpy.data.objects
+    assert not bpy.data.meshes
+    assert not bpy.data.materials
+    assert not bpy.data.images
+
+
+@needs_snapshot_430
+def test_a_failure_while_building_the_terrain_after_the_scenery_leaves_nothing_behind(snapshot_430, monkeypatch):
+    # The scenery is made before the terrain, so a failure of the terrain comes after the scenery objects exist.
+    def fail(*args):
+        raise ValueError("The build failed")
+
+    monkeypatch.setattr(region_import, "terrain_object", fail)
 
     with pytest.raises(RuntimeError, match="The build failed"):
         import_region()

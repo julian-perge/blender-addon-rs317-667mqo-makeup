@@ -38,7 +38,7 @@ class RegionReport:
 
     tiles: int
     """The terrain tiles that have at least one face. A tile with no underlay and no overlay has none, and neither has a
-    tile whose parts are all hidden."""
+    tile whose parts are all hidden. The owner chose this meaning on 2026-11-14 (spec 35, guess 6)."""
     scenery: SceneryCounts
     bridge_tiles: tuple[tuple[int, int], ...]
     """The bridge tiles of the region as world tiles, which the import leaves out (`formats.region.bridge_tiles`)."""
@@ -98,7 +98,8 @@ def report_text(x: int, y: int, report: RegionReport) -> str:
 
 def bridge_text(tiles: Sequence[tuple[int, int]]) -> str:
     """The tiles as ranges, such as `x 3112 to 3115, y 3200 to 3206`. Each column has its runs of consecutive y, and the
-    next columns that hold the same run join its x range. Pieces are joined with `; `."""
+    next columns that hold the same run join its x range. Pieces are joined with `; `. The owner chose this format on
+    2026-11-14 (spec 35, guess 7)."""
     columns = {x: _runs(sorted(y for column, y in tiles if column == x)) for x in sorted({x for x, _ in tiles})}
     pieces = []
     for x, runs in columns.items():
