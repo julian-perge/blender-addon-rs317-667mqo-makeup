@@ -1,4 +1,5 @@
-"""The terrain mesh of a region: one object for the level 0 tiles, with the client's lit colour at each face corner.
+"""The terrain mesh of a region and the Blender point of a tile. The mesh is one object for the level 0 tiles, with the
+client's lit colour at each face corner.
 
 The south-west corner of the region is at Blender (0, 0, 0) (spec 35, decision 5). One game unit is one Blender unit, as
 in model import, so one tile is 128 units wide. The game's height points down, so a Blender z is the height negated.
@@ -13,7 +14,7 @@ import bpy
 
 from ..formats import face_colour_to_rgb
 from ..formats.floor_definition import Overlay, Underlay
-from ..formats.region import REGION_SIZE, Terrain
+from ..formats.region import REGION_SIZE, Terrain, ground_height
 from ..formats.region_colours import HIDDEN, tile_colours
 from ..formats.region_shapes import Corner, TilePoint, tile_triangles
 from ..formats.texture_uvs import projected_uvs
@@ -88,6 +89,20 @@ def terrain_object(
     mesh.uv_layers.new(name=UV_MAP).data.foreach_set("uv", uvs)
     mesh.update()
     return bpy.data.objects.new(name, mesh)
+
+
+def tile_position(terrain: Terrain, x: int, y: int) -> tuple[float, float, float]:
+    """The Blender point at the centre of tile (x, y) of the terrain's region, at the client's level 0 height there
+    (`formats.region.ground_height`). On a flat tile the point is on the terrain mesh. On a sloped tile the client blends
+    all four corner heights, but the mesh draws the tile as two triangles, so the point can be above or below the mesh,
+    as it is in the client.
+
+    The point comes from the terrain, not from the mesh, so it stays the game's point after the user edits the mesh.
+    """
+    if not (0 <= x < REGION_SIZE and 0 <= y < REGION_SIZE):
+        raise ValueError(f"Tile ({x}, {y}) is outside region {terrain.x}_{terrain.y}")
+    game_x, game_y = x * TILE_SIZE + TILE_SIZE // 2, y * TILE_SIZE + TILE_SIZE // 2
+    return float(game_x), float(game_y), float(-ground_height(terrain, game_x, game_y))
 
 
 def _position(x: int, y: int, point: TilePoint, heights: list[int]) -> Position:

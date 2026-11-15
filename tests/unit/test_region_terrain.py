@@ -4,7 +4,7 @@ import pytest
 from js5_builder import REGION_FIXTURES, REGION_TERRAINS, build_region_cache
 
 from rsps_toolkit.formats.js5 import Js5Store, unpack
-from rsps_toolkit.formats.region import Terrain, Tile, assemble_terrain, decode_terrain, load_terrain
+from rsps_toolkit.formats.region import Terrain, Tile, assemble_terrain, decode_terrain, ground_height, load_terrain
 
 NEIGHBOURS = [(x, y) for x in (47, 48, 49) for y in (49, 50, 51)]
 
@@ -175,3 +175,51 @@ def test_a_terrain_that_ends_before_its_last_tile_is_an_error():
     # The client reads 4 levels of 64 by 64 records (Client.java 1826 to 1833), and a record of one byte 0 is the shortest.
     with pytest.raises(ValueError, match="ends early"):
         decode_terrain(bytes(4 * 64 * 64 - 1), 48, 50)
+
+
+@pytest.fixture(scope="module")
+def terrain_48_50(tmp_path_factory) -> Terrain:
+    folder = tmp_path_factory.mktemp("cache")
+    build_region_cache(folder)
+    return load_terrain(Js5Store(folder), 48, 50)
+
+
+def test_the_height_at_the_centre_of_a_flat_tile_is_the_height_of_its_corners(terrain_48_50):
+    # Tile (3, 48) has the height -280 at its four corners, and class264.java lines 106 to 108 blend four equal heights to the
+    # same height.
+    assert [terrain_48_50.tile(0, 3 + dx, 48 + dy).height for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1))] == [-280] * 4
+    assert ground_height(terrain_48_50, 3 * 128 + 64, 48 * 128 + 64) == -280
+
+
+def test_the_height_at_the_centre_of_a_sloped_tile_is_the_clients_blend_of_its_corners(terrain_48_50):
+    # Tile (0, 53) has the corner heights -184 (south-west), -192 (south-east), -112 (north-west) and -144 (north-east).
+    # At the offset (64, 64), class264.java line 106 gives (64 * -184 + 64 * -192) >> 7 = -188 on the south edge, line
+    # 107 gives (-112 * 64 + 64 * -144) >> 7 = -128 on the north edge, and line 108 gives (-128 * 64 + -188 * 64) >> 7.
+    heights = [terrain_48_50.tile(0, 0 + dx, 53 + dy).height for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1))]
+    assert heights == [-184, -192, -112, -144]
+    assert ground_height(terrain_48_50, 64, 53 * 128 + 64) == -158
+
+
+def test_the_height_at_a_point_blends_east_by_the_x_offset_and_north_by_the_y_offset(terrain_48_50):
+    # On tile (0, 53), at the offset (32, 96), class264.java line 106 gives (96 * -184 + 32 * -192) >> 7 = -186 on the
+    # south edge, line 107 gives (-112 * 96 + 32 * -144) >> 7 = -120 on the north edge, and line 108 gives
+    # (-120 * 96 + -186 * 32) >> 7 = -137. Offsets swapped between x and y would give -177.
+    assert ground_height(terrain_48_50, 32, 53 * 128 + 96) == -137
+
+
+def test_the_height_at_a_point_rounds_each_blend_down_as_the_client_does(terrain_48_50):
+    # Tile (0, 47) has the corner heights -296, -312, -272 and -280. At the offset (1, 1), class264.java line 106 gives
+    # (127 * -296 + 1 * -312) >> 7 = -297, line 107 gives (-272 * 127 + 1 * -280) >> 7 = -273, and line 108 gives
+    # (-273 * 1 + -297 * 127) >> 7 = -297. A blend that rounded toward 0 would give -295.
+    assert ground_height(terrain_48_50, 1, 47 * 128 + 1) == -297
+
+
+def test_the_height_on_a_bridge_tile_is_the_ground_under_the_bridge(terrain_48_50):
+    # Tile (40, 0) is a bridge tile: its level 1 settings have the flag 2. class264.java lines 99 to 101 read the heights
+    # of level 1 there, the bridge at -240, but the import has no level 1 (spec 35, part 8), so the height is the level 0
+    # ground. Its four level 0 corners have the height 0 in the RuneLite reference that the first test of this file
+    # checks.
+    assert terrain_48_50.tile(1, 40, 0).settings & 2 == 2
+    assert [terrain_48_50.tile(0, 40 + dx, 0 + dy).height for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1))] == [0] * 4
+    assert terrain_48_50.tile(1, 40, 0).height == -240
+    assert ground_height(terrain_48_50, 40 * 128 + 64, 64) == 0
