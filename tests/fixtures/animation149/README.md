@@ -19,10 +19,17 @@ and `JAR=<reference work folder>/gamepack-149.jar`.
 
 The first three `alpha-` sequences were picked with `random.Random(149).sample` from the 217 player clips (frame map 0)
 that have a face alpha transform. `alpha-3364` was found by scanning all 217: it is the only one whose alpha transforms
-give the player's face labels (0 to 2, 4 and 9 to 27) more than one curve. The other 216 move no player label, or move
-all of them with one curve. Its labels form two groups, and the groups differ on frame 10 (counting from 0) only. The
-recordings of all four include the face alphas `o`, copied at the face count, because the
-client reuses the alpha buffer of animated models for the next frame; it keeps them as signed bytes.
+give the player's face labels (0 to 2, 4 and 9 to 27) more than one curve. The other 216 change no player label's alpha,
+or change all of them with one curve. Its labels form two groups, and the groups differ on frame 10 (counting from 0) only. To
+repeat the scan, run the command below. It prints the clip count to standard error and each clip with more than one
+curve, with the labels of each curve, to standard output:
+
+```bash
+uv run scripts/scan-alpha-clips.py --cache "$CACHE"
+```
+
+The recordings of all four include the face alphas `o`, copied at the face count, because the client reuses the alpha
+buffer of animated models for the next frame; it keeps them as signed bytes.
 
 Every frame uses frame map 0. Sequences 819, 808 and 824 hold only their frame list (opcode 1): no held items. That
 they are the player's walk, stand and run is the task's labelling, not checked against the client (the server picks
