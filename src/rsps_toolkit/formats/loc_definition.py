@@ -10,9 +10,14 @@ The client also runs `post` (lines 304 to 322) after `loadData`. `post` sets onl
 flag, which this decoder does not keep, so the decoder does not run it.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from ._stream import Reader
+from .floor_definition import CONFIG_INDEX
+from .js5 import Js5Store, NotInCacheError
+
+LOC_GROUP = 6
 
 _NONE = 0xFFFF
 """An unsigned short of 0xFFFF stands for -1 in the animation, the varbit, the varp and each impostor id."""
@@ -58,6 +63,26 @@ class LocDefinition:
     """The varbit that picks the impostor, or -1. The client names it `varpId`."""
     impostor_varp: int
     """The varp that picks the impostor when there is no varbit, or -1. The client names it `configId`."""
+
+
+def read_locs(store: Js5Store, loc_ids: Iterable[int]) -> dict[int, LocDefinition]:
+    """The locs of the cache with these ids, and the locs that their impostors name, by id. An impostor id of -1 names
+    no loc. A loc id that the cache lacks is an error, as a texture id is for `texture.read_textures`."""
+    files = store.files(CONFIG_INDEX, LOC_GROUP)
+    locs: dict[int, LocDefinition] = {}
+
+    def read(loc_id: int) -> LocDefinition:
+        if loc_id not in files:
+            raise NotInCacheError(f"Group {LOC_GROUP} of index {CONFIG_INDEX} of the cache has no loc {loc_id}")
+        if loc_id not in locs:
+            locs[loc_id] = decode_loc(loc_id, files[loc_id])
+        return locs[loc_id]
+
+    for loc_id in loc_ids:
+        for impostor in read(loc_id).impostors or ():
+            if impostor != -1:
+                read(impostor)
+    return locs
 
 
 def decode_loc(loc_id: int, data: bytes) -> LocDefinition:

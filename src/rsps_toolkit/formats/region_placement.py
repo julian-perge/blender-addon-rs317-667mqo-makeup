@@ -95,6 +95,8 @@ class PlacedPart:
 @dataclass(frozen=True)
 class PlacedLoc:
     placement: Placement
+    shown_id: int | None
+    """The id of the loc that the placement shows (`region_loc.shown_loc_id`), or None when its impostor is -1."""
     parts: tuple[PlacedPart, ...]
     """Empty when the placement shows nothing: its impostor is -1, or its loc has no model for its type."""
 
@@ -104,6 +106,7 @@ class _Record:
     placement: Placement
     raw: LocDefinition
     """The loc that the landscape names. The footprint and the height come from it."""
+    shown_id: int | None
     shown: LocDefinition | None
     """The loc that the placement shows, which differs from `raw` for an impostor. The model, scale and offset come from it."""
     parts: list[tuple[int, int, LocModel]]
@@ -140,7 +143,7 @@ def place_scenery(
         raw = locs[placement.loc]
         shown_id = shown_loc_id(placement.loc, locs)
         shown = None if shown_id is None else locs[shown_id]
-        record = _Record(placement, raw, shown, _models(shown, placement.loc_type, placement.rotation))
+        record = _Record(placement, raw, shown_id, shown, _models(shown, placement.loc_type, placement.rotation))
         records.append(record)
         tile = (placement.x, placement.y)
         # An animated loc or a loc with impostors is a DynamicObject, which the client adds even when it has no model to
@@ -270,7 +273,7 @@ def _apply(matrix: Matrix, vector: tuple[float, float, float]) -> tuple[float, f
 def _place(record: _Record, height: Callable[[int, int], int]) -> PlacedLoc:
     shown = record.shown
     if shown is None or not record.parts:
-        return PlacedLoc(record.placement, ())
+        return PlacedLoc(record.placement, record.shown_id, ())
     x, z = _position(record.raw, record.placement)
     floor = _tile_height(record.raw, record.placement, height)
     parts = []
@@ -278,7 +281,7 @@ def _place(record: _Record, height: Callable[[int, int], int]) -> PlacedLoc:
         # Region.java lines 1438 to 1463: the offset moves only the first model of a wall decoration.
         offset = record.offset if record.offset is not None and index == 0 else (0, 0)
         parts.append(_transform(record.placement, shown, part, (x + offset[0], z + offset[1], -floor)))
-    return PlacedLoc(record.placement, tuple(parts))
+    return PlacedLoc(record.placement, record.shown_id, tuple(parts))
 
 
 def _transform(
