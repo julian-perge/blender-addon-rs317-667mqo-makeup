@@ -13,6 +13,10 @@ Build the two .blend files, then render each one in its own Blender process:
         diff <first.png> <second.png>
     $B -b --factory-startup --python-exit-code 1 --python scripts/measure-region-materials.py -- \
         overlaps <file.blend> <object name>
+    $B -b --factory-startup --python-exit-code 1 --python scripts/measure-region-materials.py -- \
+        slots <first.blend> <second.blend>
+    $B -b --factory-startup --python-exit-code 1 --python scripts/measure-region-materials.py -- \
+        pixels <file.blend> <first.png> <second.png>
 
 Time Material Preview in a GUI Blender, which opens a window and quits when it is done:
 
@@ -34,25 +38,39 @@ order in which faces are drawn. The option is not `--cycles`, because the Cycles
 options and Blender stops. `render --cull` turns on backface culling for every material first. The PNG file name gets
 `-cycles` or `-cull` for each option.
 
-`diff` compares two PNG files and counts the channel values and pixels that differ.
+`diff` compares two PNG files and counts the channel values and pixels that differ. It also counts the values that
+differ by more than one step of 1/255.
 
 `overlaps` counts the faces of one object that lie on the same corners as another face of that object, and the
-groups of such faces that use two or more materials.
+groups of such faces that use two or more materials. It also counts the groups of two faces whose normals point in
+opposite directions.
+
+`slots` compares the mesh objects of two .blend files of the same region, object by object. For each material slot it
+compares the game values, the draw settings, the nodes with their input values and images, and the links. It prints
+the number of objects and meshes it compared and the names of the objects whose slots differ.
+
+`pixels` adds the camera of `render` to a .blend file and casts a ray through each pixel that differs between two
+renders of that file. For each ray it finds the first face hit and the material of that face, and it counts the
+pixels where the ray also meets another face of the same object at the same distance, and the pixels where one of
+those faces draws blended. It prints the hits by object, and the pixels that remain when there are few of them.
 
 `viewport` imports the region, frames it in the largest 3D view and switches that view to Material Preview. It times
 the first draw, which includes the shader compile when Blender compiles in the draw. Then it waits 3 seconds, and
 longer while Blender reports a shader compile job, and prints whether it saw one. Then it turns the view one full
-circle in small steps, three times, and times each `wm.redraw_timer` draw of the view. A changed view starts the
-viewport samples again, so each draw is a full first sample, as when the user turns the view.
+circle in small steps, three times, and times each `wm.redraw_timer` draw of the view. If a step fails, it prints the
+error and stops Blender with exit code 1, because an error in a timer does not stop Blender.
 
 Every result is printed as one JSON line.
 """
 
 import cProfile
 import json
+import os
 import pstats
 import sys
 import time
+import traceback
+from collections import Counter
 from collections.abc import Iterator
 from math import radians
 from pathlib import Path
@@ -62,7 +80,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import bpy  # noqa: E402
 import numpy as np  # noqa: E402
-from mathutils import Quaternion, Vector  # noqa: E402
+from mathutils import Quaternion, Vector, geometry  # noqa: E402
 
 from rsps_toolkit.blender import face_materials, region_import  # noqa: E402
 
@@ -149,6 +167,7 @@ def diff(first: Path, second: Path) -> dict[str, object]:
     return {
         "values": int(a.size),
         "differing_values": int((differ > 0).sum()),
+        "values_off_by_more_than_one_step": int((differ > 1).sum()),
         "max_difference": int(differ.max()),
         "differing_pixels": int(pixels.sum()),
     }
@@ -159,17 +178,83 @@ def overlaps(blend: Path, name: str) -> dict[str, object]:
     obj = bpy.data.objects[name]
     mesh = obj.data
     assert isinstance(mesh, bpy.types.Mesh)
-    faces: dict[frozenset[tuple[float, ...]], list[int]] = {}
+    faces: dict[frozenset[tuple[float, ...]], list[bpy.types.MeshPolygon]] = {}
     for polygon in mesh.polygons:
         corners = frozenset(tuple(round(c, 4) for c in mesh.vertices[v].co) for v in polygon.vertices)
-        faces.setdefault(corners, []).append(polygon.material_index)
-    shared = [slots for slots in faces.values() if len(slots) > 1]
+        faces.setdefault(corners, []).append(polygon)
+    shared = [group for group in faces.values() if len(group) > 1]
+    pairs = [group for group in shared if len(group) == 2]
     return {
         "object": name,
         "faces": len(mesh.polygons),
-        "faces_on_the_same_corners": sum(len(slots) for slots in shared),
-        "groups_with_two_materials": sum(1 for slots in shared if len(set(slots)) > 1),
+        "faces_on_the_same_corners": sum(len(group) for group in shared),
+        "groups_with_two_materials": sum(1 for group in shared if len({p.material_index for p in group}) > 1),
+        "groups_of_two_faces": len(pairs),
+        "groups_of_two_facing_opposite": sum(1 for a, b in pairs if a.normal.dot(b.normal) < -0.99),
         "backface_culling": [slot.material.use_backface_culling for slot in obj.material_slots if slot.material],
+    }
+
+
+def slots(first: Path, second: Path) -> dict[str, object]:
+    signatures = [_slot_signatures(blend) for blend in (first, second)]
+    objects = sorted(set(signatures[0][0]) | set(signatures[1][0]))
+    differing = [name for name in objects if signatures[0][0].get(name) != signatures[1][0].get(name)]
+    return {
+        "objects": len(objects),
+        "meshes": [meshes for _, meshes in signatures],
+        "differing_objects": len(differing),
+        "first_differing": differing[:10],
+    }
+
+
+def pixels(blend: Path, first: Path, second: Path) -> dict[str, object]:
+    differ = np.abs(_png_bytes(first) - _png_bytes(second)).max(axis=2) > 0
+    bpy.ops.wm.open_mainfile(filepath=str(blend))
+    scene = bpy.context.scene
+    scene.render.resolution_x, scene.render.resolution_y = RENDER_SIZE
+    scene.render.resolution_percentage = 100
+    camera = _camera(scene)
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    assert isinstance(camera.data, bpy.types.Camera)
+    top_right, _, bottom_left, top_left = (camera.matrix_world @ c for c in camera.data.view_frame(scene=scene))
+    across, up = top_right - top_left, top_left - bottom_left
+    origin = camera.matrix_world.translation
+    by_object: Counter[str] = Counter()
+    by_material: Counter[tuple[str, str]] = Counter()
+    rows = []
+    same_distance = 0
+    blended = 0
+    # Row 0 of the image is its bottom row, because Blender stores image pixels from the bottom up.
+    for y, x in zip(*np.nonzero(differ), strict=True):
+        point = bottom_left + across * ((x + 0.5) / differ.shape[1]) + up * ((y + 0.5) / differ.shape[0])
+        direction = (point - origin).normalized()
+        hit, location, _, index, obj, _ = scene.ray_cast(depsgraph, origin, direction)
+        if not hit or obj is None:
+            by_object["(nothing)"] += 1
+            continue
+        mesh = obj.data
+        assert isinstance(mesh, bpy.types.Mesh)
+        material = obj.material_slots[mesh.polygons[index].material_index].material
+        others = _faces_at(obj, origin, direction, (location - origin).length, index)
+        same_distance += bool(others)
+        faces = [index, *others]
+        blended += any(
+            (drawn := obj.material_slots[mesh.polygons[face].material_index].material) is not None
+            and drawn.surface_render_method == "BLENDED"
+            for face in faces
+        )
+        by_object[obj.name] += 1
+        by_material[obj.name, material.name if material else "(none)"] += 1
+        rows.append({"x": int(x), "y": int(y), "object": obj.name, "face": index, "other_faces": others})
+    return {
+        "differing_pixels": int(differ.sum()),
+        "pixels_with_a_face_at_the_same_distance": same_distance,
+        "pixels_with_a_blended_face": blended,
+        "objects": len(by_object),
+        "top_objects": by_object.most_common(10),
+        "top_object_materials": [[*key, count] for key, count in by_material.most_common(15)],
+        "pixels": rows if len(rows) <= 10 else None,
     }
 
 
@@ -178,7 +263,12 @@ def viewport(cache: Path, region: str) -> None:
     steps = _viewport_steps(cache, region)
 
     def tick() -> float | None:
-        return next(steps, None)
+        try:
+            return next(steps, None)
+        except Exception:
+            traceback.print_exc()
+            sys.stdout.flush()
+            os._exit(1)
 
     bpy.app.timers.register(tick, first_interval=1.0)
 
@@ -251,6 +341,74 @@ def _png_bytes(path: Path) -> np.ndarray:
     return np.rint(values * 255).astype(int).reshape(image.size[1], image.size[0], image.channels)
 
 
+def _slot_signatures(blend: Path) -> tuple[dict[str, list[object]], int]:
+    bpy.ops.wm.open_mainfile(filepath=str(blend))
+    objects = [obj for obj in bpy.data.objects if obj.type == "MESH"]
+    signatures = {obj.name: [_material_signature(slot.material) for slot in obj.material_slots] for obj in objects}
+    return signatures, len({obj.data for obj in objects})
+
+
+def _material_signature(material: bpy.types.Material | None) -> object:
+    if material is None:
+        return None
+    settings = [
+        material.blend_method,
+        material.surface_render_method,
+        material.use_backface_culling,
+        material.use_transparency_overlap,
+        round(material.alpha_threshold, 6),
+    ]
+    tree = material.node_tree
+    nodes = sorted(
+        repr((node.bl_idname, getattr(getattr(node, "image", None), "name", None), _input_values(node)))
+        for node in (tree.nodes if tree else [])
+    )
+    links = sorted(
+        repr((link.from_node.bl_idname, link.from_socket.identifier, link.to_node.bl_idname, link.to_socket.identifier))
+        for link in (tree.links if tree else [])
+    )
+    try:
+        values: object = list(face_materials.material_values(material))
+    except ValueError:
+        # The material of the factory startup cube has no game values.
+        values = None
+    return [values, settings, nodes, links]
+
+
+def _input_values(node: bpy.types.Node) -> list[object]:
+    values = []
+    for socket in node.inputs:
+        value = getattr(socket, "default_value", None)
+        if hasattr(value, "__len__"):
+            value = tuple(round(v, 6) for v in value)
+        elif isinstance(value, float):
+            value = round(value, 6)
+        values.append((socket.identifier, value))
+    return values
+
+
+def _faces_at(obj: bpy.types.Object, origin: Vector, direction: Vector, distance: float, hit: int) -> list[int]:
+    """The other faces of the object that the ray meets within 1 cm of the distance of the first hit.
+
+    On `48_50`, the ray distances of two faces on the same corners differed by up to 2 mm, so a smaller limit misses
+    most of them.
+    """
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    to_local = obj.matrix_world.inverted()
+    local_origin = to_local @ origin
+    local_direction = (to_local.to_3x3() @ direction).normalized()
+    found = []
+    for polygon in mesh.polygons:
+        if polygon.index == hit or len(polygon.vertices) != 3:
+            continue
+        a, b, c = (mesh.vertices[v].co for v in polygon.vertices)
+        point = geometry.intersect_ray_tri(a, b, c, local_direction, local_origin, True)
+        if point is not None and abs((obj.matrix_world @ point - origin).length - distance) < 0.01:
+            found.append(polygon.index)
+    return found
+
+
 def _key(material: bpy.types.Material) -> tuple[object, ...]:
     colour, texture, alpha = face_materials.material_values(material)
     return (
@@ -295,12 +453,16 @@ def main() -> None:
         result = diff(Path(arguments[1]).expanduser(), Path(arguments[2]).expanduser())
     elif arguments[0] == "overlaps":
         result = overlaps(Path(arguments[1]).expanduser(), arguments[2])
+    elif arguments[0] == "slots":
+        result = slots(Path(arguments[1]).expanduser(), Path(arguments[2]).expanduser())
+    elif arguments[0] == "pixels":
+        result = pixels(*(Path(argument).expanduser() for argument in arguments[1:4]))
     elif arguments[0] == "viewport":
         region = arguments[arguments.index("--region") + 1] if "--region" in arguments else "48_50"
         viewport(Path(arguments[1]).expanduser(), region)
         return
     else:
-        raise SystemExit(f"unknown mode {arguments[0]!r}; use build, render, diff, overlaps or viewport")
+        raise SystemExit(f"unknown mode {arguments[0]!r}; use build, render, diff, overlaps, slots, pixels or viewport")
     print(json.dumps(result))
 
 
