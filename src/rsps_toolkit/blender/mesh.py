@@ -52,28 +52,28 @@ def model_to_object(
 
     stacked = _stacked_textured_faces(model)
     shown_per_face = [None] * len(model.faces) if shown is None else shown
-    looks = [
-        # A face that shows its own colour has the look of a plain import, so that import keeps its materials.
+    face_values = [
+        # A face that shows its own colour has the key of a plain import, so that import keeps its materials.
         (colour, texture, alpha, None if shown_colour == colour else shown_colour)
         for colour, texture, alpha, shown_colour in zip(
             model.face_colours, model.face_textures, model.face_alphas, shown_per_face, strict=True
         )
     ]
-    stacked_looks = {looks[face] for face in stacked}
-    shared = {} if materials is None else materials
+    stacked_values = {face_values[face] for face in stacked}
+    keys: list[MaterialKey] = [(*values, values in stacked_values) for values in face_values]
+    by_key = {} if materials is None else materials
     slots: dict[MaterialKey, int] = {}
-    for polygon, look in zip(mesh.polygons, looks, strict=True):
-        colour, texture, alpha, shown_instead = look
-        key = (colour, texture, alpha, shown_instead, look in stacked_looks)
+    for polygon, key in zip(mesh.polygons, keys, strict=True):
         if key not in slots:
             slots[key] = len(slots)
-            if key not in shared:
-                shared[key] = face_materials.face_material(
+            if key not in by_key:
+                colour, texture, alpha, shown_instead, is_stacked = key
+                by_key[key] = face_materials.face_material(
                     colour, texture, alpha, find_texture, brightness, shown_instead
                 )
-                if look in stacked_looks:
-                    face_materials.show_stacked(shared[key])
-            mesh.materials.append(shared[key])
+                if is_stacked:
+                    face_materials.show_stacked(by_key[key])
+            mesh.materials.append(by_key[key])
         polygon.material_index = slots[key]
     for polygon, flat in zip(mesh.polygons, model.flat_shaded, strict=True):
         polygon.use_smooth = not flat
