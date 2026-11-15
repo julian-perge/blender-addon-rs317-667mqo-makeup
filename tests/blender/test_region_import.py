@@ -379,7 +379,8 @@ def test_a_missing_overlay_on_a_tile_of_the_region_is_refused():
 
 
 def test_a_missing_overlay_outside_the_region_is_not_refused():
-    # Only the tiles of the region read their overlays (`class24.java` lines 238 to 287).
+    # The import draws only the tiles of the region, so only they read their overlays (`region_colours.tile_colours`).
+    # The underlay blend reads no overlay.
     terrain = made_terrain({(-1, 10): Tile(0, 0, 48, 42, 1, 0), (64, 10): Tile(0, 0, 48, 42, 1, 0)})
 
     region_import._check_floors(terrain, UNDERLAYS, {})
@@ -404,6 +405,14 @@ def operator_registered():
 @pytest.fixture
 def snapshot_430(monkeypatch, operator_registered):
     monkeypatch.setattr(preferences, "cache_folder", lambda: SNAPSHOT_430)
+
+
+@pytest.fixture
+def fixture_cache(monkeypatch, operator_registered, tmp_path):
+    # The groups of snapshot 430 that the import of 48_50 reads, from `tests/fixtures/region/`, so the test needs no real
+    # cache.
+    build_region_cache(tmp_path, definitions=True)
+    monkeypatch.setattr(preferences, "cache_folder", lambda: tmp_path)
 
 
 def import_region(x: int = 48, y: int = 50) -> set[str]:
@@ -432,8 +441,7 @@ def test_the_operator_imports_the_terrain_of_48_50_into_its_own_collection(snaps
     assert len(mesh_of(region.objects[0]).polygons) == expected
 
 
-@needs_snapshot_430
-def test_one_undo_removes_the_whole_import(snapshot_430):
+def test_one_undo_removes_the_whole_import(fixture_cache):
     # Background Blender pushes undo states only when asked, so the test pushes one before and after the operator. In
     # the user interface, Blender pushes the state after the operator only when it has the UNDO option.
     assert "UNDO" in region_import.RS_OT_import_region.bl_options
@@ -448,8 +456,7 @@ def test_one_undo_removes_the_whole_import(snapshot_430):
     assert not [obj for obj in bpy.data.objects if obj.name.startswith("Terrain")]
 
 
-@needs_snapshot_430
-def test_a_second_import_makes_a_second_copy(snapshot_430):
+def test_a_second_import_makes_a_second_copy(fixture_cache):
     import_region()
     import_region()
 
@@ -458,8 +465,7 @@ def test_a_second_import_makes_a_second_copy(snapshot_430):
     assert first.objects[0].data != second.objects[0].data
 
 
-@needs_snapshot_430
-def test_a_failure_while_building_leaves_nothing_behind(snapshot_430, monkeypatch):
+def test_a_failure_while_building_leaves_nothing_behind(fixture_cache, monkeypatch):
     def fail(*args):
         raise ValueError("The build failed")
 
