@@ -1,0 +1,96 @@
+{
+  "sequence": 90,
+  "source_cache_dat2_sha256": "3c48913fa884d2d33f03af71cf4be05e6915263f939c545e1fefa6953bc7fedd",
+  "sequence_sha256": "d3d1f99eafd5ffe7d722b4d4f9518a68bfa17ca543cd2ff121d5ae45254055cc",
+  "durations": [
+    7,
+    7,
+    7,
+    7,
+    7,
+    7,
+    7,
+    7,
+    7,
+    7,
+    7,
+    7
+  ],
+  "frames": [
+    {
+      "group": 1210,
+      "file": 195,
+      "map": 1080,
+      "sha256": "cba14fc648acc8eecdba1464f4c3a90be1049d40dab786099c46061d96323cbc"
+    },
+    {
+      "group": 1210,
+      "file": 196,
+      "map": 1080,
+      "sha256": "ec40c003feda85c9441eb6aad0abcbe86de22c7060d90eb871691b598ab59702"
+    },
+    {
+      "group": 1210,
+      "file": 197,
+      "map": 1080,
+      "sha256": "994b785d172c36e17cfb15ae8898fce3de24f2acdfb2cffe7147561f331e6315"
+    },
+    {
+      "group": 1210,
+      "file": 198,
+      "map": 1080,
+      "sha256": "47d54ad2c17fcff72c675fd2b11c24247ff35b2289e8575bc6d8ed053432ebb9"
+    },
+    {
+      "group": 1210,
+      "file": 199,
+      "map": 1080,
+      "sha256": "83ab476d38402ceb507bb5a33a670dcd4e53f08d5714177e1c676234a9e8223d"
+    },
+    {
+      "group": 1210,
+      "file": 200,
+      "map": 1080,
+      "sha256": "3d3cd2d2ba6158bfb9f95fc0623f09d52880096515fdbe9e51eff1c93f3caf04"
+    },
+    {
+      "group": 1210,
+      "file": 201,
+      "map": 1080,
+      "sha256": "0796f65a12d2fce95f7028227d02089d7aed31839cec5daf2c29da89e04f852f"
+    },
+    {
+      "group": 1210,
+      "file": 200,
+      "map": 1080,
+      "sha256": "3d3cd2d2ba6158bfb9f95fc0623f09d52880096515fdbe9e51eff1c93f3caf04"
+    },
+    {
+      "group": 1210,
+      "file": 199,
+      "map": 1080,
+      "sha256": "83ab476d38402ceb507bb5a33a670dcd4e53f08d5714177e1c676234a9e8223d"
+    },
+    {
+      "group": 1210,
+      "file": 198,
+      "map": 1080,
+      "sha256": "47d54ad2c17fcff72c675fd2b11c24247ff35b2289e8575bc6d8ed053432ebb9"
+    },
+    {
+      "group": 1210,
+      "file": 197,
+      "map": 1080,
+      "sha256": "994b785d172c36e17cfb15ae8898fce3de24f2acdfb2cffe7147561f331e6315"
+    },
+    {
+      "group": 1210,
+      "file": 196,
+      "map": 1080,
+      "sha256": "ec40c003feda85c9441eb6aad0abcbe86de22c7060d90eb871691b598ab59702"
+    }
+  ],
+  "maps": {
+    "1080": "2b213aa858c159198a44fed016bd52806c9622c6107993b0f71923e2852f68a0"
+  }
+}

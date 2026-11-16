@@ -13,7 +13,7 @@ from pathlib import Path
 
 import bpy
 
-from ..animation.clip import CacheClip, ClipSource, clip_from_record, source_of
+from ..animation.clip import CacheClip, ClipSource, clip_from_record, frame_map_id, read_sequence, source_of
 from ..formats.appearance import ITEM_OFFSET
 from ..formats.appearance_preset import loads_preset
 from ..formats.weapon_clips import BLOCK, RUN, STAND, WALK, WeaponClips, WeaponClipTable, load_weapon_clips
@@ -26,6 +26,7 @@ from . import (
     appearance_pose,
     appearance_preview,
     appearance_shape_keys,
+    npc_collection,
 )
 from .appearance_props import PLAY_AS_ITEMS
 
@@ -164,6 +165,76 @@ def bake_clip_to_rig(
         raise ValueError(f"{collection.name} has edits, so a clip cannot be baked onto it")
     source = source_of(clip)
     posed = appearance_pose.pose_player(collection, source, action=action, cache_folder=cache_folder)
+    return _bake_strip(
+        collection,
+        source,
+        posed,
+        action=action,
+        start=start,
+        smooth=smooth,
+        set_scene_timing=set_scene_timing,
+        hands=True,
+    )
+
+
+def bake_npc_clip(
+    collection: bpy.types.Collection,
+    clip: ClipSource | Path,
+    *,
+    action: bool = False,
+    start: int = 1,
+    smooth: bool = False,
+    set_scene_timing: bool = True,
+) -> int:
+    """Add the clip to an NPC's rig as an NLA strip on the "RS clips" track, starting at Blender frame `start`, with
+    the strip, track, Your motion, frame rate, scene range, fit and fade rules of `bake_clip_to_rig` (spec 13, Bake).
+
+    The NPC's model is posed with the clip alone (`appearance_pose.pose_model`): an NPC has no held items, no body
+    palette and no weapon clips. Refuses, before any change, Edit Mode, a clip with a frame on another frame map than
+    the NPC's, an edited NPC and a strip that would overlap another on the track. Returns the number of frames.
+    """
+    if npc_collection.NPC_KEY not in collection:
+        raise ValueError(f"{collection.name} is not an NPC")
+    appearance_collection.check_object_mode(collection, "baking a clip")
+    source = source_of(clip)
+    frame_map = json.loads(collection[npc_collection.NPC_KEY])["frame_map"]
+    for group, file in read_sequence(source).frames:
+        used = frame_map_id(source.frame_bytes(group, file))
+        if used != frame_map:
+            raise ValueError(
+                f"Frame {file} of group {group} uses frame map {used}, and {collection.name} is rigged for frame map "
+                f"{frame_map}"
+            )
+    if appearance_collection.is_edited(collection):
+        raise ValueError(f"{collection.name} has edits, so a clip cannot be baked onto it")
+    posed = appearance_pose.pose_model(collection, source, action=action)
+    return _bake_strip(
+        collection,
+        source,
+        posed,
+        action=action,
+        start=start,
+        smooth=smooth,
+        set_scene_timing=set_scene_timing,
+        hands=False,
+    )
+
+
+def _bake_strip(
+    collection: bpy.types.Collection,
+    source: ClipSource,
+    posed: appearance_pose.PosedPlayer,
+    *,
+    action: bool,
+    start: int,
+    smooth: bool,
+    set_scene_timing: bool,
+    hands: bool,
+) -> int:
+    """The steps that the player and NPC bone bakes share, from the overlap refusal to the new fingerprint. With
+    `hands`, the player's hand objects are keyed to show what each clip strip holds."""
+    rig = appearance_collection.armature_of(collection)
+    objects = appearance_collection.parts(collection)
     length = sum(ticks for _, ticks in posed.schedule)
     track = _clip_track(rig)
     replaced = None if track is None else next((s for s in track.strips if round(s.frame_start) == start), None)
@@ -234,7 +305,8 @@ def bake_clip_to_rig(
     for key in [k for k in rig.keys() if k.startswith(appearance_fades.PROPERTY_PREFIX)]:
         if key not in keep and key not in {fade.prop for fade in fades}:
             del rig[key]
-    appearance_held.key_visibility(collection, _strip_spans(collection, track))
+    if hands:
+        appearance_held.key_visibility(collection, _strip_spans(collection, track))
     # Another rig can still use the replaced action, for example one the user assigned it to, so only an unused one is
     # removed (the owner's choice, issue 20).
     if old is not None and old.users == 0:

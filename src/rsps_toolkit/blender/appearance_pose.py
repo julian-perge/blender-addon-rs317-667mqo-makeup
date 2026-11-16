@@ -89,9 +89,7 @@ def pose_player(
     held = appearance_held.held_items(sequence, action)
     variant = None if held is None else appearance_held.variant(collection, held, cache_folder)
     if held is None or variant is None:
-        vertices, labels, faces, worn = _worn_inputs(appearance_collection.worn_parts(collection))
-        frames = pose_vertices(vertices, labels, source, *(faces or ()))
-        return PosedPlayer(vertices, labels, frames, frame_schedule(sequence, action=action), None, {}, lambda: worn)
+        return pose_model(collection, source, action=action)
     vertices, labels, faces = appearance_held.variant_inputs(variant)
     frames = pose_vertices(vertices, labels, source, *(faces or ()))
     return PosedPlayer(
@@ -103,6 +101,20 @@ def pose_player(
         {_HELD_RECORD: list(held)},
         functools.partial(appearance_held.ensure_pieces, collection, variant),
     )
+
+
+def pose_model(collection: bpy.types.Collection, clip: ClipSource | Path, *, action: bool = False) -> PosedPlayer:
+    """Pose the model of the collection's mesh objects with the clip, changing nothing in the file.
+
+    This is the model a player shows when the clip holds no items, and the model of an NPC: the client poses an NPC's
+    lit model with the sequence alone, with no held items (`NPCComposition.getModel` lines 426 to 434,
+    docs/research/13-npc-rigs.md). Raises ValueError for meshes that no longer hold the model as built.
+    """
+    source = source_of(clip)
+    sequence = read_sequence(source)
+    vertices, labels, faces, worn = _worn_inputs(appearance_collection.worn_parts(collection))
+    frames = pose_vertices(vertices, labels, source, *(faces or ()))
+    return PosedPlayer(vertices, labels, frames, frame_schedule(sequence, action=action), None, {}, lambda: worn)
 
 
 def shown_equipment(collection: bpy.types.Collection, record: dict) -> tuple[int, ...] | None:
