@@ -99,6 +99,11 @@ def read_sequence(clip: ClipSource | Path) -> SequenceDefinition:
     return decode_sequence(source_of(clip).sequence_bytes())
 
 
+def frame_map_id(frame: bytes) -> int:
+    """The id of the frame map that a frame file uses, which the file holds in its first two bytes."""
+    return int.from_bytes(frame[0:2], "big")
+
+
 def pose_vertices(
     vertices: tuple[Vertex, ...],
     labels: tuple[int, ...],
@@ -119,7 +124,7 @@ def pose_vertices(
     result = []
     for (group, file), ticks in zip(sequence.frames, sequence.durations, strict=True):
         data = source.frame_bytes(group, file)
-        map_id = int.from_bytes(data[0:2], "big")
+        map_id = frame_map_id(data)
         if map_id not in maps:
             maps[map_id] = source.frame_map_bytes(map_id)
         frame_map = decode_frame_map(maps[map_id])

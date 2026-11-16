@@ -13,7 +13,7 @@ import bpy
 from mathutils import Vector
 
 from ..animation.bundle import FrameMap
-from ..animation.clip import CacheClip
+from ..animation.clip import CacheClip, frame_map_id
 from ..animation.frames import decode_frame_map, decode_sequence
 from ..formats.appearance_rig import derive_rig, frame_map_joint_specs
 from ..formats.cache_profile import shared_profile
@@ -44,8 +44,7 @@ def stand_frame_map(store: Js5Store, npc: NpcDefinition) -> tuple[int, FrameMap]
     if not sequence.frames:
         raise ValueError(f"The stand sequence {npc.stand} of NPC {npc.name} has no frames")
     group, file = sequence.frames[0]
-    # A frame file starts with the id of its frame map (`pose_vertices` reads it the same way).
-    map_id = int.from_bytes(clip.frame_bytes(group, file)[0:2], "big")
+    map_id = frame_map_id(clip.frame_bytes(group, file))
     return map_id, decode_frame_map(clip.frame_map_bytes(map_id))
 
 

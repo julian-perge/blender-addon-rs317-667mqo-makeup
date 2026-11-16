@@ -13,7 +13,7 @@ from pathlib import Path
 
 import bpy
 
-from ..animation.clip import CacheClip, ClipSource, clip_from_record, read_sequence, source_of
+from ..animation.clip import CacheClip, ClipSource, clip_from_record, frame_map_id, read_sequence, source_of
 from ..formats.appearance import ITEM_OFFSET
 from ..formats.appearance_preset import loads_preset
 from ..formats.weapon_clips import BLOCK, RUN, STAND, WALK, WeaponClips, WeaponClipTable, load_weapon_clips
@@ -166,7 +166,14 @@ def bake_clip_to_rig(
     source = source_of(clip)
     posed = appearance_pose.pose_player(collection, source, action=action, cache_folder=cache_folder)
     return _bake_strip(
-        collection, source, posed, action=action, start=start, smooth=smooth, set_scene_timing=set_scene_timing
+        collection,
+        source,
+        posed,
+        action=action,
+        start=start,
+        smooth=smooth,
+        set_scene_timing=set_scene_timing,
+        hands=True,
     )
 
 
@@ -192,7 +199,7 @@ def bake_npc_clip(
     source = source_of(clip)
     frame_map = json.loads(collection[npc_collection.NPC_KEY])["frame_map"]
     for group, file in read_sequence(source).frames:
-        used = int.from_bytes(source.frame_bytes(group, file)[0:2], "big")
+        used = frame_map_id(source.frame_bytes(group, file))
         if used != frame_map:
             raise ValueError(
                 f"Frame {file} of group {group} uses frame map {used}, and {collection.name} is rigged for frame map "
@@ -222,7 +229,7 @@ def _bake_strip(
     start: int,
     smooth: bool,
     set_scene_timing: bool,
-    hands: bool = True,
+    hands: bool,
 ) -> int:
     """The steps that the player and NPC bone bakes share, from the overlap refusal to the new fingerprint. With
     `hands`, the player's hand objects are keyed to show what each clip strip holds."""
