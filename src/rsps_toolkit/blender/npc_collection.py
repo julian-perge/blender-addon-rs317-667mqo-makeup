@@ -132,9 +132,21 @@ def register_properties() -> None:
     bpy.types.Scene.rs_npc_id = bpy.props.IntProperty(  # pyrefly: ignore[missing-attribute]
         name="NPC id", description="The id of the NPC that Create NPC builds", min=0
     )
+    bpy.types.Scene.rs_npc_sequence = bpy.props.IntProperty(  # pyrefly: ignore[missing-attribute]
+        name="Sequence id",
+        description="The id of the sequence that Bake at the current frame reads from the cache for the active NPC",
+        min=0,
+    )
+    bpy.types.Scene.rs_npc_smooth = bpy.props.BoolProperty(  # pyrefly: ignore[missing-attribute]
+        name="Smooth",
+        description="Blend the NPC's clips from each game frame to the next. The game itself holds each frame for "
+        "its ticks, which is how clips bake when this is off",
+    )
 
 
 def unregister_properties() -> None:
+    del bpy.types.Scene.rs_npc_smooth  # pyrefly: ignore[missing-attribute]
+    del bpy.types.Scene.rs_npc_sequence  # pyrefly: ignore[missing-attribute]
     del bpy.types.Scene.rs_npc_id  # pyrefly: ignore[missing-attribute]
 
 
