@@ -4,7 +4,7 @@ Source: [issue 82](https://github.com/julian-perge/blender-addon-rs317-667mqo-ma
 
 Status: the owner approved this spec on 2026-11-15.
 
-This spec follows the two comments of 2026-11-16 on issue 82 (the refinement and the settled design). Terms follow [GLOSSARY.md](../GLOSSARY.md). [Spec 35](35-draynor-region-import.md) left the glTF export, and the question about shared mesh data, for this issue. The owner answered four questions at this stage on 2026-11-15:
+This spec follows the two comments of 2026-11-16 (UTC) on issue 82 (the refinement and the settled design). Terms follow [GLOSSARY.md](../GLOSSARY.md). [Spec 35](35-draynor-region-import.md) left the glTF export, and the question about shared mesh data, for this issue. The owner answered four questions at this stage on 2026-11-15:
 
 1. **Emote.** The second clip is the Wave emote. The build stage reads its sequence id from the cache and confirms that it changes no face alpha.
 2. **Player.** The note exports the owner's real outfit. The owner gives the worn items in the build session.
@@ -92,7 +92,7 @@ One row for each assumption. Each row has: survives or not, the evidence (a glTF
 | 32 square | size, draw calls, fps | size, draw calls, fps | size, draw calls, fps |
 | Whole `48_50` | size, draw calls, fps | not measured | not measured |
 
-Each cell is marked as under or over 2 MB, and as at or under 50 fps. The table gives the real tile bounds of each square.
+Each cell is marked as under 2 MB or not, and as at or over 50 fps or not. The table gives the real tile bounds of each square.
 
 ### Form of the exporter
 

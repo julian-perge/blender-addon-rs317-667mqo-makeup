@@ -85,7 +85,9 @@ uv run python3 <scratch folder>/read-gltf.py <scratch folder>/out/terrain16-dire
 
 node <scratch folder>/page/shot.mjs terrain16-page-test.png "file=terrain16.glb&view=test"
 node <scratch folder>/page/shot.mjs terrain16-direct-page-test.png "file=terrain16-direct.glb&view=test"
+node <scratch folder>/page/shot.mjs terrain16-page-test-nolights.png "file=terrain16.glb&view=test&lights=0"
 node <scratch folder>/page/shot.mjs loc-page-low-hud.png "file=loc.glb&view=low&t=0.5&hud=1"
+<scratch folder>/compare.py <scratch folder>/out/terrain16-page-test.png <scratch folder>/out/terrain16-page-test-nolights.png
 <scratch folder>/compare.py <scratch folder>/out/terrain16-blender-test.png <scratch folder>/out/terrain16-page-test.png
 <scratch folder>/compare.py <scratch folder>/out/terrain16-blender-test.png <scratch folder>/out/terrain16-direct-page-test.png
 <scratch folder>/compare.py <scratch folder>/out/terrain16-blender-test.png <scratch folder>/out/terrain16-direct-blender-test.png
@@ -173,7 +175,7 @@ All three files have one sampler, and it is the same:
 - **Cause, evidence.** The exporter reads the interpolation of the Image Texture node. For `Closest` it writes `TextureFilter.Nearest` as the magnification filter and `TextureFilter.NearestMipmapNearest` as the minification filter (`io_scene_gltf2/blender/exp/sampler.py` lines 79 to 88 of Blender 5.3.0).
 - **On the page, evidence.** The page reported `magFilter` 1003 and `minFilter` 1004 for the texture of each file. These are `NearestFilter` and `NearestMipmapNearestFilter` of three.js release 187.
 - **Not checked.** With `NEAREST_MIPMAP_NEAREST`, a texture that is drawn smaller than its image reads a smaller mipmap level, which is an average of texels. Blender's Closest reads one texel of the full image. This task did not compare the two by eye.
-- **One sampler for each image, evidence.** For `loc.glb` and `terrain16-direct.glb` the exporter warned "More than one shader node tex image used for a texture. The resulting glTF sampler will behave like the first shader node tex image". The add-on sets Closest on the Image Texture nodes that it makes (`face_materials.py` line 140 and `region_terrain.py` line 194), so the warning changes nothing here. The nodes of these two materials were not read one by one.
+- **One sampler for each image, evidence.** For `loc.glb` and `terrain16-direct.glb` the exporter warned "More than one shader node tex image used for a texture. The resulting glTF sampler will behave like the first shader node tex image". The add-on makes one Image Texture node for each of these materials and sets Closest on it (`face_materials.py` lines 135 and 140, and `region_terrain.py` lines 192 and 194), so the sampler comes from that node. This is read from the add-on code. The nodes of the two exported materials were not read one by one, and why the exporter counts more than one node is not checked.
 
 ## Row 3: Unlit terrain
 
