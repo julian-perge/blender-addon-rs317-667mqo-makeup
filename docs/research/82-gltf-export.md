@@ -2,7 +2,7 @@
 
 This note belongs to [issue 82](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/82) and follows [spec 82](../../spec/82-gltf-export-findings.md). It records what survives when Blender's stock glTF exporter writes a region import and a player with a clip, and a three.js page draws the file. Terms follow [GLOSSARY.md](../../GLOSSARY.md). "Square", "stock export" and "joined export" are used as the spec uses them.
 
-The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). The rows and cells that say "not measured yet" belong to issues 85 to 89.
+The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). The rows and cells that say "not measured yet" belong to issues 86 to 89.
 
 Each cause is marked as evidence or as a guess. "Read" means that the file or the picture was opened and read in the session that wrote the row.
 
@@ -10,6 +10,11 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 
 - **Row 2 survives for magnification.** A texture with Closest interpolation exports with a `NEAREST` magnification filter. Its minification filter is `NEAREST_MIPMAP_NEAREST`, so the page uses mipmaps for a texture that is drawn small, and Blender does not. How that looks is not checked.
 - **Row 3 does not survive.** The stock exporter does not write the terrain's Emission material as unlit. The page draws the terrain in plain white. The same material without its Emission node exports as unlit with the colour attribute, and the page then matches the unlit render on the faces without a texture. The textured terrain faces lose their corner shade in both forms.
+
+- **Row 4 does not survive for the stock form, and survives for the joined form.** The stock exporter writes each Principled BSDF scenery material as a lit glTF material. The page lights the scenery with its own lights next to a white terrain, and with no lights the scenery is black. The joined form exports 6 unlit materials, and the page draws them close to the unlit render.
+- **The stock exporter removes faces.** It validates each mesh that it exports, in the scene and not in a copy. In the 16 square that removed 409 of 14,073 placement faces from 43 objects. Each removed face used the same three vertices as another face. See [Row 7](#row-7-face-order).
+- **Row 7 survives, when each face has vertices of its own.** Triangle i of the file is face i of the Blender mesh for all 14,627 faces of the joined 16 square. The last of two faces at the same place draws on top, on the page and in the render.
+- **Row 8 does not survive for the stock form, and survives for the joined form in priority order.** The page picture depends on the face order where faces of two placements lie in one plane, and the render does not. One window of the 16 square shows it: it is black on the page in the stock form and in the order of the import, and it is close to the render when the joined form sorts the faces by render priority. The faces with a face alpha are darker on the page than in the render in the joined form. The cause is evidence from the numbers of row 7: the page blends after the sRGB curve. That this is the whole difference in the window is a guess.
 
 ## Environment
 
@@ -23,9 +28,9 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 | Browser | Google Chrome 157.0.8103.39, headless, started by Playwright 1.65.1 with `channel: 'chrome'` and the arguments `--enable-gpu --ignore-gpu-blocklist --use-angle=metal` |
 | WebGL renderer string | `ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)`. This is the real GPU, not a software renderer. |
 | Region | `48_50` of snapshot 430, imported by `region_import.import_region` at the default brightness. The import reported 4096 tiles, 1874 placements as 1894 objects, 185 shared meshes and 1154 own meshes. |
-| Add-on code | Commit bd43fcd |
+| Add-on code | Commit bd43fcd for rows 2 and 3, and commit d8eb169 for rows 4, 7 and 8 |
 
-The page reported 60.0 fps and 16.67 ms for each frame on every run of this task, with 2 to 6 draw calls. A guess is that the headless Chrome caps the frame rate at 60. Issue 86 checks the cap.
+The page reported 60.0 fps and 16.66 or 16.67 ms for each frame on every run of issues 84 and 85, with 1 to 446 draw calls. A guess is that the headless Chrome caps the frame rate at 60. Issue 86 checks the cap.
 
 ## Scratch setup
 
@@ -37,6 +42,13 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | `run-export.sh` | Runs `export.py` in a headless Blender with the throwaway profile of the repo, and saves the log as `export.log`. |
 | `read-gltf.py` | Prints the JSON chunk of a `.glb` file. It leaves out the accessors and the buffer views unless `--all` is given. |
 | `compare.py` | Counts the pixels that differ between two PNG files of the same size. |
+| `join.py` | The join script of issue 85. It imports `48_50` and writes the stock form and the joined forms of a square, the face order test, and the unlit renders to `out/`. See [The joined form](#the-joined-form). |
+| `run-blender.sh` | Runs one scratch Blender script as `run-export.sh` runs `export.py`, and saves the log as `<script>.log`. |
+| `inventory.py`, `coplanar.py` | Blender scripts that count the faces, the materials and the texture coordinates of the 16 square, and list the placements that have a face alpha. |
+| `debug.py` | A Blender script that finds why `inventory.py` and `join.py` counted different numbers of placement faces. |
+| `check-glb.py` | Prints the materials and the primitives of a `.glb` file with the type of each accessor. With `joined16-faces.json` it compares triangle i of each primitive with face i of the Blender mesh. |
+| `diffmap.py` | Prints the colour of one pixel of some PNG files, marks the pixels that differ between two PNG files, or puts the same box of some PNG files side by side. |
+| `shots85.sh`, `compare85.sh`, `mixed85.sh`, `summary85.py` | The screenshots and the comparisons of issue 85. The page's reports are in `shots85.jsonl`. |
 | `page/index.html`, `page/main.js` | The scratch page. |
 | `page/serve.mjs` | A static file server for `<scratch folder>` on 127.0.0.1. |
 | `page/shot.mjs` | Starts the server, opens the page in headless Chrome at 1920x1080, waits until the page has measured 3 seconds, saves a screenshot to `out/` and prints the page's report as one JSON line. It exits with code 2 when the WebGL renderer string names a software renderer. |
@@ -63,6 +75,7 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | `test` | (1024, 3800, 2172) | The camera of the row 3 pictures. It is the test camera for now. Issue 86 may replace it if it does not hold the 32 square. |
 | `top` | (1024, 6399, 3572) | By-eye checks from above |
 | `low` | (-476, 4900, 872) | By-eye checks from near the ground |
+| `order` | (0, -700, 100), with the target (0, 0, 100) | The two stacked faces of row 7. `join.py` adds it. |
 
 ### The unlit render
 
@@ -101,6 +114,21 @@ export BLENDER_USER_RESOURCES="<repo>/.blender-test-profile"
 $B -b --factory-startup --python-exit-code 1 --python <scratch folder>/export.py -- <repo>/src <path to cache> <scratch folder>/out
 ```
 
+The commands of issue 85. `join.py` needs the `views.json` that `export.py` wrote. `shots85.sh` takes each screenshot with `node <scratch folder>/page/shot.mjs <name>-page-<view>.png "file=<name>.glb&view=<view>"`.
+
+```bash
+bash <scratch folder>/run-blender.sh <repo> <path to cache> inventory
+bash <scratch folder>/run-blender.sh <repo> <path to cache> coplanar
+bash <scratch folder>/run-blender.sh <repo> <path to cache> join
+<scratch folder>/check-glb.py <scratch folder>/out/joined16.glb <scratch folder>/out/joined16-faces.json
+<scratch folder>/check-glb.py <scratch folder>/out/stock16.glb
+<scratch folder>/check-glb.py <scratch folder>/out/order-a.glb
+bash <scratch folder>/shots85.sh
+bash <scratch folder>/compare85.sh
+bash <scratch folder>/mixed85.sh
+<scratch folder>/diffmap.py pixel 1225 255 <scratch folder>/out/joined16-blender-test.png <scratch folder>/out/joined16-page-test.png
+```
+
 To look at the page by hand, run `node <scratch folder>/page/serve.mjs` and open `http://127.0.0.1:8082/page/index.html?file=terrain16.glb&view=test`.
 
 ### What `export.py` exports
@@ -122,11 +150,11 @@ The 16 square is centred on tile 3080, 3250. It covers tiles x 3072 to 3087 and 
 | 1. Face colour, face alpha and textures | Not measured yet (issue 87) | | |
 | 2. Nearest sampler | Yes for magnification. The minification filter uses mipmaps. | The sampler in the glTF JSON of `loc.glb`, `terrain16.glb` and `terrain16-direct.glb`. See [Row 2](#row-2-nearest-sampler). | `magFilter` 9728, `minFilter` 9984 |
 | 3. Unlit terrain | No | The materials in the glTF JSON of `terrain16.glb`, and the page screenshot next to the unlit render. See [Row 3](#row-3-unlit-terrain). | All 636,551 drawn pixels differ, 633,671 of them by more than 32 of 255. The mean difference is 217. |
-| 4. Scenery materials | Not measured yet (issue 85) | | |
+| 4. Scenery materials | No for the stock form. Yes for the joined form. | The materials in the glTF JSON of `stock16.glb` and `joined16.glb`, and the page screenshots next to the unlit render. See [Row 4](#row-4-scenery-materials). | Stock: 96 lit materials, 446 draw calls. Joined: 6 unlit materials, 7 draw calls, mean difference 1.6 of 255 from the render. |
 | 5. Bones-method clip | Not measured yet (issue 88) | | |
 | 6. Stepped playback | Not measured yet (issue 88) | | |
-| 7. Face order | Not measured yet (issue 85) | | |
-| 8. Render priority | Not measured yet (issue 85) | | |
+| 7. Face order | Yes, when each face has vertices of its own. No for a face that uses the same three vertices as another face: the exporter removes it. | The index accessors of `joined16.glb` against the Blender meshes, and two stacked faces in both orders. See [Row 7](#row-7-face-order). | 14,627 of 14,627 triangles keep their place. The stock form of the 16 square loses 409 faces. |
+| 8. Render priority | No for the stock form. Yes for the joined form in priority order on the 16 square, except that the faces with a face alpha are darker on the page (the blend of row 7). | The page screenshots of the joined 16 square in two face orders next to the unlit renders. See [Row 8](#row-8-render-priority). | The two face orders differ in 1,248 pixels on the page by more than 8 of 255, and in 0 pixels in the render. |
 | 9. Shared mesh data | Not measured yet (issue 86) | | |
 | 10. Size | Not measured yet (issue 86) | | |
 | 11. Frame rate | Not measured yet (issue 86) | | |
@@ -149,13 +177,15 @@ No cell is measured yet. Issue 86 fills the table and gives the real tile bounds
 
 The terrain of the 16 square alone is 59,308 bytes as a stock export, with 2 draw calls. It is not a cell of the table, because a square also holds its placements.
 
+Issue 85 exported the 16 square at the `test` camera: `stock16.glb` is 1,017,424 bytes with 446 draw calls, and `joined16.glb` is 721,268 bytes with 7 draw calls. Issue 86 puts them in the table with the frame rate.
+
 ## Form of the exporter
 
 Not decided yet. Issue 89 writes this section.
 
 ## Issues
 
-None yet. Issue 89 opens one issue for each row that does not survive. Row 3 is the first such row.
+None yet. Issue 89 opens one issue for each row that does not survive. So far these are row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, and the darker faces with a face alpha of rows 7 and 8.
 
 ## Row 2: Nearest sampler
 
@@ -273,4 +303,225 @@ The page screenshot, read, next to the unlit render at the `test` camera: the gr
 
 ### What this means for the joined form
 
-The joined form of issue 85 wants one unlit material that shows a colour attribute. A material whose Material Output is fed by the Color output of a Color Attribute node exports that way with the default exporter settings. An Emission node between them does not. A texture multiplied by the colour attribute did not keep the attribute in the one material measured here, where the Multiply result feeds a Mix Shader. Other node shapes for a texture with the attribute are not measured.
+The joined form of issue 85 wants one unlit material that shows a colour attribute. A material whose Material Output is fed by the Color output of a Color Attribute node exports that way with the default exporter settings. An Emission node between them does not. A texture multiplied by the colour attribute did not keep the attribute in the one material measured here, where the Multiply result feeds a Mix Shader. Issue 85 measured a node shape that keeps it. See [The joined form](#the-joined-form).
+
+## The joined form
+
+`join.py` makes the stock form and the joined form of one square. Issue 85 ran it on the 16 square only.
+
+### The 16 square
+
+The 16 square covers tiles x 3072 to 3087 and y 3242 to 3257, which are region tiles x 0 to 15 and y 42 to 57. `join.py` puts the south-west tile of a square at region tile (8 - side / 2, 50 - side / 2) and then limits each number to the range from 0 to 64 - side. So a square that crosses the west edge moves east, and a square that crosses the north edge moves south. The 16 square did not move.
+
+| What | Count |
+| --- | --- |
+| Terrain faces whose centre is on a tile of the square | 554 |
+| Placements that stand on a tile of the square, as objects | 140, with 110 meshes and 96 materials |
+| Placement faces | 14,073 |
+| Placement faces with a face colour and no face alpha | 13,703 |
+| Placement faces with a face alpha above 0 | 146, in 7 materials and 2 placements |
+| Placement faces with a texture | 224, with textures 8, 22 and 23 |
+| Terrain faces with a texture | 6, with texture 1 |
+| Placement faces of render priority 0, 1, 2, 3, 4, 5, 6, 7, 8 and 10 | 7,866, 1,555, 2,960, 264, 513, 172, 547, 60, 38 and 98 |
+
+A placement stands on the tile that holds the origin of its object. 9 of the 140 objects have their origin on a tile edge, and they count for the tile to the east or north of that edge.
+
+### Two choices of the owner
+
+The spec says "one unlit material". Two kinds of face do not fit in one material. The owner chose on 2026-11-16, in the build session of issue 85:
+
+- **Textured faces.** Each texture gets a mesh of its own with an unlit material of that texture. Texture 8 repeats on 96 of its 108 faces (texture coordinates from -1.5 to 1.098), so one atlas image cannot hold it.
+- **Faces with a face alpha.** They get a mesh of their own. Its material is the unlit material with blending, and the alpha is the alpha channel of the colour attribute. A glTF material has one alpha mode, so opaque and blended faces cannot share a material.
+
+### The join steps
+
+1. Import the region. Take the terrain faces whose centre is on a tile of the square, and the placements whose object origin is on a tile of the square, sorted by object name.
+2. Read every face before any export, because the export removes faces (see [Row 7](#row-7-face-order)).
+3. For a terrain face, take the corner positions, the corner colours of `rs_terrain_colour`, and for a textured face the texture coordinates and the image.
+4. For a placement face, take the corner positions through the world matrix of the object. When the determinant of that matrix is negative, reverse the corner order. An untextured face gets the Base Color of its Principled BSDF node at each corner, with the Alpha of that node as the alpha. A textured face gets white, its texture coordinates and its image. Each face keeps its render priority, and a terrain face counts as priority -1.
+5. Sort the faces by render priority, lowest first. The sort keeps the order of step 1 inside one priority.
+6. Split the faces into meshes: one for the untextured faces with no face alpha, one for the untextured faces with a face alpha, and one for each image. A textured face with a face alpha goes in a separate mesh for its image. That mesh has the opaque textured material, so the face alpha is lost. The 16 square has no such face.
+7. In each mesh, corners at the same position (to 0.001 units) share one vertex. A face whose three vertices another face of the mesh already uses gets three vertices of its own. Every face is smooth, so that the exporter does not split the vertices for flat normals. The page does not use the normals.
+8. Write the corner colours to a colour attribute `rs_colour` of the kind Face Corner and Color, and make it the active and the render colour. A textured mesh also gets a UV map.
+9. Give each mesh one material with backface culling off, as the scenery materials of the import have it.
+10. Export the meshes with the stock exporter and `use_selection=True`.
+
+The materials, by their nodes:
+
+| Mesh | Nodes |
+| --- | --- |
+| Untextured, no face alpha | The Color of a Color Attribute node feeds the Surface of the Material Output. |
+| Untextured, face alpha | A Mix Shader feeds the Surface. Its factor is the Alpha of the Color Attribute node, its first shader is a Transparent BSDF, and its second input is the Color of the Color Attribute node. The render method is Blended. |
+| Textured | A Mix node (Color, Multiply, factor 1) of the image Color and the attribute Color feeds an Emission node. A Mix Shader feeds the Surface. Its factor is Is Camera Ray of a Light Path node, its first shader is a Transparent BSDF, and its second is the Emission node. The image has Closest interpolation. |
+| Textured, when the image has a transparent texel | One more Mix Shader feeds the Surface. Its factor is the Alpha of the image through a Math node set to Round, its first shader is a Transparent BSDF, and its second is the Mix Shader above. |
+
+The Emission node behind the Is Camera Ray Mix Shader is the shape that the exporter's `detect_lightpath_trick` accepts (`unlit.py` lines 36 to 63). It gives the Multiply node a colour socket to feed, which row 3 guessed was missing.
+
+### What the joined 16 square is
+
+`joined16.glb` is 721,268 bytes. It has 6 nodes, 6 meshes with one primitive each, 6 materials, 4 images, 4 textures and 1 sampler.
+
+| Mesh | Faces | Vertices in Blender | Vertices in the file | glTF material |
+| --- | --- | --- | --- | --- |
+| `Joined Colour` | 14,251 | 11,338 | 15,023 | unlit, opaque |
+| `Joined Colour blended` | 146 | 79 | 124 | unlit, `alphaMode` `BLEND` |
+| `Joined RS_Texture_1` | 6 | 8 | 14 | unlit, opaque, texture |
+| `Joined RS_Texture_8` | 108 | 110 | 216 | unlit, `alphaMode` `MASK`, texture |
+| `Joined RS_Texture_22` | 30 | 24 | 57 | unlit, opaque, texture |
+| `Joined RS_Texture_23` | 86 | 66 | 118 | unlit, opaque, texture |
+
+All 14,627 faces of the square are in the file. 411 faces have vertices of their own (step 7): 409 in `Joined Colour` and 2 in `Joined RS_Texture_23`. No face had two corners at one position.
+
+Every material has `doubleSided` true and `KHR_materials_unlit`. Every primitive has `POSITION`, `NORMAL` and `COLOR_0`, and a textured one has `TEXCOORD_0`. `COLOR_0` is a float `VEC3` accessor, except in the blended mesh, where it is a `VEC4` accessor of normalized unsigned shorts with alpha from 0.2188 to 0.9609. These are (256 - 200) / 256 and (256 - 10) / 256, the opacity of face alpha 200 and 10. `COLOR_0` of the texture 1 mesh has 6 different values, so the corner shade of the water is in the file. The other textured meshes have white only.
+
+`join.py` also writes `joined16-source.glb` (step 5 left out), `joined16-culled.glb` (backface culling on) and `joined16-mixed.glb` (step 5 left out for the blended mesh only) for row 8.
+
+## Row 4: Scenery materials
+
+### The stock form
+
+`stock16.glb` is the terrain of the 16 square (as `terrain16.glb`) and the 140 placements, selected and exported in one call. It is 1,017,424 bytes, with 141 nodes, 110 meshes, 341 primitives and 98 materials. The exporter writes a mesh that several placements share once.
+
+Three of its materials:
+
+```json
+{
+ "doubleSided": true,
+ "name": "RS_Colour_41_0",
+ "pbrMetallicRoughness": {
+  "baseColorFactor": [0.14702726900577545, 0.11953842639923096, 0.11697066575288773, 1],
+  "metallicFactor": 0,
+  "roughnessFactor": 0.5
+ }
+},
+{
+ "alphaMode": "BLEND",
+ "doubleSided": true,
+ "name": "RS_Colour_49_100",
+ "pbrMetallicRoughness": {
+  "baseColorFactor": [0.2015562504529953, 0.16202937066555023, 0.15896083414554596, 0.609375],
+  "metallicFactor": 0,
+  "roughnessFactor": 0.5
+ }
+},
+{
+ "alphaMode": "BLEND",
+ "doubleSided": true,
+ "name": "RS_Texture_8_0.001",
+ "pbrMetallicRoughness": {
+  "baseColorTexture": {"index": 0},
+  "metallicFactor": 0,
+  "roughnessFactor": 0.5
+ }
+}
+```
+
+- 86 scenery materials are opaque with a `baseColorFactor`. 7 have a face alpha and are `BLEND` with the opacity in the factor: 0.609375 is (256 - 100) / 256. The 3 textured materials are `BLEND`, also textures 22 and 23, which have no transparent texel. The cause is evidence for the link and a guess for the rule: the import links the Alpha of the image to the Alpha of the Principled BSDF node (`face_materials.py` line 142), and a guess is that the exporter writes `BLEND` for every linked alpha that it cannot prove to be 1.
+- The file has no `extensionsUsed`. The page reported 96 scenery materials as `MeshStandardMaterial`, which is a lit material, and the 2 terrain materials as in row 3.
+- The page drew 446 draw calls and 14,588 triangles.
+
+The pictures at the `test` camera, both read:
+
+- **With the page's lights.** The terrain is plain white, as in row 3. The stalls, fences, walls, trees and plants show their colours, shaded by the two lights of the page.
+- **With `lights=0`.** The terrain is white, the water has its texture, and every placement is black.
+
+So the stock form puts lit scenery next to an unlit terrain, and the look of the scenery comes from the lights of the page. Blender shows the same split: Principled BSDF scenery next to an Emission terrain. `compare.py`: 164,710 pixels differ between the two pictures. A guess is that these are the pixels of the scenery, because the terrain is equal with and without lights in row 3.
+
+### The joined form
+
+The page reported all 6 materials of `joined16.glb` as `MeshBasicMaterial` with `vertexColors` true, which is an unlit material. It drew 7 draw calls and 14,773 triangles. The count is above 14,627 because three.js draws a transparent double-sided material in two passes (`WebGLRenderer.js` line 1368), so the 146 blended faces count twice.
+
+The pair of pictures at the `test`, `top` and `low` cameras, all read: the page shows the same scene as the unlit render. The paved square, the grass, the 4 stalls, the fences, the stone building, the 2 trees and the water have the same places and colours. The differences that the eye finds are the window of row 8 and a finer grain on the 2 trees.
+
+| Measure, `joined16-blender-<view>.png` against `joined16-page-<view>.png` | `test` | `top` | `low` |
+| --- | --- | --- | --- |
+| Pixels that are not black in either picture | 655,177 | 840,887 | 1,065,673 |
+| Pixels that differ by more than 2 of 255 | 95,966 | 80,139 | 118,867 |
+| Pixels that differ by more than 8 of 255 | 36,207 | 31,990 | 43,601 |
+| Pixels that differ by more than 32 of 255 | 3,119 | 2,859 | 4,737 |
+| Mean difference of the drawn pixels | 1.6 | 1.1 | 1.3 |
+
+- **Flat colours match, evidence.** At the `test` camera, a grass pixel at (800, 800) is (87, 81, 22) in both pictures, and a stall roof pixel at (960, 530) is (216, 210, 199) in both.
+- **The water keeps its corner shade, evidence.** The water pixel at (450, 950) is (78, 93, 124) in the render and (77, 92, 124) on the page. In row 3 the page had (125, 148, 197) there.
+- **The trees, a guess.** A tree pixel at (1270, 690) is (54, 61, 24) in the render and (59, 69, 21) on the page. The trees use texture 8 with `alphaMode` `MASK`. A guess is that the mipmaps of the `NEAREST_MIPMAP_NEAREST` sampler of row 2 cause the finer grain, because the page draws the texture smaller than its image. This was not tested with another sampler.
+- **The other pixels, a guess.** The map of the pixels that differ by more than 32 at the `test` camera, read, shows them on the outlines of the placements, on the trees and in the window. A guess is that the outlines differ by the antialiasing, as in row 3.
+
+## Row 7: Face order
+
+### The exporter keeps the order of the faces
+
+`join.py` writes the corner positions of each face of each joined mesh, in mesh order, to `joined16-faces.json`. `check-glb.py` reads the index accessor of each primitive of `joined16.glb` three indices at a time. For all 6 meshes, triangle i of the file has the corner positions of face i of the Blender mesh, in the same corner order: 14,251, 146, 6, 108, 30 and 86 triangles, 14,627 in all.
+
+### The exporter removes a face that uses the vertices of another face
+
+The exporter calls `validate()` on the mesh of each object that it exports (`io_scene_gltf2/blender/exp/nodes.py` line 307). The mesh is the one in the scene, not a copy. This is evidence, from three measurements:
+
+- **Stock form.** The 140 placements of the 16 square had 14,073 faces before `stock16.glb` was written and 13,664 after. 43 objects lost 409 faces. The exporter logged "Mesh ... is not valid, and may be exported wrongly" for them.
+- **Which faces.** The 16 square has 411 pairs of faces with the same three corner positions. In all 411 pairs the two faces look opposite ways and have the same colours. 409 pairs are inside one placement, and 2 pairs are textured faces of two placements. 4 pairs have two different render priorities. The 409 faces that the stock export lost are one face of each pair inside one placement.
+- **Two faces on three vertices.** `order-shared-a.glb` and `order-shared-b.glb` come from a mesh of 2 faces on the same 3 vertices. Each file has 1 triangle, and it has the colour of the first face. The mesh in Blender had 1 face after the export.
+
+The client draws a face only from its front (`ZKARKDQW.java` line 4455, as ADR 0011 cites it). So such a pair is one surface that shows from both sides. The stock export keeps one face of the pair, and its material is `doubleSided`, so the surface still shows from both sides in the 16 square. A pair with two colours would lose one colour. The 16 square has no such pair.
+
+A script that exports must not rely on the scene after the export: the 409 faces are gone from the meshes of the placements, with their render priority and their game values.
+
+### Two stacked faces in both orders
+
+Each test mesh has two faces at the same three positions that look the same way, one red and one green, with the unlit material of the joined form. The pictures are at the `order` camera. All 12 were read, and the colours are the pixel at (960, 500).
+
+| Files | Vertices | First face in file A, in file B | Render A, B | Page A, B |
+| --- | --- | --- | --- | --- |
+| `order-a.glb`, `order-b.glb` | 3 for each face | red, green | green, red | green, red |
+| `order-shared-a.glb`, `order-shared-b.glb` | 3 for both faces | red, green | green, red | red, green |
+| `order-blend-a.glb`, `order-blend-b.glb`, alpha 0.5 | 3 for each face | red, green | (137, 188, 0), (188, 137, 0) | (64, 128, 0), (128, 64, 0) |
+
+- **The last face draws on top, evidence.** With vertices of their own, the page and the render both show the colour of the second face, and the swap changes both pictures. The glTF JSON has the two triangles in the order of the mesh.
+- **Cause on the page, evidence for the rule.** The depth test of a three.js material is `LessEqualDepth` by default (`Material.js` line 211), so a later triangle at the same depth replaces an earlier one. three.js draws the triangles of one primitive in index order, which is general knowledge of WebGL and unverified here.
+- **Shared vertices, evidence.** The page shows the first face, and the render, made before the export, shows the second. The exporter removed the second face.
+- **Blended faces, evidence for the numbers.** The second face is on top in both. The page blends the stored 0 to 255 values: 128 is half of 255, and 64 is a quarter. The render has 188 and 137, which are the sRGB values of a linear 0.5 and 0.25. So Blender blends linear values and the page blends the values after the sRGB curve. That inference comes from these numbers. The code of the two blends was not read.
+
+## Row 8: Render priority
+
+The joined form sorts the faces by render priority, so that a face of a higher priority is later in its mesh (step 5). Row 7 shows that a later face draws on top of an earlier face at the same depth. This row records what that gives on the 16 square.
+
+### Stacked faces
+
+The 16 square has no two faces at the same three positions that look the same way. Its 411 pairs look opposite ways and have the same colours (row 7). So with `doubleSided` true, either face of a pair gives the same picture from both sides, and the stacked faces of this square show no fault on the page or in the render. A square with a pair of two colours is not measured. The blended and culled state of ADR 0011 applies to textured stacked faces of one model, and the 16 square has none: its 2 textured pairs are faces of two placements.
+
+`joined16-culled.glb` has backface culling on (`doubleSided` absent). At the `low` camera its page screenshot differs from the one of `joined16.glb` in 1,036 pixels by more than 8 of 255, and at the `test` camera in 136. Both `low` screenshots were read, and the eye finds no difference at full size. A guess is that the pixels are faces that the camera sees from behind. Their places were not read one by one.
+
+### The face order changes the page, and not the render
+
+`joined16-source.glb` has the faces in the order of the import, and `joined16.glb` has them in priority order.
+
+| Pair at the `test` camera | Pixels that differ by more than 8 of 255 | Largest difference |
+| --- | --- | --- |
+| Page, priority order against source order | 1,248 | 64 |
+| Render, priority order against source order | 0 | 6 |
+| Page against render, priority order, more than 32 of 255 | 3,119 | 211 |
+| Page against render, source order, more than 32 of 255 | 3,446 | 211 |
+
+The map of the 1,248 pixels, read: they are the two panes of the window in the north wall of the building, one spot on its east wall, and a few pixels at the west end of the north wall.
+
+The window in the north wall, read at 8 times its size in five pictures:
+
+| Picture | The panes |
+| --- | --- |
+| Unlit render, priority order | Dark brown with faint horizontal bands |
+| Page, priority order | Brown and black horizontal bands, with more contrast than in the render |
+| Page, source order | Black |
+| Page, `joined16-culled.glb` | As the page in priority order |
+| Page, stock form | Black |
+
+One pane pixel at (1225, 255) is (31, 22, 2) in the render in priority order, (28, 20, 1) in the render in source order, (32, 25, 2) on the page in priority order and (0, 0, 1) on the page in source order.
+
+- **The opaque mesh decides, evidence.** `joined16-mixed.glb` has the blended mesh in source order and every other mesh in priority order. Its page screenshot is equal to the one of `joined16.glb` in every pixel. So the order of the 146 faces with a face alpha does not change the picture, and the order of the opaque faces does.
+- **Cause, a guess.** A brown opaque face and a black opaque face lie in one plane behind the panes, and they come from two placements. On the page the later one wins, by the `LessEqualDepth` rule of row 7. In priority order the brown face is later, and in source order the black face is. The two faces were not found by number. `coplanar.py` shows that the 16 square has 2 placements with a face alpha: `Loc 28960 at 11_54` with 108 such faces of 5 alpha values, all of priority 4, and `Loc 1020 at 14_56` with 38. Which of them is this window was not checked.
+- **The render, a guess.** The render changes by at most 6 of 255 with the face order. Row 7 shows that the render lets a later face at the same depth replace an earlier one, so that is not the cause. The cause is not known. A guess is that the brown face and the black face are not exactly in one plane, and that the depth buffers of EEVEE and of the page settle the tie in different ways. The positions of the two faces were not read.
+- **The bands, evidence for the blend and a guess for the place.** The page shows the bands with more contrast than the render. Row 7 shows that the page blends after the sRGB curve and Blender blends linear values, so a face with a face alpha is darker on the page. That this is the whole difference in the panes is a guess.
+
+### What this means for the exporter
+
+- The priority order is needed on the page. Without it, the window is black, as in the stock form.
+- The priority order is not the client's rule. The client draws the faces of one model in priority order, and by depth inside one priority (`docs/research/render-priority.md`), and the sort here is over all placements of a mesh. It only decides which of two faces at the same depth wins.
+- The render is the reference of this note, and it does not show this fault. A check of the page against the render does not find a wrong face order. It needs a check of the page against itself in two orders, as above, or a look at the panes.
+- A face with a face alpha is darker on the page than in the render.
