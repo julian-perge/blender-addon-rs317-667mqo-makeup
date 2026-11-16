@@ -14,7 +14,7 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 - **Row 4 does not survive for the stock form, and survives for the joined form.** The stock exporter writes each Principled BSDF scenery material as a lit glTF material. The page lights the scenery with its own lights next to a white terrain, and with no lights the scenery is black. The joined form exports 6 unlit materials, and the page draws them close to the unlit render.
 - **The stock exporter removes faces.** It validates each mesh that it exports, in the scene and not in a copy. In the 16 square that removed 409 of 14,073 placement faces from 43 objects. Each removed face used the same three vertices as another face. See [Row 7](#row-7-face-order).
 - **Row 7 survives, when each face has vertices of its own.** Triangle i of the file is face i of the Blender mesh for all 14,627 faces of the joined 16 square. The last of two faces at the same place draws on top, on the page and in the render.
-- **Row 8 does not survive.** The page picture depends on the face order where faces of two placements lie in one plane, and the render does not. One window of the 16 square shows it. The faces with a face alpha are darker on the page than in the render.
+- **Row 8 does not survive for the stock form, and survives for the joined form in priority order.** The page picture depends on the face order where faces of two placements lie in one plane, and the render does not. One window of the 16 square shows it: it is black on the page in the stock form and in the order of the import, and it is close to the render when the joined form sorts the faces by render priority. The faces with a face alpha are darker on the page than in the render in every form, because of the blend of row 7.
 
 ## Environment
 
@@ -45,6 +45,7 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | `join.py` | The join script of issue 85. It imports `48_50` and writes the stock form and the joined forms of a square, the face order test, and the unlit renders to `out/`. See [The joined form](#the-joined-form). |
 | `run-blender.sh` | Runs one scratch Blender script as `run-export.sh` runs `export.py`, and saves the log as `<script>.log`. |
 | `inventory.py`, `coplanar.py` | Blender scripts that count the faces, the materials and the texture coordinates of the 16 square, and list the placements that have a face alpha. |
+| `debug.py` | A Blender script that finds why `inventory.py` and `join.py` counted different numbers of placement faces. |
 | `check-glb.py` | Prints the materials and the primitives of a `.glb` file with the type of each accessor. With `joined16-faces.json` it compares triangle i of each primitive with face i of the Blender mesh. |
 | `diffmap.py` | Prints the colour of one pixel of some PNG files, marks the pixels that differ between two PNG files, or puts the same box of some PNG files side by side. |
 | `shots85.sh`, `compare85.sh`, `mixed85.sh`, `summary85.py` | The screenshots and the comparisons of issue 85. The page's reports are in `shots85.jsonl`. |
@@ -153,7 +154,7 @@ The 16 square is centred on tile 3080, 3250. It covers tiles x 3072 to 3087 and 
 | 5. Bones-method clip | Not measured yet (issue 88) | | |
 | 6. Stepped playback | Not measured yet (issue 88) | | |
 | 7. Face order | Yes, when each face has vertices of its own. No for a face that uses the same three vertices as another face: the exporter removes it. | The index accessors of `joined16.glb` against the Blender meshes, and two stacked faces in both orders. See [Row 7](#row-7-face-order). | 14,627 of 14,627 triangles keep their place. The stock form of the 16 square loses 409 faces. |
-| 8. Render priority | No | The page screenshots of the joined 16 square in two face orders next to the unlit renders. See [Row 8](#row-8-render-priority). | The two face orders differ in 1,248 pixels on the page by more than 8 of 255, and in 0 pixels in the render. |
+| 8. Render priority | No for the stock form. Yes for the joined form in priority order on the 16 square, except that the faces with a face alpha are darker on the page (the blend of row 7). | The page screenshots of the joined 16 square in two face orders next to the unlit renders. See [Row 8](#row-8-render-priority). | The two face orders differ in 1,248 pixels on the page by more than 8 of 255, and in 0 pixels in the render. |
 | 9. Shared mesh data | Not measured yet (issue 86) | | |
 | 10. Size | Not measured yet (issue 86) | | |
 | 11. Frame rate | Not measured yet (issue 86) | | |
@@ -184,7 +185,7 @@ Not decided yet. Issue 89 writes this section.
 
 ## Issues
 
-None yet. Issue 89 opens one issue for each row that does not survive. So far these are row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, and row 8.
+None yet. Issue 89 opens one issue for each row that does not survive. So far these are row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, and the darker faces with a face alpha of rows 7 and 8.
 
 ## Row 2: Nearest sampler
 
@@ -339,7 +340,7 @@ The spec says "one unlit material". Two kinds of face do not fit in one material
 3. For a terrain face, take the corner positions, the corner colours of `rs_terrain_colour`, and for a textured face the texture coordinates and the image.
 4. For a placement face, take the corner positions through the world matrix of the object. When the determinant of that matrix is negative, reverse the corner order. An untextured face gets the Base Color of its Principled BSDF node at each corner, with the Alpha of that node as the alpha. A textured face gets white, its texture coordinates and its image. Each face keeps its render priority, and a terrain face counts as priority -1.
 5. Sort the faces by render priority, lowest first. The sort keeps the order of step 1 inside one priority.
-6. Split the faces into meshes: one for the untextured faces with no face alpha, one for the untextured faces with a face alpha, and one for each image.
+6. Split the faces into meshes: one for the untextured faces with no face alpha, one for the untextured faces with a face alpha, and one for each image. `join.py` gives the textured faces with a face alpha of one image a mesh of their own, with the opaque textured material, so their face alpha is lost. The 16 square has no such face.
 7. In each mesh, corners at the same position (to 0.001 units) share one vertex. A face whose three vertices another face of the mesh already uses gets three vertices of its own. Every face is smooth, so that the exporter does not split the vertices for flat normals. The page does not use the normals.
 8. Write the corner colours to a colour attribute `rs_colour` of the kind Face Corner and Color, and make it the active and the render colour. A textured mesh also gets a UV map.
 9. Give each mesh one material with backface culling off, as the scenery materials of the import have it.
@@ -515,12 +516,12 @@ One pane pixel at (1225, 255) is (31, 22, 2) in the render in priority order, (2
 
 - **The opaque mesh decides, evidence.** `joined16-mixed.glb` has the blended mesh in source order and every other mesh in priority order. Its page screenshot is equal to the one of `joined16.glb` in every pixel. So the order of the 146 faces with a face alpha does not change the picture, and the order of the opaque faces does.
 - **Cause, a guess.** A brown opaque face and a black opaque face lie in one plane behind the panes, and they come from two placements. On the page the later one wins, by the `LessEqualDepth` rule of row 7. In priority order the brown face is later, and in source order the black face is. The two faces were not found by number. `coplanar.py` shows that the 16 square has 2 placements with a face alpha: `Loc 28960 at 11_54` with 108 such faces of 5 alpha values, all of priority 4, and `Loc 1020 at 14_56` with 38. Which of them is this window was not checked.
-- **The render, a guess.** The render changes by at most 6 of 255 with the face order. A guess is that EEVEE does not let a later face at the same depth replace an earlier one. Its depth test was not read.
+- **The render, a guess.** The render changes by at most 6 of 255 with the face order. Row 7 shows that the render lets a later face at the same depth replace an earlier one, so that is not the cause. The cause is not known. A guess is that the brown face and the black face are not exactly in one plane, and that the depth buffers of EEVEE and of the page settle the tie in different ways. The positions of the two faces were not read.
 - **The bands, evidence for the blend and a guess for the place.** The page shows the bands with more contrast than the render. Row 7 shows that the page blends after the sRGB curve and Blender blends linear values, so a face with a face alpha is darker on the page. That this is the whole difference in the panes is a guess.
 
 ### What this means for the exporter
 
 - The priority order is needed on the page. Without it, the window is black, as in the stock form.
-- The priority order is not the client's rule. The client sorts the faces of one model by depth and then by priority (`docs/research/render-priority.md`), and the sort here is over all placements of a mesh. It only decides which of two faces at the same depth wins.
+- The priority order is not the client's rule. The client draws the faces of one model in priority order, and by depth inside one priority (`docs/research/render-priority.md`), and the sort here is over all placements of a mesh. It only decides which of two faces at the same depth wins.
 - The render is the reference of this note, and it does not show this fault. A check of the page against the render does not find a wrong face order. It needs a check of the page against itself in two orders, as above, or a look at the panes.
 - A face with a face alpha is darker on the page than in the render.
