@@ -14,7 +14,7 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 - **Row 4 does not survive for the stock form, and survives for the joined form.** The stock exporter writes each Principled BSDF scenery material as a lit glTF material. The page lights the scenery with its own lights next to a white terrain, and with no lights the scenery is black. The joined form exports 6 unlit materials, and the page draws them close to the unlit render.
 - **The stock exporter removes faces.** It validates each mesh that it exports, in the scene and not in a copy. In the 16 square that removed 409 of 14,073 placement faces from 43 objects. Each removed face used the same three vertices as another face. See [Row 7](#row-7-face-order).
 - **Row 7 survives, when each face has vertices of its own.** Triangle i of the file is face i of the Blender mesh for all 14,627 faces of the joined 16 square. The last of two faces at the same place draws on top, on the page and in the render.
-- **Row 8 does not survive for the stock form, and survives for the joined form in priority order.** The page picture depends on the face order where faces of two placements lie in one plane, and the render does not. One window of the 16 square shows it: it is black on the page in the stock form and in the order of the import, and it is close to the render when the joined form sorts the faces by render priority. The faces with a face alpha are darker on the page than in the render in every form, because of the blend of row 7.
+- **Row 8 does not survive for the stock form, and survives for the joined form in priority order.** The page picture depends on the face order where faces of two placements lie in one plane, and the render does not. One window of the 16 square shows it: it is black on the page in the stock form and in the order of the import, and it is close to the render when the joined form sorts the faces by render priority. The faces with a face alpha are darker on the page than in the render in the joined form. The cause is evidence from the numbers of row 7: the page blends after the sRGB curve. That this is the whole difference in the window is a guess.
 
 ## Environment
 
@@ -322,7 +322,7 @@ The 16 square covers tiles x 3072 to 3087 and y 3242 to 3257, which are region t
 | Placement faces with a face alpha above 0 | 146, in 7 materials and 2 placements |
 | Placement faces with a texture | 224, with textures 8, 22 and 23 |
 | Terrain faces with a texture | 6, with texture 1 |
-| Faces of render priority 0, 1, 2, 3, 4, 5, 6, 7, 8 and 10 | 7,866, 1,555, 2,960, 264, 513, 172, 547, 60, 38 and 98 |
+| Placement faces of render priority 0, 1, 2, 3, 4, 5, 6, 7, 8 and 10 | 7,866, 1,555, 2,960, 264, 513, 172, 547, 60, 38 and 98 |
 
 A placement stands on the tile that holds the origin of its object. 9 of the 140 objects have their origin on a tile edge, and they count for the tile to the east or north of that edge.
 
@@ -340,7 +340,7 @@ The spec says "one unlit material". Two kinds of face do not fit in one material
 3. For a terrain face, take the corner positions, the corner colours of `rs_terrain_colour`, and for a textured face the texture coordinates and the image.
 4. For a placement face, take the corner positions through the world matrix of the object. When the determinant of that matrix is negative, reverse the corner order. An untextured face gets the Base Color of its Principled BSDF node at each corner, with the Alpha of that node as the alpha. A textured face gets white, its texture coordinates and its image. Each face keeps its render priority, and a terrain face counts as priority -1.
 5. Sort the faces by render priority, lowest first. The sort keeps the order of step 1 inside one priority.
-6. Split the faces into meshes: one for the untextured faces with no face alpha, one for the untextured faces with a face alpha, and one for each image. `join.py` gives the textured faces with a face alpha of one image a mesh of their own, with the opaque textured material, so their face alpha is lost. The 16 square has no such face.
+6. Split the faces into meshes: one for the untextured faces with no face alpha, one for the untextured faces with a face alpha, and one for each image. A textured face with a face alpha goes in a separate mesh for its image. That mesh has the opaque textured material, so the face alpha is lost. The 16 square has no such face.
 7. In each mesh, corners at the same position (to 0.001 units) share one vertex. A face whose three vertices another face of the mesh already uses gets three vertices of its own. Every face is smooth, so that the exporter does not split the vertices for flat normals. The page does not use the normals.
 8. Write the corner colours to a colour attribute `rs_colour` of the kind Face Corner and Color, and make it the active and the render colour. A textured mesh also gets a UV map.
 9. Give each mesh one material with backface culling off, as the scenery materials of the import have it.
