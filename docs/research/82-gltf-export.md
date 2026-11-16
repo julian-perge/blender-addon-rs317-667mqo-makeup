@@ -2,7 +2,7 @@
 
 This note belongs to [issue 82](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/82) and follows [spec 82](../../spec/82-gltf-export-findings.md). It records what survives when Blender's stock glTF exporter writes a region import and a player with a clip, and a three.js page draws the file. Terms follow [GLOSSARY.md](../../GLOSSARY.md). "Square", "stock export" and "joined export" are used as the spec uses them.
 
-The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). The rows and cells that say "not measured yet" belong to issues 86 to 89.
+The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). Rows 9, 10 and 11 and the size table were measured on 2026-11-16 for [issue 86](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/86). The rows that say "not measured yet" belong to issues 87 to 89.
 
 Each cause is marked as evidence or as a guess. "Read" means that the file or the picture was opened and read in the session that wrote the row.
 
@@ -15,6 +15,10 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 - **The stock exporter removes faces.** It validates each mesh that it exports, in the scene and not in a copy. In the 16 square that removed 409 of 14,073 placement faces from 43 objects. Each removed face used the same three vertices as another face. See [Row 7](#row-7-face-order).
 - **Row 7 survives, when each face has vertices of its own.** Triangle i of the file is face i of the Blender mesh for all 14,627 faces of the joined 16 square. The last of two faces at the same place draws on top, on the page and in the render.
 - **Row 8 does not survive for the stock form, and survives for the joined form in priority order.** The page picture depends on the face order where faces of two placements lie in one plane, and the render does not. One window of the 16 square shows it: it is black on the page in the stock form and in the order of the import, and it is close to the render when the joined form sorts the faces by render priority. The faces with a face alpha are darker on the page than in the render in the joined form. The cause is evidence from the numbers of row 7: the page blends after the sRGB curve. That this is the whole difference in the window is a guess.
+- **Row 9 survives.** The stock export of the whole `48_50` writes each Blender mesh that has a face once, and every node of an object on that mesh points to it. The 185 shared meshes of the import include 3 with no face, which the exporter leaves out. The file has 1,337 meshes, 98 of them used by more than one node, and 16,484 accessors.
+- **Row 10.** Under 2 MiB: the 16 square in all three forms, the 24 square joined and joined with Draco, and the 32 square joined with Draco. Over 2 MiB: the stock 24 and 32 squares, the joined 32 square, and the stock export of the whole `48_50` (8,293,068 bytes).
+- **Row 11.** Every cell draws at 60 fps at 1920x1080, which is the cap of the headless Chrome. With the cap off, the frame time is 1.2 ms for each joined form and goes from 1.8 ms (stock 16 square) to 7.8 ms (whole region) for the stock form.
+- **Draco loses the face order.** The joined form with Draco keeps every triangle, but not in the order of the mesh. So the priority order of row 8 does not reach the page, and the window of row 8 changes.
 
 ## Environment
 
@@ -22,15 +26,17 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 | --- | --- |
 | Blender | 5.3.0, hash 02f0899d78e3, macOS build with Metal, run with `-b --factory-startup` |
 | glTF exporter | The stock add-on `io_scene_gltf2` of that Blender. The files name it `Khronos glTF Blender I/O v5.3.43`. |
-| Exporter settings that are not the default | `use_selection=True`. Every other setting is the default, so the format is `GLB` and `export_vertex_color` is `MATERIAL`. |
+| Exporter settings that are not the default | `use_selection=True`. Every other setting is the default, so the format is `GLB` and `export_vertex_color` is `MATERIAL`. The joined form with Draco adds `export_draco_mesh_compression_enable=True`, with the default Draco settings: compression level 6, and quantization bits 14 for positions, 10 for normals, 12 for texture coordinates, 10 for colours and 12 for generic attributes (`io_scene_gltf2/__init__.py` lines 484 to 538). |
 | three.js | Release 187 (`three` 0.187.0 from the package registry), with its `GLTFLoader` and `DRACOLoader` and the Draco decoder of the same package. The page loads all of it from the scratch folder. |
 | Machine | MacBook Pro with Apple M2 Pro, macOS 27.2.1, built-in display |
 | Browser | Google Chrome 157.0.8103.39, headless, started by Playwright 1.65.1 with `channel: 'chrome'` and the arguments `--enable-gpu --ignore-gpu-blocklist --use-angle=metal` |
 | WebGL renderer string | `ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)`. This is the real GPU, not a software renderer. |
 | Region | `48_50` of snapshot 430, imported by `region_import.import_region` at the default brightness. The import reported 4096 tiles, 1874 placements as 1894 objects, 185 shared meshes and 1154 own meshes. |
-| Add-on code | Commit bd43fcd for rows 2 and 3, and commit d8eb169 for rows 4, 7 and 8 |
+| Add-on code | Commit bd43fcd for rows 2 and 3, commit d8eb169 for rows 4, 7 and 8, and commit 015a089 for rows 9, 10 and 11 |
 
-The page reported 60.0 fps and 16.66 or 16.67 ms for each frame on every run of issues 84 and 85, with 1 to 446 draw calls. A guess is that the headless Chrome caps the frame rate at 60. Issue 86 checks the cap.
+The page reported 60.0 fps and 16.66 or 16.67 ms for each frame on every run of issues 84 and 85, with 1 to 446 draw calls.
+
+**The headless Chrome caps the frame rate at 60, evidence.** With the arguments above, every cell of the size table drew at 60.0 fps in each one-second window from the third to the eighth. The first window, which holds the load, was 56.3 to 61.1 fps. With `--disable-gpu-vsync --disable-frame-rate-limit` added, the same page drew the same files at 128 to 825 fps. So the size table gives the frame rate with the cap, and the frame rate and the frame time without it. The frame time is the mean time between two `requestAnimationFrame` calls. It is not a GPU timer.
 
 ## Scratch setup
 
@@ -49,9 +55,15 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | `check-glb.py` | Prints the materials and the primitives of a `.glb` file with the type of each accessor. With `joined16-faces.json` it compares triangle i of each primitive with face i of the Blender mesh. |
 | `diffmap.py` | Prints the colour of one pixel of some PNG files, marks the pixels that differ between two PNG files, or puts the same box of some PNG files side by side. |
 | `shots85.sh`, `compare85.sh`, `mixed85.sh`, `summary85.py` | The screenshots and the comparisons of issue 85. The page's reports are in `shots85.jsonl`. |
+| `size.py` | The Blender script of issue 86. It imports `48_50` and, for one side, writes the stock form, the joined form and the joined form with Draco of that square. With `region` in place of a side, it writes the stock export of every mesh object of the region collection. It uses the functions of `join.py`, whose last line issue 86 put under `if __name__ == "__main__"` so that it can be imported. Each form is a new Blender run, because the stock export removes faces from the meshes of the scene (row 7). |
+| `share.py` | A Blender script that counts the objects on each mesh of the import, before any export. |
+| `glbcount.py` | Prints the length of each top-level array of a `.glb` file, the primitives, the meshes that more than one node uses, and the bytes of the images. |
+| `measure86.sh`, `summary86.py` | Draw each file of the size table with the cap and without it, and print the table. The page's reports are in `measure86.jsonl`. |
+| `sheet86.py` | Puts the 10 screenshots of the size table on one sheet. |
+| `page/order86.mjs` | Loads two files in the page and compares the triangles of each mesh in index order, by their centres to 1 unit. Its output for the joined 32 square is in `order86.jsonl`. |
 | `page/index.html`, `page/main.js` | The scratch page. |
 | `page/serve.mjs` | A static file server for `<scratch folder>` on 127.0.0.1. |
-| `page/shot.mjs` | Starts the server, opens the page in headless Chrome at 1920x1080, waits until the page has measured 3 seconds, saves a screenshot to `out/` and prints the page's report as one JSON line. It exits with code 2 when the WebGL renderer string names a software renderer. |
+| `page/shot.mjs` | Starts the server, opens the page in headless Chrome at 1920x1080, waits until the page has measured 3 seconds (or the number of seconds of its third argument), saves a screenshot to `out/` and prints the page's report as one JSON line. It exits with code 2 when the WebGL renderer string names a software renderer. The environment variable `CHROME_ARGS` adds more Chrome arguments. |
 | `page/node_modules/` | The local copy of three.js and Playwright. |
 | `out/` | The glTF files, `views.json`, the renders and the screenshots. |
 
@@ -63,16 +75,18 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 - `?t=<seconds>` sets the animation mixer to that time and does not advance it. Without `?t=`, the first clip plays. `?clip=<index>` selects another clip. No file of this task has a clip, so only the parameter itself is tested: the page reported `time: 0.5` for `?t=0.5`.
 - The page draws no shadow: the shadow map of the renderer is off.
 - The page adds one ambient light and one directional light, which `?lights=0` leaves out. Row 3 does not depend on them: the screenshot of `terrain16.glb` with `lights=0` is equal to the one with the lights in every pixel.
-- Each second, the page writes `renderer.info.render.calls`, the triangle count, the frame rate and the frame time to a text overlay and to `window.__report`. `?hud=0` hides the overlay. `shot.mjs` hides it, unless the query has `hud=1`.
+- Each second, the page writes `renderer.info.render.calls`, the triangle count, the frame rate and the frame time to a text overlay and to `window.__report`. `?hud=0` hides the overlay. `shot.mjs` hides it, unless the query has `hud=1`. The report also keeps the frame rate and the frame time of each one-second window in `history`.
+- The page puts the loaded glTF in `window.__gltf`, for `order86.mjs`.
 - The renderer has antialiasing on, a pixel ratio of 1, a black clear colour, and the default output colour space (sRGB) with no tone mapping.
 
 ### Cameras
 
-`export.py` writes the cameras to `out/views.json` in Blender coordinates, where z points up. The page turns Blender (x, y, z) into (x, z, -y), as the exporter does. Every camera has a vertical field of view of 40 degrees, a near plane of 10 and a far plane of 20000. The target is the centre of the bounding box of the 16 square, (1024, 6400, 172).
+`export.py` writes the cameras to `out/views.json` in Blender coordinates, where z points up. The page turns Blender (x, y, z) into (x, z, -y), as the exporter does. Every camera has a vertical field of view of 40 degrees, a near plane of 10 and a far plane of 20000. The target of `test`, `top` and `low` is the centre of the bounding box of the 16 square, (1024, 6400, 172).
 
 | View | Position | Use |
 | --- | --- | --- |
-| `test` | (1024, 3800, 2172) | The camera of the row 3 pictures. It is the test camera for now. Issue 86 may replace it if it does not hold the 32 square. |
+| `test` | (1024, 3800, 2172) | The camera of the pictures of rows 3, 4 and 8 |
+| `size` | (2048, 944, 4172), with the target (2048, 6144, 172) | The test camera of the size table. The target is the centre of the 32 square at the height of the `test` target. The 32 square fills the middle of the picture with black on all four sides. The whole region does not fit: the picture shows its south-west part. Issue 86 added it to `views.json` by hand. |
 | `top` | (1024, 6399, 3572) | By-eye checks from above |
 | `low` | (-476, 4900, 872) | By-eye checks from near the ground |
 | `order` | (0, -700, 100), with the target (0, 0, 100) | The two stacked faces of row 7. `join.py` adds it. |
@@ -129,6 +143,30 @@ bash <scratch folder>/mixed85.sh
 <scratch folder>/diffmap.py pixel 1225 255 <scratch folder>/out/joined16-blender-test.png <scratch folder>/out/joined16-page-test.png
 ```
 
+The commands of issue 86. `<views>` is `<scratch folder>/out/views.json`.
+
+```bash
+bash <scratch folder>/run-blender.sh <repo> <path to cache> size 16
+bash <scratch folder>/run-blender.sh <repo> <path to cache> size 24
+bash <scratch folder>/run-blender.sh <repo> <path to cache> size 32
+bash <scratch folder>/run-blender.sh <repo> <path to cache> size region
+bash <scratch folder>/run-blender.sh <repo> <path to cache> share
+<scratch folder>/glbcount.py <scratch folder>/out/region.glb <scratch folder>/out/stock16.glb <scratch folder>/out/joined16.glb <scratch folder>/out/joined16-draco.glb
+uv run python3 -c "import json; p='<views>'; v=json.load(open(p)); v['size']={'position':[2048.0,944.0,4172.0],'target':[2048.0,6144.0,172.0],'fov':40.0,'near':10.0,'far':20000.0}; json.dump(v,open(p,'w'),indent=1)"
+bash <scratch folder>/measure86.sh
+uv run python3 <scratch folder>/summary86.py --gpu
+<scratch folder>/sheet86.py
+<scratch folder>/compare.py <scratch folder>/out/joined32-page-size.png <scratch folder>/out/joined32-draco-page-size.png
+node <scratch folder>/page/order86.mjs joined32.glb joined32-draco.glb > <scratch folder>/order86.jsonl
+```
+
+One cell by hand, the joined 16 square without the cap:
+
+```bash
+bash <scratch folder>/run-blender.sh <repo> <path to cache> size 16
+CHROME_ARGS="--disable-gpu-vsync --disable-frame-rate-limit" node <scratch folder>/page/shot.mjs joined16-page-size-uncapped.png "file=joined16.glb&view=size" 8
+```
+
 To look at the page by hand, run `node <scratch folder>/page/serve.mjs` and open `http://127.0.0.1:8082/page/index.html?file=terrain16.glb&view=test`.
 
 ### What `export.py` exports
@@ -155,9 +193,9 @@ The 16 square is centred on tile 3080, 3250. It covers tiles x 3072 to 3087 and 
 | 6. Stepped playback | Not measured yet (issue 88) | | |
 | 7. Face order | Yes, when each face has vertices of its own. No for a face that uses the same three vertices as another face: the exporter removes it. | The index accessors of `joined16.glb` against the Blender meshes, and two stacked faces in both orders. See [Row 7](#row-7-face-order). | 14,627 of 14,627 triangles keep their place. The stock form of the 16 square loses 409 faces. |
 | 8. Render priority | No for the stock form. Yes for the joined form in priority order on the 16 square, except that the faces with a face alpha are darker on the page (the blend of row 7). | The page screenshots of the joined 16 square in two face orders next to the unlit renders. See [Row 8](#row-8-render-priority). | The two face orders differ in 1,248 pixels on the page by more than 8 of 255, and in 0 pixels in the render. |
-| 9. Shared mesh data | Not measured yet (issue 86) | | |
-| 10. Size | Not measured yet (issue 86) | | |
-| 11. Frame rate | Not measured yet (issue 86) | | |
+| 9. Shared mesh data | Yes | The meshes and the nodes in the glTF JSON of `region.glb`, against the objects on each mesh of the import. See [Row 9](#row-9-shared-mesh-data). | 185 shared meshes in the import, 3 of them with no face. 1,337 meshes in the file, 98 of them used by more than one node. 16,484 accessors. |
+| 10. Size | Under 2 MiB: the 16 square in all forms, the 24 square joined and joined with Draco, the 32 square joined with Draco. Over: the stock 24 and 32 squares, the joined 32 square, the whole region. | The file sizes. See [Size table](#size-table). | From 155,688 bytes (joined 16 square with Draco) to 8,293,068 bytes (whole region) |
+| 11. Frame rate | Yes for every cell | The page's reports at the `size` camera, with the frame rate cap and without it. See [Size table](#size-table). | 60 fps with the cap in every cell. Without the cap, 128 fps (whole region) to 825 fps (joined 16 square). The `size` camera shows only the south-west part of the region: the page drew 89,234 triangles of its 139,117 exported faces. |
 | 12. Nearly coplanar faces | Not measured yet (issue 87) | | |
 | 13. Floating player | Not measured yet (issue 87) | | |
 | 14. Clip that changes face alpha | Not measured yet (issue 88) | | |
@@ -166,18 +204,66 @@ The issue numbers come from the bodies of the open tasks of issue 82. Issue 89 l
 
 ## Size table
 
-No cell is measured yet. Issue 86 fills the table and gives the real tile bounds of each square. Each cell gets the file size, the draw calls and the frame rate, marked against 2 MB and 50 fps.
+Each cell gives the file size in bytes, the draw calls (`renderer.info.render.calls`), the frame rate with the cap, and the frame rate and the frame time without the cap. All are at the `size` camera at 1920x1080. "Under 2 MiB" means under 2,097,152 bytes, which the owner chose in the build session of issue 86. Only the joined 24 square (2,002,476 bytes) is between 2,000,000 and 2,097,152 bytes. "50 fps" is checked against the frame rate with the cap. Each frame rate and frame time is the mean of the one-second windows 3 to 8 of an 8-second run (`summary86.py`). The first two windows hold the load and the first frames.
 
 | Scene | Stock | Joined | Joined with Draco |
 | --- | --- | --- | --- |
-| 16 square | | | |
-| 24 square | | | |
-| 32 square | | | |
-| Whole `48_50` | | not measured | not measured |
+| 16 square | 1,017,424 B, under 2 MiB. 446 calls. 60 fps, at or over 50. No cap: 552 fps, 1.81 ms. | 721,268 B, under 2 MiB. 7 calls. 60 fps, at or over 50. No cap: 825 fps, 1.21 ms. | 155,688 B, under 2 MiB. 7 calls. 60 fps, at or over 50. No cap: 825 fps, 1.21 ms. |
+| 24 square | 2,505,732 B, over 2 MiB. 1,352 calls. 60 fps, at or over 50. No cap: 317 fps, 3.15 ms. | 2,002,476 B, under 2 MiB. 14 calls. 60 fps, at or over 50. No cap: 817 fps, 1.22 ms. | 420,588 B, under 2 MiB. 14 calls. 60 fps, at or over 50. No cap: 802 fps, 1.24 ms. |
+| 32 square | 3,577,928 B, over 2 MiB. 2,195 calls. 60 fps, at or over 50. No cap: 183 fps, 5.48 ms. | 3,113,696 B, over 2 MiB. 16 calls. 60 fps, at or over 50. No cap: 808 fps, 1.24 ms. | 589,712 B, under 2 MiB. 16 calls. 60 fps, at or over 50. No cap: 813 fps, 1.23 ms. |
+| Whole `48_50` | 8,293,068 B, over 2 MiB. 2,917 calls. 60 fps, at or over 50. No cap: 128 fps, 7.79 ms. | not measured | not measured |
+
+### The squares
+
+`size.py` places each square by the rule of [The 16 square](#the-16-square).
+
+| Square | World tiles | Region tiles | Moved |
+| --- | --- | --- | --- |
+| 16 | x 3072 to 3087, y 3242 to 3257 | x 0 to 15, y 42 to 57 | No |
+| 24 | x 3072 to 3095, y 3238 to 3261 | x 0 to 23, y 38 to 61 | 4 tiles east. It did not cross the north edge. |
+| 32 | x 3072 to 3103, y 3232 to 3263 | x 0 to 31, y 32 to 63 | 8 tiles east and 2 tiles south |
+
+| Square | Terrain faces | Placements, as objects | Placement meshes | Placement faces | Placement faces after the stock export |
+| --- | --- | --- | --- | --- | --- |
+| 16 | 554 | 140 | 110 | 14,073 | 13,664 |
+| 24 | 1,220 | 382 | 236 | 39,189 | 38,116 |
+| 32 | 2,146 | 690 | 420 | 59,658 | 56,919 |
+
+The stock export of the whole region removed 8,960 of its 148,077 faces (row 7).
+
+### What the files hold
+
+| File | glTF meshes | Primitives | Materials | Bytes of images |
+| --- | --- | --- | --- | --- |
+| `stock16.glb` | 110 | 341 | 98 | 63,855 |
+| `stock24.glb` | 234 | 808 | 243 | 173,037 |
+| `stock32.glb` | 418 | 1,248 | 278 | 189,762 |
+| `joined16.glb`, with Draco the same | 6 | 6 | 6 | 63,855 |
+| `joined24.glb`, with Draco the same | 13 | 13 | 13 | 173,037 |
+| `joined32.glb`, with Draco the same | 15 | 15 | 15 | 189,762 |
+| `region.glb` | 1,337 | 3,172 | 328 | 219,922 |
+
+- **Draw calls, evidence.** In the stock form the calls grow with the primitives. In the joined form they are the meshes plus one, because the mesh with a face alpha is double-sided and blended, so three.js draws it in two passes (row 4). The whole region has 3,172 primitives and 2,917 calls. A guess is that three.js leaves out the meshes outside the view of the `size` camera (frustum culling, general knowledge of three.js and unverified here).
+- **Draco shrinks the mesh data only, evidence.** The images keep the same bytes in the file with Draco. In the joined 32 square, the images are 189,762 of 589,712 bytes.
+- **The frame time, a guess.** Without the cap, the joined form draws at about 810 fps in each square, so its frame time does not grow with the square. A guess is that something other than the scene, such as the browser's frame loop, limits it. The stock form gets slower with each square, and the calls grow with it. That the calls are the cause is a guess.
+- **The screenshots, read.** `sheet86.png` holds the 10 screenshots of the table. Each square shows whole at the `size` camera. The stock form has the white terrain of row 3. The joined form, with and without Draco, has the terrain colours. The whole region fills the picture past its right and bottom edges.
+
+### Draco does not keep the face order
+
+The joined 32 square with Draco differs from the one without it in 9,669 pixels by more than 8 of 255 (the measure of row 8) and in 2,183 by more than 32, and the mean difference of the drawn pixels is 0.76. The map of these pixels, read: most of them are in the window panes of the buildings, and some are on one tree at the east and in small spots.
+
+`order86.mjs` loads `joined32.glb` and `joined32-draco.glb` in the page and compares the triangles of each mesh by their centres. A triangle is found when the other file has a triangle whose centre is within 1 unit of it.
+
+| Measure | Value |
+| --- | --- |
+| Triangles of the 15 meshes, without Draco and with Draco | 61,804 and 61,804 |
+| Triangles with a match in the same mesh of the file with Draco | 61,804 |
+| Triangles at the same index in both files | 11 |
+| The same comparison of `joined32.glb` with itself | every triangle at the same index |
+
+The match is one way. With the equal counts, this is evidence that the file with Draco keeps every triangle and changes their order. The output is in `order86.jsonl`. Row 8 needs the priority order, and the page draws the faces out of it. The panes in the difference map are the place where row 8 found that the order changes the picture. That this is the whole cause of the 2,183 pixels is a guess. The quantization of positions and colours can also move a pixel, and that part was not measured apart. The Draco settings of the exporter have no option that keeps the order (the settings in [Environment](#environment)). Whether the Draco encoder has one was not checked.
 
 The terrain of the 16 square alone is 59,308 bytes as a stock export, with 2 draw calls. It is not a cell of the table, because a square also holds its placements.
-
-Issue 85 exported the 16 square at the `test` camera: `stock16.glb` is 1,017,424 bytes with 446 draw calls, and `joined16.glb` is 721,268 bytes with 7 draw calls. Issue 86 puts them in the table with the frame rate.
 
 ## Form of the exporter
 
@@ -185,7 +271,7 @@ Not decided yet. Issue 89 writes this section.
 
 ## Issues
 
-None yet. Issue 89 opens one issue for each row that does not survive. So far these are row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, and the darker faces with a face alpha of rows 7 and 8.
+None yet. Issue 89 opens one issue for each row that does not survive. So far these are row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, the darker faces with a face alpha of rows 7 and 8, and the face order that the joined form with Draco loses (see [Size table](#draco-does-not-keep-the-face-order)).
 
 ## Row 2: Nearest sampler
 
@@ -525,3 +611,31 @@ One pane pixel at (1225, 255) is (31, 22, 2) in the render in priority order, (2
 - The priority order is not the client's rule. The client draws the faces of one model in priority order, and by depth inside one priority (`docs/research/render-priority.md`), and the sort here is over all placements of a mesh. It only decides which of two faces at the same depth wins.
 - The render is the reference of this note, and it does not show this fault. A check of the page against the render does not find a wrong face order. It needs a check of the page against itself in two orders, as above, or a look at the panes.
 - A face with a face alpha is darker on the page than in the render.
+
+## Row 9: Shared mesh data
+
+`region.glb` is the stock export of all 1,895 mesh objects of the region collection: the terrain and the 1,894 objects of the placements. In Blender these objects use 1,340 meshes: the terrain mesh, the 185 shared meshes and the 1,154 own meshes of the import report.
+
+`share.py` counts the objects on each mesh before any export:
+
+| Measure | Value |
+| --- | --- |
+| Meshes with more than one object | 101, with 656 objects |
+| Shared meshes with one object | 84 |
+| Meshes with no face | 3, all shared: `Loc 2738 model 1105` (13 objects), `Loc 84 model 4873` (4 objects) and `Loc 83 model 2214` (2 objects) |
+
+The glTF JSON of `region.glb`:
+
+| Measure | Value |
+| --- | --- |
+| Nodes | 1,895 |
+| Nodes with a mesh | 1,876 |
+| Meshes | 1,337 |
+| Meshes used by more than one node | 98 |
+| Primitives | 3,172 |
+| Accessors | 16,484 |
+| Buffer views | 16,499 |
+| Materials | 328 |
+
+- **The exporter keeps the sharing, evidence.** 1,337 is 1,340 less the 3 meshes with no face, and 98 is 101 less the same 3. The 19 nodes with no mesh are the 19 objects on those 3 meshes. The number of glTF meshes with 1, 2, 3 or more nodes is the number of Blender meshes with that many objects, less the 3 meshes with no face (with 13, 4 and 2 objects). Meshes were matched by these counts, not by name.
+- **The accessors, evidence.** Each primitive has its own accessors, about 5 for each of the 3,172 primitives. A mesh that more than one node uses has its accessors once. Why 3 meshes have no face in the import was not checked.
