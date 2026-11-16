@@ -20,9 +20,10 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 - **Row 11.** Every cell draws at 60 fps at 1920x1080, which is the cap of the headless Chrome. With the cap off, the frame time is 1.2 ms for each joined form and goes from 1.8 ms (stock 16 square) to 7.8 ms (whole region) for the stock form.
 - **Draco loses the face order.** The joined form with Draco keeps every triangle, but not in the order of the mesh. So the priority order of row 8 does not reach the page, and the window of row 8 changes.
 - **Row 1 does not survive for the game values.** The stock exporter writes the look of a loc material (the face colour as `baseColorFactor`, the texture as `baseColorTexture`) and no game value. The player from Create Player has one Emission material with no game value on it. It exports as lit with a white emissive colour, so the page draws the player plain white. Its lit corner colours seem to go to the unused `COLOR_1` (an inference, see [Row 1](#row-1-face-colour-face-alpha-and-textures)).
-- **The game values reach the page through a scratch step.** No exporter setting writes `rs_face_colour` and `rs_alpha` from the player as it is. A scratch step gives each face colour of the player its own material with the two values as custom properties. With `export_extras=True` the exporter writes them as material extras, and three.js puts them in `material.userData`. Page code then makes one flat `MeshBasicMaterial` for each. The rig and the clip do not change. The flat page loses the client light that Create Player bakes into `rs_lit`.
-- **Row 12 survives.** On the flat page, the straps on the torso and the belt on the skirt look as in the unlit render of the same flat colours, at 2 frames and 2 cameras. The pixels that differ lie on the outlines and on the edges of the straps and of the flail.
-- **Row 13 survives.** With no shadow, the player on the joined 16 square does not look like it floats. The lowest point of the player is 7.8 units under the flat tile, and the pictures put it on the boots.
+- **The game values reach the page through a scratch step.** No exporter setting writes `rs_face_colour` and `rs_alpha` from the player as it is. A scratch step gives each face colour of the player its own material with the two values as custom properties. With `export_extras=True` the exporter writes them as material extras, and three.js puts them in `material.userData`. The rig and the clip do not change.
+- **The page draws the baked client light ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).** Page code first made flat materials from the extras. The owner rejected that look as too flat (RuneScape Classic, not Old School RuneScape). When each split material feeds `rs_lit` from a Color Attribute node straight into the Material Output, the stock exporter writes it as `KHR_materials_unlit` with one colour attribute as `COLOR_0`, which matches the render of `rs_lit` (an inference: the values were not compared one by one). The page then draws the player with the client light and no code of its own, within a mean of 1.0 to 1.3 of 255 of the unlit render. The extras stay on the materials. The scenery has no baked loc light yet ([issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105)).
+- **Row 12 survives.** On the lit page, the straps on the torso and the belt on the skirt look as in the unlit render, at 2 frames and 2 cameras. The pixels that differ by more than 32 lie on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band. The flat page gave the same result.
+- **Row 13 survives.** With no shadow, the lit player on the joined 16 square does not look like it floats. The lowest point of the player is 7.8 units under the flat tile, and the pictures put it on the boots.
 - **The Fire cape is left out.** Create Player refuses it, because 24 of its faces have a texture ([issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103)). So no textured face of a player was exported.
 
 ## Environment
@@ -37,7 +38,7 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 | Browser | Google Chrome 157.0.8103.39, headless, started by Playwright 1.65.1 with `channel: 'chrome'` and the arguments `--enable-gpu --ignore-gpu-blocklist --use-angle=metal` |
 | WebGL renderer string | `ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)`. This is the real GPU, not a software renderer. |
 | Region | `48_50` of snapshot 430, imported by `region_import.import_region` at the default brightness. The import reported 4096 tiles, 1874 placements as 1894 objects, 185 shared meshes and 1154 own meshes. |
-| Exporter settings of the player | `player-stock.glb` uses the settings above. `player-stock-extras.glb` and `player-extras.glb` add `export_extras=True`. Both export the animation with the defaults. |
+| Exporter settings of the player | `player-stock.glb` uses the settings above. `player-stock-extras.glb`, `player-extras.glb` and `player-lit.glb` add `export_extras=True`. All four export the animation with the defaults. |
 | Add-on code | Commit bd43fcd for rows 2 and 3, commit d8eb169 for rows 4, 7 and 8, commit 015a089 for rows 9, 10 and 11, and commit 955f868 for rows 1, 12 and 13 |
 
 The page reported 60.0 fps and 16.66 or 16.67 ms for each frame on every run of issues 84 and 85, with 1 to 446 draw calls.
@@ -68,9 +69,9 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | `sheet86.py` | Puts the 10 screenshots of the size table on one sheet. |
 | `page/order86.mjs` | Loads two files in the page and compares the triangles of each mesh in index order, by their centres to 1 unit. Its output for the joined 32 square is in `order86.jsonl`. |
 | `items87.py`, `textured87.py` | Find the item ids of the outfit in snapshot 430, and count the textured faces that each item gives the assembled player. |
-| `player87.py` | The Blender script of issue 87. It builds the player with Create Player, puts its rig at the tile-to-position point of a tile, and bakes the stance clip with the Bones method. Step `inspect` prints the objects, materials, attributes, rig and clip. Step `stock` writes `player-stock.glb` and `player-stock-extras.glb`. Step `export` splits the materials, writes `player-extras.glb`, adds the player cameras to `views.json`, renders the player, and writes `player87.json`. See [The player](#the-player). |
+| `player87.py` | The Blender script of issue 87. It builds the player with Create Player, puts its rig at the tile-to-position point of a tile, and bakes the stance clip with the Bones method. Step `inspect` prints the objects, materials, attributes, rig and clip. Step `stock` writes `player-stock.glb` and `player-stock-extras.glb`. Step `export` splits the materials, writes `player-extras.glb`, adds the player cameras to `views.json`, renders the player, and writes `player87.json`. Step `lit` splits the materials, gives them the unlit shape of `rs_lit`, writes `player-lit.glb` and renders the player again. See [The player](#the-player). |
 | `glbjson87.py`, `cliptimes87.py`, `colours87.py` | Print the materials, primitives, skin, clip and extras of a `.glb` file, the key times and the interpolation of its clip, and the number of distinct values of `COLOR_0` and `COLOR_1` in each primitive. |
-| `shots87.sh` | The page screenshots of issue 87. The page's reports are in `shots87.jsonl`. |
+| `shots87.sh`, `shots87lit.sh` | The page screenshots of issue 87, flat and lit. The page's reports are in `shots87.jsonl` and `shots87lit.jsonl`. |
 | `page/index.html`, `page/main.js` | The scratch page. |
 | `page/serve.mjs` | A static file server for `<scratch folder>` on 127.0.0.1. |
 | `page/shot.mjs` | Starts the server, opens the page in headless Chrome at 1920x1080, waits until the page has measured 3 seconds (or the number of seconds of its third argument), saves a screenshot to `out/` and prints the page's report as one JSON line. It exits with code 2 when the WebGL renderer string names a software renderer. The environment variable `CHROME_ARGS` adds more Chrome arguments. |
@@ -192,6 +193,7 @@ uv run python <scratch folder>/textured87.py <repo>/src <path to cache>
 bash <scratch folder>/run-blender.sh <repo> <path to cache> player87 inspect
 bash <scratch folder>/run-blender.sh <repo> <path to cache> player87 stock
 bash <scratch folder>/run-blender.sh <repo> <path to cache> player87 export
+bash <scratch folder>/run-blender.sh <repo> <path to cache> player87 lit
 uv run python3 <scratch folder>/glbjson87.py <scratch folder>/out/player-stock.glb
 uv run python3 <scratch folder>/glbjson87.py <scratch folder>/out/player-stock-extras.glb
 uv run python3 <scratch folder>/glbjson87.py <scratch folder>/out/player-extras.glb
@@ -199,6 +201,11 @@ uv run python3 <scratch folder>/glbjson87.py <scratch folder>/out/loc.glb
 uv run python3 <scratch folder>/cliptimes87.py <scratch folder>/out/player-extras.glb
 uv run python3 <scratch folder>/colours87.py <scratch folder>/out/player-stock.glb
 bash <scratch folder>/shots87.sh
+bash <scratch folder>/shots87lit.sh
+uv run python3 <scratch folder>/glbjson87.py <scratch folder>/out/player-lit.glb
+uv run python3 <scratch folder>/colours87.py <scratch folder>/out/player-lit.glb
+<scratch folder>/diffmap.py map <scratch folder>/out/player-lit-blender-player-f1.png <scratch folder>/out/player-lit-page-player-f1.png <scratch folder>/out/difflit87-player-f1.png 32
+<scratch folder>/compare.py <scratch folder>/out/player-lit-blender-player-f1.png <scratch folder>/out/player-lit-page-player-f1.png
 node <scratch folder>/page/shot.mjs float-page-float-near-f1.png "file=player-extras.glb&also=joined16.glb&view=float-near&t=0.02&flat=1"
 node <scratch folder>/page/shot.mjs float-page-float-east-f1.png "file=player-extras.glb&also=joined16.glb&view=float-east&t=0.02&flat=1"
 node <scratch folder>/page/shot.mjs loc-page-low-87.png "file=loc.glb&view=low"
@@ -206,7 +213,7 @@ node <scratch folder>/page/shot.mjs loc-page-low-87.png "file=loc.glb&view=low"
 <scratch folder>/diffmap.py map <scratch folder>/out/player-flat-blender-player-f1.png <scratch folder>/out/player-flat-page-player-f1.png <scratch folder>/out/diff87-player-f1.png 32
 ```
 
-`compare.py` and `diffmap.py` ran the same way for the `player-side` camera and for frame 26.
+`compare.py` and `diffmap.py` ran the same way for the `player-side` camera, for frame 26, and for the lit renders and screenshots.
 
 To look at the page by hand, run `node <scratch folder>/page/serve.mjs` and open `http://127.0.0.1:8082/page/index.html?file=terrain16.glb&view=test`.
 
@@ -237,8 +244,8 @@ The 16 square is centred on tile 3080, 3250. It covers tiles x 3072 to 3087 and 
 | 9. Shared mesh data | Yes | The meshes and the nodes in the glTF JSON of `region.glb`, against the objects on each mesh of the import. See [Row 9](#row-9-shared-mesh-data). | 185 shared meshes in the import, 3 of them with no face. 1,337 meshes in the file, 98 of them used by more than one node. 16,484 accessors. |
 | 10. Size | Under 2 MiB: the 16 square in all forms, the 24 square joined and joined with Draco, the 32 square joined with Draco. Over: the stock 24 and 32 squares, the joined 32 square, the whole region. | The file sizes. See [Size table](#size-table). | From 155,688 bytes (joined 16 square with Draco) to 8,293,068 bytes (whole region) |
 | 11. Frame rate | Yes for every cell | The page's reports at the `size` camera, with the frame rate cap and without it. See [Size table](#size-table). | 60 fps with the cap in every cell. Without the cap, 128 fps (whole region) to 825 fps (joined 16 square). The `size` camera shows only the north-west part of the region: the page drew 89,234 triangles of its 139,117 exported faces. |
-| 12. Nearly coplanar faces | Yes, with the flat materials of the page | The flat page screenshots next to the unlit render of the same flat colours, at frames 1 and 26 and the `player` and `player-side` cameras, and the maps of the pixels that differ. See [Row 12](#row-12-nearly-coplanar-faces). | Mean difference 1.9 to 2.0 of 255. 1,045 to 1,329 pixels differ by more than 32. The maps of all 4 pairs put them on outlines and on the edges of the straps and of the flail. |
-| 13. Floating player | Yes: the player does not look like it floats | The page screenshots of the player on the joined 16 square at 5 cameras, read, and the bounds of the player. See [Row 13](#row-13-floating-player). | The tile is flat at height 280. The lowest point of the player is at 272.2, 7.8 units under the ground. That this point is on the boots is an inference from the pictures. |
+| 12. Nearly coplanar faces | Yes, lit and flat | The lit page screenshots next to the unlit render of the player, at frames 1 and 26 and the `player` and `player-side` cameras, and the maps of the pixels that differ. The flat page next to a flat render gave the same result. See [Row 12](#row-12-nearly-coplanar-faces). | Lit: mean difference 1.0 to 1.3 of 255, 246 to 529 pixels differ by more than 32, on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band. Flat: mean 1.9 to 2.0, 1,045 to 1,329 pixels, on outlines and on the edges of the straps and of the flail. |
+| 13. Floating player | Yes: the player does not look like it floats | The page screenshots of the lit and the flat player on the joined 16 square at 5 cameras, read, and the bounds of the player. See [Row 13](#row-13-floating-player). | The tile is flat at height 280. The lowest point of the player is at 272.2, 7.8 units under the ground. That this point is on the boots is an inference from the pictures. |
 | 14. Clip that changes face alpha | Not measured yet (issue 88) | | |
 
 The issue numbers come from the bodies of the open tasks of issue 82. Issue 89 links an issue for each row that does not survive.
@@ -315,7 +322,7 @@ Not decided yet. Issue 89 writes this section.
 
 Issue 89 opens one issue for each row that does not survive. So far these are row 1 for the game values, row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, the darker faces with a face alpha of rows 7 and 8, and the face order that the joined form with Draco loses (see [Draco does not keep the face order](#draco-does-not-keep-the-face-order)).
 
-Issue 87 opened [issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103): Create Player refuses an item with textured faces, such as the Fire cape.
+Issue 87 opened [issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103): Create Player refuses an item with textured faces, such as the Fire cape. It also opened [issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105): the scenery needs the client's loc light baked in, so that the page can draw it lit ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).
 
 ## The player
 
@@ -459,7 +466,38 @@ With `?flat=1`, `page/main.js` does this after the files are loaded:
 
 The page reported 19 `MeshBasicMaterial`, 19 draw calls and 1,143 triangles. In all 9 flat screenshots of issue 87, the colour of each of the 19 flat materials (171 reports) is equal to `face_colour_to_rgb` at brightness 0.8. The opacity code ran on no face, because the outfit has no face alpha.
 
-**The flat page loses the client light, evidence.** At the `player` camera and frame 1, the unlit render of the player as Create Player made it (`rs_lit`) differs from the flat page in 26,058 pixels by more than 32 of 255, with a mean of 29.4 of the drawn pixels. A skin pixel at (960, 450) is (147, 102, 69) in the render and (201, 150, 109) on the page. The flat colour is the face colour before the light, and the client light darkens it. To show the client light, the page would need `rs_lit` as an unlit colour attribute, as the joined form of issue 85 does for the region.
+**The flat page loses the client light, evidence.** At the `player` camera and frame 1, the unlit render of the player as Create Player made it (`rs_lit`) differs from the flat page in 26,058 pixels by more than 32 of 255, with a mean of 29.4 of the drawn pixels. A skin pixel at (960, 450) is (147, 102, 69) in the render and (201, 150, 109) on the page. The flat colour is the face colour before the light, and the client light darkens it. The owner rejected this look in the build session of issue 87 ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)). See [The lit player](#the-lit-player).
+
+### The lit player
+
+The owner chose, after seeing the flat page, that the page draws the client light ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)). Step `lit` of `player87.py` splits the materials as above, and then gives each of the 19 materials this node tree: the Color output of a Color Attribute node of `rs_lit` feeds the Surface of the Material Output. This is the shape that row 3 found the exporter writes as unlit. The export is `player-lit.glb`, with `export_extras=True`. It is 540,652 bytes.
+
+- **Blender looks the same, evidence.** The renders of the new shape are equal to the renders of the player as Create Player made it, in every pixel, at both cameras and both frames.
+- **The file, evidence.** `extensionsUsed` is `["KHR_materials_unlit"]`. Each of the 19 materials has `KHR_materials_unlit` and the extras `rs_face_colour` and `rs_alpha`. Each primitive has `POSITION`, `NORMAL`, `COLOR_0`, `JOINTS_0` and `WEIGHTS_0`, and no `COLOR_1`. `COLOR_0` is a float `VEC3` accessor (12 distinct values in the primitive of face colour 10508, for example). The exporter logged no "active Vertex Color" warning. The skin and the clip are as in `player-stock.glb` and `player-extras.glb`: 61 joints, 183 channels, and keys from 0.02 to 5.08 seconds.
+
+```json
+{
+ "extensions": {"KHR_materials_unlit": {}},
+ "extras": {"rs_face_colour": 11138, "rs_alpha": 0},
+ "name": "RS_Colour_11138_0",
+ "pbrMetallicRoughness": {"metallicFactor": 0, "roughnessFactor": 0.9}
+}
+```
+
+- **The page, evidence.** Without `?flat=1`, the page reported 19 `MeshBasicMaterial` with `vertexColors` true, and the extras of all 19 in `material.userData`. It needs no code of its own to draw the light.
+
+| Pair, unlit render of the player against the lit page | Drawn pixels | More than 8 of 255 | More than 32 of 255 | Largest | Mean of the drawn pixels |
+| --- | --- | --- | --- | --- | --- |
+| `player`, frame 1 | 74,205 | 3,085 | 529 | 84 | 1.3 |
+| `player-side`, frame 1 | 64,732 | 1,935 | 246 | 81 | 1.0 |
+| `player`, frame 26 | 74,018 | 3,053 | 521 | 76 | 1.3 |
+| `player-side`, frame 26 | 64,626 | 1,955 | 250 | 81 | 1.0 |
+
+The front at frame 1, read next to the render: the same player with the same shading, such as the darker side of the skirt and of the legs. The maps of the pixels that differ by more than 32, read for all 4 pairs, show them on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band.
+
+- **That `COLOR_0` is `rs_lit`, an inference.** The match of the page with the render of `rs_lit` is the evidence. The values were not compared one by one.
+- **The scenery is still flat.** The joined form of issue 85 takes each placement face's colour from its material, before any light, and the import has no baked loc light ([ADR 0022](../adr/0022-the-region-import-checks-each-value-against-a-second-reader.md)). On the page the lit player stands among flat stalls. [Issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105) bakes the loc light.
+- **Face alpha, not measured.** The outfit has no face alpha, and this unlit shape has no alpha. How a face alpha travels with `rs_lit` was not checked.
 
 ## Row 2: Nearest sampler
 
@@ -830,7 +868,7 @@ The glTF JSON of `region.glb`:
 
 ## Row 12: Nearly coplanar faces
 
-The page draws the player with the flat materials of [The game values on the page](#the-game-values-on-the-page). The reference is an unlit render of the same flat colours: after the first renders, `player87.py` makes each split material show its flat colour with no light (an RGB node of the client colour, made linear, feeds the Material Output). The renders are at frames 1 and 26 of the clip, and the page uses `t=0.02` and `t=0.52`. The exported clip has keys every 0.02 seconds from 0.02 to 5.08 (`cliptimes87.py`), so frame f is time f / 50.
+The lit page is in [The lit player](#the-lit-player): its differences from the unlit render lie on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band, so the straps and the belt show no fault there either. This section is the first check, on the flat page. It draws the player with the flat materials of [The game values on the page](#the-game-values-on-the-page). The reference is an unlit render of the same flat colours: after the first renders, `player87.py` makes each split material show its flat colour with no light (an RGB node of the client colour, made linear, feeds the Material Output). The renders are at frames 1 and 26 of the clip, and the page uses `t=0.02` and `t=0.52`. The exported clip has keys every 0.02 seconds from 0.02 to 5.08 (`cliptimes87.py`), so frame f is time f / 50.
 
 | Pair, flat render against flat page | Drawn pixels | More than 8 of 255 | More than 32 of 255 | Largest | Mean of the drawn pixels |
 | --- | --- | --- | --- | --- | --- |
@@ -844,7 +882,7 @@ The pictures, read:
 - **The front, frame 1.** The render and the page show the same player: the helm with its visor slits and horns, the bare torso with the two straps of the brassard, the shoulder plates, the skirt with the belt and its dark bands, the gloves, the boots and the flail. The straps lie on the torso, and the belt and the bands lie on the skirt. On the page none of them shows a gap, a stripe or a patch of the face behind it.
 - **The maps of the pixels that differ by more than 32, front and side at frames 1 and 26.** The pixels lie on the outline of the player and on the edges of the straps and of the flail. No pixel lies inside a strap, the belt or a band.
 - **Cause, a guess.** The edges differ by the antialiasing of EEVEE and of the browser, as in rows 3 and 4. That the nearly coplanar faces have enough depth between them on the page at these cameras is a guess from the pictures. Their distances were not measured.
-- **Not covered.** These are 2 cameras near the player and 2 frames. A camera far away has less depth precision, and that was not checked. The lit render of the player (`rs_lit`) was not used for this row, because the flat page has other colours (see [The game values on the page](#the-game-values-on-the-page)).
+- **Not covered.** These are 2 cameras near the player and 2 frames. A camera far away has less depth precision, and that was not checked.
 
 ## Row 13: Floating player
 
@@ -859,4 +897,5 @@ The page loads `player-extras.glb` with `?flat=1` and the joined 16 square of is
 
 - **The player does not look like it floats.** This is a judgement by eye on the two close cameras.
 - **The feet go into the ground, evidence for the depth and an inference for the place.** The tile is flat at Blender z 280. The lowest point of the bounding box of the player at frame 1 is 272.2, which is 7.8 units under the ground. The bounding box holds the body and the flail. That this point is on the boots is an inference from the pictures, where the flail hangs well above the ground. The test of issue 48 found 6 units for another player, from the client's own model (`test_region_import.py`). So a part of each boot is hidden, and no gap can show.
-- **What makes the contact hard to see, a guess.** The Climbing boots are dark grey on a dark grey paving. A lighter boot or a lighter ground can show the contact better or worse. This was not checked with another outfit or another tile.
+- **What makes the contact hard to see, a guess.** With the flat and the lit materials, the Climbing boots are dark grey on a dark grey paving. A lighter boot or a lighter ground can show the contact better or worse. This was not checked with another outfit or another tile.
+- **The lit player, read.** `shots87lit.sh` took the same 5 cameras with `player-lit.glb` in place of the flat player. At `float-near` and `float-east` the lit boots are a dark grey close to the paving, and their lower edges meet the ground with no gap. The lit player does not look like it floats either.
