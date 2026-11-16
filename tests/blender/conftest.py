@@ -1,5 +1,6 @@
 """Fixtures shared by the player appearance tests."""
 
+import os
 from pathlib import Path
 
 import bpy
@@ -8,6 +9,16 @@ from js5_builder import build_cache
 
 APPEARANCE = Path(__file__).parent.parent / "fixtures" / "appearance"
 CLIPS = Path(__file__).parent.parent / "fixtures" / "animation149"
+
+
+def pytest_collection_modifyitems(items):
+    """Keep one share of the tests when `scripts/test-blender.sh` runs several copies of Blender. BLENDER_TEST_SHARD
+    is `<index>/<count>`, and this copy keeps every `count`th test from test `index`, so the slow tests of one file go
+    to different copies."""
+    shard = os.environ.get("BLENDER_TEST_SHARD")
+    if shard:
+        index, count = map(int, shard.split("/"))
+        items[:] = items[index::count]
 
 
 def raw_files(folder: Path) -> dict[int, bytes]:
