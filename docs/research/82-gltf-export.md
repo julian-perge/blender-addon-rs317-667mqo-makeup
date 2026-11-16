@@ -86,7 +86,7 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | View | Position | Use |
 | --- | --- | --- |
 | `test` | (1024, 3800, 2172) | The camera of the pictures of rows 3, 4 and 8 |
-| `size` | (2048, 944, 4172), with the target (2048, 6144, 172) | The test camera of the size table. The target is the centre of the 32 square at the height of the `test` target. The 32 square fills the middle of the picture with black on all four sides. The whole region does not fit: the picture shows its south-west part. Issue 86 added it to `views.json` by hand. |
+| `size` | (2048, 944, 4172), with the target (2048, 6144, 172) | The test camera of the size table. The target is the centre of the 32 square at the height of the `test` target. The 32 square fills the middle of the picture with black on all four sides. The whole region does not fit: the picture shows its north-west part, and its south and east parts are past the bottom and right edges. Issue 86 added it to `views.json` by hand. |
 | `top` | (1024, 6399, 3572) | By-eye checks from above |
 | `low` | (-476, 4900, 872) | By-eye checks from near the ground |
 | `order` | (0, -700, 100), with the target (0, 0, 100) | The two stacked faces of row 7. `join.py` adds it. |
@@ -195,7 +195,7 @@ The 16 square is centred on tile 3080, 3250. It covers tiles x 3072 to 3087 and 
 | 8. Render priority | No for the stock form. Yes for the joined form in priority order on the 16 square, except that the faces with a face alpha are darker on the page (the blend of row 7). | The page screenshots of the joined 16 square in two face orders next to the unlit renders. See [Row 8](#row-8-render-priority). | The two face orders differ in 1,248 pixels on the page by more than 8 of 255, and in 0 pixels in the render. |
 | 9. Shared mesh data | Yes | The meshes and the nodes in the glTF JSON of `region.glb`, against the objects on each mesh of the import. See [Row 9](#row-9-shared-mesh-data). | 185 shared meshes in the import, 3 of them with no face. 1,337 meshes in the file, 98 of them used by more than one node. 16,484 accessors. |
 | 10. Size | Under 2 MiB: the 16 square in all forms, the 24 square joined and joined with Draco, the 32 square joined with Draco. Over: the stock 24 and 32 squares, the joined 32 square, the whole region. | The file sizes. See [Size table](#size-table). | From 155,688 bytes (joined 16 square with Draco) to 8,293,068 bytes (whole region) |
-| 11. Frame rate | Yes for every cell | The page's reports at the `size` camera, with the frame rate cap and without it. See [Size table](#size-table). | 60 fps with the cap in every cell. Without the cap, 128 fps (whole region) to 825 fps (joined 16 square). The `size` camera shows only the south-west part of the region: the page drew 89,234 triangles of its 139,117 exported faces. |
+| 11. Frame rate | Yes for every cell | The page's reports at the `size` camera, with the frame rate cap and without it. See [Size table](#size-table). | 60 fps with the cap in every cell. Without the cap, 128 fps (whole region) to 825 fps (joined 16 square). The `size` camera shows only the north-west part of the region: the page drew 89,234 triangles of its 139,117 exported faces. |
 | 12. Nearly coplanar faces | Not measured yet (issue 87) | | |
 | 13. Floating player | Not measured yet (issue 87) | | |
 | 14. Clip that changes face alpha | Not measured yet (issue 88) | | |
@@ -271,7 +271,7 @@ Not decided yet. Issue 89 writes this section.
 
 ## Issues
 
-None yet. Issue 89 opens one issue for each row that does not survive. So far these are row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, the darker faces with a face alpha of rows 7 and 8, and the face order that the joined form with Draco loses (see [Size table](#draco-does-not-keep-the-face-order)).
+None yet. Issue 89 opens one issue for each row that does not survive. So far these are row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, the darker faces with a face alpha of rows 7 and 8, and the face order that the joined form with Draco loses (see [Draco does not keep the face order](#draco-does-not-keep-the-face-order)).
 
 ## Row 2: Nearest sampler
 
