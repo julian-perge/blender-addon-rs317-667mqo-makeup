@@ -175,9 +175,9 @@ def test_each_test_npc_has_generic_joints_from_the_frame_map_of_its_stand_sequen
 
 def test_man_gets_the_15_player_joints():
     # NPC 3078 stands on frame map 0, the player's (docs/research/13-npc-rigs.md), which uses data/player_joints.json.
-    names = {re.sub(r"\.[LR]$", "", name) for name in joint_names(created(MAN))}
-    assert names == {spec.name for spec in load_joint_specs()}
-    assert len(joint_names(created(MAN))) == 15
+    names = joint_names(created(MAN))
+    assert {re.sub(r"\.[LR]$", "", name) for name in names} == {spec.name for spec in load_joint_specs()}
+    assert len(names) == 15
 
 
 def test_the_npc_collection_stores_the_npc_its_frame_map_and_its_sequences_and_no_preset():

@@ -185,11 +185,18 @@ def kit_model(kit: Kit, load_model: Callable[[int], Model]) -> Model:
     """A kit's body model: its listed models joined, then its recolours, then its retextures."""
     if not kit.model_ids:
         raise ValueError(f"Kit {kit.id} lists no body model")
-    parts = [load_model(model_id) for model_id in kit.model_ids]
+    return dressed_model([load_model(model_id) for model_id in kit.model_ids], kit.recolours, kit.retextures)
+
+
+def dressed_model(
+    parts: Sequence[Model], recolours: Sequence[tuple[int, int]], retextures: Sequence[tuple[int, int]]
+) -> Model:
+    """The parts joined in order, or a copy of a single part, then every recolour in order, then every retexture.
+    Kits and NPCs build their models this way (`npc_definition.npc_model`)."""
     model = replace(parts[0]) if len(parts) == 1 else merge(parts)
-    for find, to in kit.recolours:
+    for find, to in recolours:
         recolour(model, find, to)
-    for find, to in kit.retextures:
+    for find, to in retextures:
         retexture(model, find, to)
     return model
 

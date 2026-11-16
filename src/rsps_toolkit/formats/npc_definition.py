@@ -10,10 +10,10 @@ The client's `post` (lines 225 to 226) is empty, so the decoder has nothing to r
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from ._stream import Reader
-from .appearance import merge, recolour, retexture
+from .appearance import dressed_model
 from .floor_definition import CONFIG_INDEX
 from .js5 import Js5Store, NotInCacheError
 from .model import Model
@@ -85,12 +85,7 @@ def npc_model(npc: NpcDefinition, load_model: Callable[[int], Model]) -> Model:
     if unskinned:
         listed = ", ".join(map(str, unskinned))
         raise ValueError(f"NPC {npc.name} has models without vertex skins, so it cannot have a rig: {listed}")
-    model = replace(parts[0]) if len(parts) == 1 else merge(parts)
-    for find, to in npc.recolours:
-        recolour(model, find, to)
-    for find, to in npc.retextures:
-        retexture(model, find, to)
-    return model
+    return dressed_model(parts, npc.recolours, npc.retextures)
 
 
 def npc_lighting(npc: NpcDefinition) -> tuple[int, int, int, int, int]:

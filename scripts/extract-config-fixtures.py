@@ -9,7 +9,8 @@
 
 It writes every kit of config group 3 to `appearance/kits/<id>.dat`, the enums that `STYLE_ENUMS` names from config
 group 8 to `appearance/enums/<id>.dat`, the NPCs that `TEST_NPCS` names from config group 9 to `npc/<id>.dat`, and
-the models of those NPCs from index 7 to `npc/models/<id>.dat`, each unchanged. An existing file with different bytes stops the run, so the fixtures cannot change without notice.
+the models of those NPCs from index 7 to `npc/models/<id>.dat`, each unchanged. An existing file with different bytes
+stops the run, so the fixtures cannot change without notice.
 """
 
 import argparse
