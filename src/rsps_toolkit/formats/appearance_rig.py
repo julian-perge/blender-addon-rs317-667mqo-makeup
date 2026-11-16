@@ -1,26 +1,36 @@
-"""A rest-pose rig derived from a model's vertex skin labels and the player frame map's joints.
+"""A rest-pose rig derived from a model's vertex skin labels and the joints of its frame map.
 
-Label bones carry the vertices, one per skin label. Joint bones come from `data/player_joints.json`, the rotate
-transforms of frame map 0 with their pivots (`scripts/generate-player-joints.py`): each joint the body uses is placed
-at the rest centre of its pivot labels and parented by how the label sets it moves nest, and each label bone hangs
-under the deepest joint that moves it.
+Label bones carry the vertices, one per skin label. Joint bones come from joint specs, the rotate transforms of a
+frame map with their pivots: `data/player_joints.json` for frame map 0 (`scripts/generate-player-joints.py`), and
+`frame_map_joint_specs` for any other frame map. Each joint the body uses is placed at the rest centre of its pivot
+labels and parented by how the label sets it moves nest, and each label bone hangs under the deepest joint that
+moves it.
 """
 
 import json
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .model import Model
+
+# The animation package imports formats, so a run-time import of FrameMap here would make an import cycle as soon as
+# formats/__init__.py imports this module.
+if TYPE_CHECKING:
+    from ..animation.bundle import FrameMap
 
 # The cache stores no bone direction or length, so the owner chose that each label bone points up a fixed distance
 # from its head, in game units (issue 20).
 BONE_LENGTH = 8.0
 JOINTS_PATH = Path(__file__).parent.parent / "data" / "player_joints.json"
+PLAYER_FRAME_MAP = 0
+PIVOT, ROTATE = 0, 2
 
 
 @dataclass(frozen=True)
 class JointSpec:
-    """One rotate transform of the player frame map, with the labels of its pivot and every label it moves."""
+    """One rotate transform of a frame map, with the labels of its pivot and every label it moves."""
 
     name: str
     rotate: int
@@ -148,3 +158,39 @@ def _names(specs: list[JointSpec], sums: dict[int, list[float]]) -> dict[int, st
         name = spec.name if abs(x) < 1 else f"{spec.name}.{'L' if x > 0 else 'R'}"
         names[spec.rotate] = name if name not in names.values() else f"{name}_{spec.rotate}"
     return names
+
+
+def frame_map_joint_specs(frame_map_id: int, frame_map: "FrameMap", labels: Collection[int]) -> tuple[JointSpec, ...]:
+    """The joint specs of a frame map for a model that carries `labels` (ADR 0025).
+
+    Frame map 0 gives the player table. On any other frame map each rotate transform is a joint named
+    `joint_<transform>`, with the nearest earlier pivot transform as its pivot. Of the rotate transforms that move
+    the same set of `labels`, only the earliest is a joint.
+
+    A rotate transform is skipped when no pivot transform comes before it, or when the model carries no label of
+    its pivot. The client turns such a transform around a point that no label gives (2018 client): the pivot
+    starts each frame at 0 (`Model.java` lines 676 to 678), a frame adds no pivot when the frame map has none
+    before the transform (`Frame.java` lines 69 to 80), a pivot with no vertices is the frame's own offset
+    (`Model.java` lines 772 to 780), and the rotation is around that pivot (`Model.java` lines 808 to 810).
+    `derive_joints` has no place for that joint, so the owner chose on issue 91 that a later transform which moves
+    the same labels can be the joint. A rotate transform that moves no label of the model is skipped too, because
+    `derive_joints` gives it no joint.
+    """
+    if frame_map_id == PLAYER_FRAME_MAP:
+        return load_joint_specs()
+    body = frozenset(labels)
+    specs = []
+    taken: set[frozenset[int]] = set()
+    pivot = None
+    for index, (kind, moved) in enumerate(zip(frame_map.types, frame_map.labels, strict=True)):
+        if kind == PIVOT:
+            pivot = index
+        elif kind == ROTATE:
+            moved_on_body = body.intersection(moved)
+            if pivot is None or body.isdisjoint(frame_map.labels[pivot]):
+                continue
+            if not moved_on_body or moved_on_body in taken:
+                continue
+            taken.add(moved_on_body)
+            specs.append(JointSpec(f"joint_{index}", index, frozenset(frame_map.labels[pivot]), frozenset(moved)))
+    return tuple(specs)
