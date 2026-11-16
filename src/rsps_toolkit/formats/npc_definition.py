@@ -3,8 +3,8 @@
 NPCs are config group 9 of index 2. The opcodes follow `NPCComposition.readNext` of the 2018 Old School client
 (`NPCComposition.java` lines 251 to 368), and the tests check them against RuneLite's NpcLoader. The decoder reads
 every opcode of `readNext`, so that each definition reads to its end, and keeps the fields that an NPC rig needs (spec
-13). The client ignores an opcode that it does not know and reads no value for it. This decoder refuses it, and it also refuses bytes after the
-closing opcode 0, so a wrong parse cannot pass without notice.
+13). The client ignores an opcode that it does not know and reads no value for it. This decoder refuses it, and it
+also refuses bytes after the closing opcode 0, so a wrong parse cannot pass without notice.
 
 The client's `post` (lines 225 to 226) is empty, so the decoder has nothing to run after the opcodes.
 """
@@ -91,7 +91,7 @@ def decode_npc(npc_id: int, data: bytes) -> NpcDefinition:
         elif opcode == 16:
             turn_right = reader.u16()
         elif opcode == 17:
-            # Lines 273 to 277.
+            # Lines 273 to 277 read the walk, walk back, walk left and walk right sequences, in that order.
             walk, walk_back, walk_left, walk_right = (reader.u16() for _ in range(4))
         elif 30 <= opcode < 35:
             _string(reader)

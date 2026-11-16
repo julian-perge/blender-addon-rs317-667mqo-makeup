@@ -86,7 +86,12 @@ def test_fields_that_no_opcode_sets_keep_the_constructor_defaults():
     assert (npc.width_scale, npc.height_scale, npc.ambient, npc.contrast) == (128, 128, 0, 0)
 
 
-@pytest.mark.parametrize("opcode", [3, 18, 42, 61, 74, 114, 122])
+READ_NEXT_OPCODES = {1, 2, *range(12, 18), *range(30, 35), 40, 41, 60, 93, 95, *range(97, 104), 106, 107, 109, 111}
+READ_NEXT_OPCODES |= {118, 249}
+"""The opcodes that NPCComposition.readNext reads, from the branches of lines 254 to 366. Opcode 0 ends a definition."""
+
+
+@pytest.mark.parametrize("opcode", sorted(set(range(1, 256)) - READ_NEXT_OPCODES))
 def test_an_npc_with_an_opcode_that_decode_does_not_read_is_refused(opcode):
     with pytest.raises(ValueError, match=f"unknown opcode {opcode}"):
         decode_npc(1, bytes([opcode, 0]))

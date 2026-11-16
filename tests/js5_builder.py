@@ -87,8 +87,8 @@ def build_cache(
 ) -> None:
     """Write a disk cache that holds each model as file 0 of its own group in index 7. The kits, enums, NPCs and items
     become config groups 3, 8, 9 and 10 in index 2, and each definition's id is its file id. A config group with one
-    file has no size table, as in a real cache. A group with no files is left out. The reference table of index 2 holds each config
-    group's CRC32, as in a real cache."""
+    file has no size table, as in a real cache. A group with no files is left out. The reference table of index 2 holds
+    each config group's CRC32, as in a real cache."""
     config = {
         group: dict(sorted(files.items()))
         for group, files in ((KIT_GROUP, kits), (ENUM_GROUP, enums), (NPC_GROUP, npcs), (ITEM_GROUP, items))

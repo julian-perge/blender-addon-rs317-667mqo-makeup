@@ -30,7 +30,7 @@ An NPC is created and baked only. There is no Update NPC, no tie between the pan
 A new decoder `formats/npc_definition.py` reads config group 9 of index 2, following `NPCComposition.decode` of the 2018 client, and refuses an unknown opcode and bytes after the closing opcode 0, as `loc_definition.py` does. It keeps:
 
 - the models (opcode 1), the name (opcode 2);
-- the stand sequence (13), the walk sequence (14 and 17), the turn left and turn right sequences (15 and 16), and the walk back, walk right and walk left sequences (17);
+- the stand sequence (13), the walk sequence (14 and 17), the turn left and turn right sequences (15 and 16), and the walk back, walk left and walk right sequences (17, in that order: `Frames.java` lines 238 and 239 copy the third and fourth to the walk left and walk right slots of an actor);
 - the recolours (40) and retextures (41);
 - the width and height scale (97 and 98), and the ambient and contrast (100 and 101).
 
