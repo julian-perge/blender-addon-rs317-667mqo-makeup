@@ -9,13 +9,18 @@ also refuses bytes after the closing opcode 0, so a wrong parse cannot pass with
 The client's `post` (lines 225 to 226) is empty, so the decoder has nothing to run after the opcodes.
 """
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 
 from ._stream import Reader
+from .appearance import merge, recolour, retexture
 from .floor_definition import CONFIG_INDEX
 from .js5 import Js5Store, NotInCacheError
+from .model import Model
 
 NPC_GROUP = 9
+# The light direction of `NPCComposition.getModel` (2018 client line 421, revision 149 `ip.v` offsets 443 to 447).
+LIGHT_DIRECTION = (-30, -50, -30)
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,44 @@ def read_npc(store: Js5Store, npc_id: int) -> NpcDefinition:
     if npc_id not in files:
         raise NotInCacheError(f"Group {NPC_GROUP} of index {CONFIG_INDEX} of the cache has no NPC {npc_id}")
     return decode_npc(npc_id, files[npc_id])
+
+
+def npc_model(npc: NpcDefinition, load_model: Callable[[int], Model]) -> Model:
+    """The unlit model of the NPC, as `NPCComposition.getModel` of the 2018 client builds it before it lights it.
+
+    Lines 395 to 406 merge the models of opcode 1 in order, and use a single model as it is. Lines 409 to 413 apply the
+    recolours, then lines 415 to 419 the retextures. Revision 149 `ip.v` does the same (offsets 202 to 292, 333 to
+    404 and 592 to 646). An NPC with no models, or with a model that has no vertex skins, is refused, because an NPC
+    rig needs a label on every vertex. The refusal names those model ids.
+    """
+    if not npc.models:
+        raise ValueError(f"NPC {npc.name} has no models")
+    parts = [load_model(model_id) for model_id in npc.models]
+    unskinned = [model_id for model_id, part in zip(npc.models, parts, strict=True) if part.vertex_skins is None]
+    if unskinned:
+        listed = ", ".join(map(str, unskinned))
+        raise ValueError(f"NPC {npc.name} has models without vertex skins, so it cannot have a rig: {listed}")
+    model = replace(parts[0]) if len(parts) == 1 else merge(parts)
+    for find, to in npc.recolours:
+        recolour(model, find, to)
+    for find, to in npc.retextures:
+        retexture(model, find, to)
+    return model
+
+
+def npc_lighting(npc: NpcDefinition) -> tuple[int, int, int, int, int]:
+    """The lighting of `NPCComposition.getModel`: `light(ambient + 64, contrast * 5 + 850, -30, -50, -30)` (2018
+    client line 421). Revision 149 `ip.v` adds 64 and 850 at offsets 418 to 442, and `ip.r` stores opcode 101 so that
+    its contrast field reads as five times the byte (offsets 896 to 906 and 431 to 438: the two field multipliers
+    multiply to 5 in 32 bits)."""
+    return (npc.ambient + 64, npc.contrast * 5 + 850, *LIGHT_DIRECTION)
+
+
+def npc_scale(npc: NpcDefinition) -> tuple[float, float, float]:
+    """The scale of the NPC in game x, height and z. `NPCComposition.getModel` lines 436 to 437 scale the posed model
+    by `widthScale / 128` in x and z and by `heightScale / 128` in height (revision 149 `ip.v` offsets 712 to 738)."""
+    width, height = npc.width_scale / 128, npc.height_scale / 128
+    return (width, height, width)
 
 
 def decode_npc(npc_id: int, data: bytes) -> NpcDefinition:
