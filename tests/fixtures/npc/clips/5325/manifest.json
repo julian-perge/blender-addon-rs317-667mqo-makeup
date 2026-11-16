@@ -1,0 +1,82 @@
+{
+  "sequence": 5325,
+  "source_cache_dat2_sha256": "3c48913fa884d2d33f03af71cf4be05e6915263f939c545e1fefa6953bc7fedd",
+  "sequence_sha256": "3b1bdf9904d02c6f06a6d46ad448ac42920f1f05b158acd4a2e3fe4b9efdc098",
+  "durations": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+  ],
+  "frames": [
+    {
+      "group": 1390,
+      "file": 190,
+      "map": 1248,
+      "sha256": "b6cca4780282e16603f2719a6837dfd8cf51a167feab3f4a6ac835f3686fd41e"
+    },
+    {
+      "group": 1390,
+      "file": 192,
+      "map": 1248,
+      "sha256": "d3fcc800f943e47c93a27ada622390fe5bd782cd3dfba2fd796c9040fa3350c5"
+    },
+    {
+      "group": 1390,
+      "file": 193,
+      "map": 1248,
+      "sha256": "627ee3254a5a142b691eda5610f6b06f117281371a6511773b5bfdca1e0ce37a"
+    },
+    {
+      "group": 1390,
+      "file": 194,
+      "map": 1248,
+      "sha256": "980a92c1a406843590fce348d5c9aee2a16864429e62a062a5d465ced1af417b"
+    },
+    {
+      "group": 1390,
+      "file": 195,
+      "map": 1248,
+      "sha256": "9e6bdf3e7d11893c885099314a974dc586840789fa1e01a7bc2fbb44474a56c0"
+    },
+    {
+      "group": 1390,
+      "file": 196,
+      "map": 1248,
+      "sha256": "01183216693d1a30d692e335dd81e3b485997ea04740417cf9c5af6fe0d3cb0e"
+    },
+    {
+      "group": 1390,
+      "file": 197,
+      "map": 1248,
+      "sha256": "2c507ac68fa967edcda07fdb34ede839abd2d2364756dd1bd33878cfbf5ff994"
+    },
+    {
+      "group": 1390,
+      "file": 198,
+      "map": 1248,
+      "sha256": "0490ff3d049f09827fa50ada57aa44513b83a8d43bd57260876e76dfab3c8a7a"
+    },
+    {
+      "group": 1390,
+      "file": 199,
+      "map": 1248,
+      "sha256": "288b4b31fa42c994820c96df19b0dac5b9c88f1c62dd0274485398706ebe1d5b"
+    },
+    {
+      "group": 1390,
+      "file": 191,
+      "map": 1248,
+      "sha256": "a06ff8827c92fdd618e6d38fe4965552e0d50b072d8062210852bd728fdc6452"
+    }
+  ],
+  "maps": {
+    "1248": "8d30de1467a7f745979fce7f77e66acbfe6386b509c59fcddf4c1245b8e80779"
+  }
+}

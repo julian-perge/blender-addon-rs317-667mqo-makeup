@@ -1,0 +1,68 @@
+{
+  "sequence": 5848,
+  "source_cache_dat2_sha256": "3c48913fa884d2d33f03af71cf4be05e6915263f939c545e1fefa6953bc7fedd",
+  "sequence_sha256": "197854816e9c85af688f219f107e0844eb098b2837364b94f95cf63e5bbc7757",
+  "durations": [
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5
+  ],
+  "frames": [
+    {
+      "group": 1490,
+      "file": 170,
+      "map": 1338,
+      "sha256": "657ecf11c13e268f8ae7fbc7803420afeca3a6df4377b719816548f643b16b28"
+    },
+    {
+      "group": 1490,
+      "file": 171,
+      "map": 1338,
+      "sha256": "2ef5fd2c7eb41c720763d783ac63eac9a580f4363732a4feabbe67e7545c0506"
+    },
+    {
+      "group": 1490,
+      "file": 172,
+      "map": 1338,
+      "sha256": "c240f53824e4ee96ab8324a4d65e3cd20e807214bac050b173fc2b4ba80f675a"
+    },
+    {
+      "group": 1490,
+      "file": 173,
+      "map": 1338,
+      "sha256": "585587ba2f182e05354019765f605f537bb507354d62f0d8dd3b611b9ec206e7"
+    },
+    {
+      "group": 1490,
+      "file": 174,
+      "map": 1338,
+      "sha256": "f0a668f6369e6c7e75362d68b0c65d04da46f751144eb451e306f6c2519f6583"
+    },
+    {
+      "group": 1490,
+      "file": 175,
+      "map": 1338,
+      "sha256": "7ee0393adf796ab0de8176d6163de6b709aa46316ef8f29a7f126c649f483a42"
+    },
+    {
+      "group": 1490,
+      "file": 176,
+      "map": 1338,
+      "sha256": "3d530a855780104153bdde1e6d7aecea6ee94c50648c7495d83d9d49e77769b5"
+    },
+    {
+      "group": 1490,
+      "file": 177,
+      "map": 1338,
+      "sha256": "2512129a7c0bdf94b7a4172dc65970c9cd58262ae3fef5cbdb9acca6e266d9ef"
+    }
+  ],
+  "maps": {
+    "1338": "724fab447d923d0fc4bddc6173871f5de7572f50d1a96a63047f966603f7f1da"
+  }
+}

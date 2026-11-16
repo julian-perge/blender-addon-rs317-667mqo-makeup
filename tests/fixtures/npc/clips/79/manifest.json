@@ -1,0 +1,124 @@
+{
+  "sequence": 79,
+  "source_cache_dat2_sha256": "3c48913fa884d2d33f03af71cf4be05e6915263f939c545e1fefa6953bc7fedd",
+  "sequence_sha256": "b58c5465d8804a4c915165f4481b1b1390ef13d7656dd71194f1ea8fd0490339",
+  "durations": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3
+  ],
+  "frames": [
+    {
+      "group": 1210,
+      "file": 217,
+      "map": 1080,
+      "sha256": "8628d1d805d2d2d5185cc1a33ca24be2460368ea6521cbfa1c9e408930abc3a0"
+    },
+    {
+      "group": 1210,
+      "file": 225,
+      "map": 1080,
+      "sha256": "f150031209028fd68dc18ea52a4697f0f2651e45bd35b4c63bbdafc5324c2fd7"
+    },
+    {
+      "group": 1210,
+      "file": 226,
+      "map": 1080,
+      "sha256": "bdd35013214ed78970514d9d52ffb03a440c5738d0af7b493d44d0e5db12fa26"
+    },
+    {
+      "group": 1210,
+      "file": 227,
+      "map": 1080,
+      "sha256": "95cab3e019c54caea33e005a4d1c474ae54a13e0b8d3e709b8070625a508ca86"
+    },
+    {
+      "group": 1210,
+      "file": 228,
+      "map": 1080,
+      "sha256": "2d75912be4df19a6dc72304b2f6fbc35e7184a6298c643becb830a2caba8206a"
+    },
+    {
+      "group": 1210,
+      "file": 229,
+      "map": 1080,
+      "sha256": "1293c86ad86b0a9f276a24f2127bea0310472b4e928bc5f55b637fa6e5e5c1f9"
+    },
+    {
+      "group": 1210,
+      "file": 230,
+      "map": 1080,
+      "sha256": "384a7a31ef87450b7822b26664be7758a5cfceb27554ec2710296c56ada91aa3"
+    },
+    {
+      "group": 1210,
+      "file": 231,
+      "map": 1080,
+      "sha256": "bf1f519f607f636579abde75f9b96f64f4193541f4826f1d8eb9bc4ddcc1a776"
+    },
+    {
+      "group": 1210,
+      "file": 232,
+      "map": 1080,
+      "sha256": "05191c2b6f56bb4c86190bb66a0612670e78868c2b91e7d482c5e82c02fb082b"
+    },
+    {
+      "group": 1210,
+      "file": 218,
+      "map": 1080,
+      "sha256": "c2675b31a78a71588725b0d56d883a2b4b0f4177798dbd329b55751f7221191b"
+    },
+    {
+      "group": 1210,
+      "file": 219,
+      "map": 1080,
+      "sha256": "02c7343ebd72887b8cb2f33b7f555e4e6629dc791936b94e761d65d05d1b5971"
+    },
+    {
+      "group": 1210,
+      "file": 220,
+      "map": 1080,
+      "sha256": "08914ded8a12e5137bd3e5e347c7aaa1e1f1673c197d7e20968bfbb6c83fe056"
+    },
+    {
+      "group": 1210,
+      "file": 221,
+      "map": 1080,
+      "sha256": "113619c162e0a3ada40c75c9a691a2e51cb70a7ab00917b5ea1455f89e4bf15c"
+    },
+    {
+      "group": 1210,
+      "file": 222,
+      "map": 1080,
+      "sha256": "5ab3c9a577e038e359d04e6ee7bb7e54938c770ca79dafa2bb9975945b648abe"
+    },
+    {
+      "group": 1210,
+      "file": 223,
+      "map": 1080,
+      "sha256": "9135d0f706bb48cf9a59bda3db4c94ac792a4aeb73c5fa81a867ca1f72d083a1"
+    },
+    {
+      "group": 1210,
+      "file": 224,
+      "map": 1080,
+      "sha256": "785e03b2b19c1f8e07833879d96af686d77195bc8c3af32c8ceb346153936e34"
+    }
+  ],
+  "maps": {
+    "1080": "2b213aa858c159198a44fed016bd52806c9622c6107993b0f71923e2852f68a0"
+  }
+}

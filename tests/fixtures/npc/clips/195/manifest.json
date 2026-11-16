@@ -1,0 +1,26 @@
+{
+  "sequence": 195,
+  "source_cache_dat2_sha256": "3c48913fa884d2d33f03af71cf4be05e6915263f939c545e1fefa6953bc7fedd",
+  "sequence_sha256": "42c9eab102d90199a5edbcedade09886cb5c87388c3a3d97bd31716d9f13f02e",
+  "durations": [
+    21,
+    21
+  ],
+  "frames": [
+    {
+      "group": 432,
+      "file": 409,
+      "map": 319,
+      "sha256": "71e3a2aededece13487384734cc431597fbf93c86136fe87ea55b37f1fa62c94"
+    },
+    {
+      "group": 432,
+      "file": 410,
+      "map": 319,
+      "sha256": "8bffac7e274d5c20c787b3b1918b91f238953418c69116113df2bf6dcbdef713"
+    }
+  ],
+  "maps": {
+    "319": "f97a0d4df6d7fc40d0e9abb639573f567f6d7f7fa9de9e64a6639d7f869ad275"
+  }
+}

@@ -2,17 +2,26 @@
 
 import dataclasses
 import json
+import math
 import os
 import re
 from pathlib import Path
 
 import bpy
 import pytest
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
-from rsps_toolkit.animation.clip import CacheClip
-from rsps_toolkit.animation.frames import decode_frame_map, decode_sequence
-from rsps_toolkit.blender import appearance_collection, appearance_preview, appearance_props, npc_collection, npc_panel
+from rsps_toolkit.animation.clip import CacheClip, pose_vertices, read_sequence
+from rsps_toolkit.animation.frames import decode_frame_map, decode_sequence, frame_schedule
+from rsps_toolkit.animation.label_fit import fit_frame, fitted_vertices
+from rsps_toolkit.blender import (
+    appearance_clip,
+    appearance_collection,
+    appearance_preview,
+    appearance_props,
+    npc_collection,
+    npc_panel,
+)
 from rsps_toolkit.blender.face_materials import DEFAULT_BRIGHTNESS, srgb_to_linear
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.appearance_rig import derive_rig, frame_map_joint_specs, load_joint_specs
@@ -32,6 +41,10 @@ pytestmark = [
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 LIT = json.loads((FIXTURES / "npc" / "lit.json").read_text())["npcs"]
 APPEARANCE = json.loads((FIXTURES / "appearance" / "reference.json").read_text())
+# The unchanged revision 149 client posing each test NPC with every frame of its stand and walk clips, recorded by
+# tests/fixtures/record_npc.py from the clip folders in tests/fixtures/npc/clips.
+POSES = json.loads((FIXTURES / "npc" / "poses.json").read_text())
+NPC_CLIPS = FIXTURES / "npc" / "clips"
 # The five test NPCs of spec 13: the gnome, the ent, the cow, the green dragon and the giant spider.
 TEST_NPCS = (4233, 6594, 2805, 260, 2477)
 MAN = 3078
@@ -269,3 +282,210 @@ def test_the_npc_panel_draws_below_player_appearance_and_reads_the_npc_id_field(
     assert order.index("VIEW3D_PT_rsps_npc") > order.index("VIEW3D_PT_rsps_appearance")
     assert npc_panel.VIEW3D_PT_rsps_npc.bl_category == "RSPS ADDON"
     assert npc_panel.VIEW3D_PT_rsps_npc.bl_label == "NPC"
+
+
+# The largest distance, in game units, between an NPC baked on its rig and the client's posed vertices, measured on
+# 2026-11-16 over every frame of each clip (docs/research/13-npc-rigs.md, "Bone bake"). The add-on's pose of each
+# clip equals the client's, after the client's own scale, so the distance is the fit's: the similarity that a bone
+# can carry against the client's integer vertices. The ent's clips and the green dragon's walk scale labels on one or
+# two axes only, which no similarity follows. For the rest, even the best affine fit of each label is 2.3 to 3.1 away,
+# which is the client's integer truncation.
+CLIENT_BOUND = {
+    (4233, "stand"): 0.0,
+    (4233, "walk"): 1.36,
+    (6594, "stand"): 2.58,
+    (6594, "walk"): 5.72,
+    (2805, "stand"): 1.46,
+    (2805, "walk"): 1.37,
+    (260, "stand"): 3.17,
+    (260, "walk"): 3.51,
+    (2477, "stand"): 1.43,
+    (2477, "walk"): 1.60,
+}
+# Blender stores bones, keys and evaluated vertices in 32-bit floats (tests/blender/test_appearance_clip.py,
+# RIG_ROUNDING). The NPCs are larger than a player, so this allows ten times the player's margin.
+RIG_ROUNDING = 1e-3
+
+
+def evaluated_vertices(collection: bpy.types.Collection, frame: int) -> dict[int, tuple[float, float, float]]:
+    """Each model vertex of the NPC after the rig on a Blender frame, in game coordinates from the rig's location, so
+    the rig's scale applies and its placement beside the other actors does not."""
+    bpy.context.scene.frame_set(frame)  # pyrefly: ignore[missing-attribute]
+    mesh_obj = appearance_collection.mesh_of(collection)
+    origin = appearance_collection.armature_of(collection).matrix_world.translation
+    evaluated = mesh_obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    data = evaluated.to_mesh()
+    try:
+        out = {}
+        for vertex, model_vertex in zip(data.vertices, vertices_of(collection), strict=True):
+            x, y, z = mesh_obj.matrix_world @ vertex.co - origin
+            out[model_vertex] = (x, -z, y)
+        return out
+    finally:
+        evaluated.to_mesh_clear()
+
+
+def vertices_of(collection: bpy.types.Collection) -> list[int]:
+    return appearance_preview.vertex_indices(mesh(collection))
+
+
+def fitted_clip(npc_id: int, sequence: int) -> list[tuple[tuple[float, float, float], ...]]:
+    """The pure fit of every frame of the clip on the NPC's model before the client's scale."""
+    model = npc_model(read_npc(Js5Store(SNAPSHOT_430), npc_id), shared_profile(SNAPSHOT_430).load_model)
+    rest = tuple(model.vertices)
+    assert model.vertex_skins is not None
+    labels = tuple(model.vertex_skins)
+    return [
+        fitted_vertices(rest, labels, fit_frame(rest, labels, frame.vertices))
+        for frame in pose_vertices(rest, labels, NPC_CLIPS / str(sequence))
+    ]
+
+
+def first_frames(sequence: int) -> list[tuple[int, int]]:
+    """Each frame index of a pose clip with the Blender frame it starts on, for a strip that starts on frame 1."""
+    out, frame = [], 1
+    for index, ticks in frame_schedule(read_sequence(NPC_CLIPS / str(sequence)), action=False):
+        out.append((index, frame))
+        frame += ticks
+    return out
+
+
+@pytest.mark.parametrize("npc_id", TEST_NPCS)
+@pytest.mark.parametrize("clip", ["stand", "walk"])
+def test_each_frame_of_a_baked_stand_and_walk_clip_gives_the_clients_posed_vertices(npc_id, clip):
+    sequence = POSES["clips"][str(npc_id)][clip]
+    client = POSES["npcs"][str(npc_id)][str(sequence)]
+    collection = created(npc_id)
+    assert appearance_clip.bake_npc_clip(collection, NPC_CLIPS / str(sequence)) == len(client)
+    fitted = fitted_clip(npc_id, sequence)
+    scale = appearance_collection.armature_of(collection).scale
+    for index, frame in first_frames(sequence):
+        evaluated = evaluated_vertices(collection, frame)
+        expected = client[index]
+        for vertex, at in evaluated.items():
+            x, y, z = fitted[index][vertex]
+            assert math.dist(at, (x * scale.x, y * scale.z, z * scale.y)) <= RIG_ROUNDING
+            assert math.dist(at, (expected["e"][vertex], expected["l"][vertex], expected["s"][vertex])) <= (
+                CLIENT_BOUND[npc_id, clip] + RIG_ROUNDING
+            )
+
+
+def test_an_npc_bake_keeps_the_tracks_frame_rate_and_scene_range_of_the_player_bake():
+    # docs/research/13-npc-rigs.md: the gnome stands with sequence 195, two frames of 21 ticks, and walks with 189,
+    # eight frames of 5 ticks (tests/fixtures/npc/clips/<sequence>/manifest.json). The first frame of a pose clip shows
+    # one tick longer than its duration (`frames._frames_per_tick`), so the clips are 43 and 41 Blender frames long.
+    collection = created(4233)
+    scene = bpy.context.scene
+    scene.render.fps = 24  # pyrefly: ignore[missing-attribute]
+    appearance_clip.bake_npc_clip(collection, NPC_CLIPS / "195")
+    appearance_clip.bake_npc_clip(collection, NPC_CLIPS / "189", start=44)
+    animation = appearance_collection.armature_of(collection).animation_data
+    assert animation is not None
+    assert [track.name for track in animation.nla_tracks] == [appearance_clip.CLIP_TRACK, appearance_clip.USER_TRACK]
+    strips = animation.nla_tracks[appearance_clip.CLIP_TRACK].strips
+    assert [(s.frame_start, s.frame_end, s.extrapolation) for s in strips] == [
+        (1, 44, "HOLD_FORWARD"),
+        (44, 85, "HOLD_FORWARD"),
+    ]
+    assert (scene.render.fps, scene.frame_start, scene.frame_end) == (50, 1, 84)  # pyrefly: ignore[missing-attribute]
+    assert not appearance_collection.is_edited(collection)
+
+
+def test_a_key_on_a_joint_on_your_motion_moves_the_mesh_on_top_of_the_baked_clip():
+    collection = created(4233)
+    appearance_clip.bake_npc_clip(collection, NPC_CLIPS / "189")
+    rig = appearance_collection.armature_of(collection)
+    clip_only = evaluated_vertices(collection, 12)
+    clip_basis = {bone.name: bone.matrix_basis.copy() for bone in rig.pose.bones}  # pyrefly: ignore[missing-attribute]
+    joint = next(name for name in joint_names(collection) if not rig.data.bones[name].parent)  # pyrefly: ignore[missing-attribute]
+    turn = bpy.data.actions.new("turn")
+    animation = rig.animation_data
+    assert animation is not None
+    animation.action = turn
+    path = f'pose.bones["{joint}"].rotation_quaternion'
+    for index, value in enumerate((math.cos(math.pi / 4), 0.0, 0.0, math.sin(math.pi / 4))):
+        turn.fcurve_ensure_for_datablock(rig, path, index=index).keyframe_points.insert(1, value)
+    slot = animation.action_slot
+    animation.action = None
+    strip = animation.nla_tracks[appearance_clip.USER_TRACK].strips.new("turn", 1, turn)
+    strip.action_slot = slot
+    strip.blend_type = animation.action_blend_type
+    keyed = evaluated_vertices(collection, 12)
+    # Combine blending multiplies the clip's rotation by the user's, so the joint turns a quarter turn from where the
+    # clip puts it, and every other bone keeps the clip's pose.
+    pose_bones = rig.pose.bones  # pyrefly: ignore[missing-attribute]
+    expected = clip_basis[joint] @ Matrix.Rotation(math.pi / 2, 4, "Z")
+    assert [v for row in pose_bones[joint].matrix_basis for v in row] == pytest.approx(
+        [v for row in expected for v in row], abs=1e-5
+    )
+    for bone in pose_bones:
+        if bone.name != joint:
+            assert [v for row in bone.matrix_basis for v in row] == pytest.approx(
+                [v for row in clip_basis[bone.name] for v in row], abs=1e-5
+            )
+    assert any(math.dist(keyed[v], clip_only[v]) > 1 for v in keyed)
+
+
+def file_state() -> dict[str, object]:
+    """What a refused bake must leave alone: the data of `blender_data`, the actions, each rig's strips and the
+    scene's rate and range."""
+    scene = bpy.context.scene
+    return {
+        **blender_data(),
+        "actions": sorted(action.name for action in bpy.data.actions),
+        "strips": sorted(
+            (obj.name, track.name, strip.name, strip.frame_start, strip.frame_end)
+            for obj in bpy.data.objects
+            if obj.animation_data is not None
+            for track in obj.animation_data.nla_tracks
+            for strip in track.strips
+        ),
+        "scene": (scene.render.fps, scene.frame_start, scene.frame_end),  # pyrefly: ignore[missing-attribute]
+    }
+
+
+def test_a_sequence_on_another_frame_map_is_refused_with_no_change():
+    # docs/research/13-npc-rigs.md: the gnome is rigged for frame map 319 and the green dragon's stand sequence 90
+    # uses frame map 1080.
+    collection = created(4233)
+    before = file_state()
+    with pytest.raises(ValueError, match="uses frame map 1080.*frame map 319"):
+        appearance_clip.bake_npc_clip(collection, NPC_CLIPS / "90")
+    assert file_state() == before
+
+
+def test_an_edited_npc_is_refused_with_no_change():
+    collection = created(4233)
+    mesh(collection).vertices[0].co.x += 5
+    before = file_state()
+    with pytest.raises(ValueError, match="has edits"):
+        appearance_clip.bake_npc_clip(collection, NPC_CLIPS / "195")
+    assert file_state() == before
+
+
+def test_a_strip_that_would_overlap_another_is_refused_with_no_change():
+    collection = created(4233)
+    appearance_clip.bake_npc_clip(collection, NPC_CLIPS / "195")
+    before = file_state()
+    with pytest.raises(ValueError, match="over the strip"):
+        appearance_clip.bake_npc_clip(collection, NPC_CLIPS / "189", start=30)
+    assert file_state() == before
+
+
+def test_an_npc_in_edit_mode_is_refused_with_no_change():
+    collection = created(4233)
+    bpy.context.view_layer.objects.active = appearance_collection.mesh_of(collection)  # pyrefly: ignore[missing-attribute]
+    bpy.ops.object.mode_set(mode="EDIT")
+    before = file_state()
+    with pytest.raises(ValueError, match="Edit Mode"):
+        appearance_clip.bake_npc_clip(collection, NPC_CLIPS / "195")
+    assert file_state() == before
+
+
+def test_a_player_is_refused_by_the_npc_bake():
+    case = APPEARANCE["cases"][0]
+    preset = AppearancePreset(149, 430, False, tuple(case["equipment"]), tuple(case["colours"]))
+    body, shading, slots = appearance_preview.assemble_parts(preset, SNAPSHOT_430)
+    player = appearance_collection.build_collection(body, shading, preset, "Player", slots=slots)
+    with pytest.raises(ValueError, match="Player is not an NPC"):
+        appearance_clip.bake_npc_clip(player, NPC_CLIPS / "195")

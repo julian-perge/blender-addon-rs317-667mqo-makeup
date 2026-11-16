@@ -41,3 +41,25 @@ On 2026-11-16 a second scratch probe applied the joint rule of ADR 0025 with the
 - Lines 436 to 437 scale the posed model by `widthScale` in x and z and by `heightScale` in height, each over 128.
 
 So the scale comes after the pose. A scale on the rig object gives the same order.
+
+## Bone bake
+
+Measured on 2026-11-16 for issue 93. `tests/fixtures/record_npc.py --poses` recorded the unchanged revision 149 client posing each test NPC with every frame of its stand and walk clips (`tests/fixtures/npc/poses.json`). The harness calls `ip.v` with a sequence: offsets 104 to 111 call `jg.e`, and the scale of offsets 712 to 738 follows.
+
+- **Pose.** The add-on's `pose_vertices` gives the client's vertices exactly for every frame of all ten clips. For the green dragon, the client's scale of `x * 110 / 128` with integer division, applied to the add-on's pose, also gives the client's vertices exactly. This confirms that the client scales after the pose. Evidence: a scratch comparison in `<scratch folder 2026-11-16-npc-bake>/`.
+- **Rounding.** The rounding is not the same as for a player. The largest distance from the baked rig to the client, in game units, over every frame:
+
+| NPC | Stand | Walk |
+| --- | --- | --- |
+| Gnome 4233 | 0.00 (195) | 1.35 (189) |
+| Ent 6594 | 2.57 (7143) | 5.71 (7142) |
+| Cow 2805 | 1.45 (5852) | 1.37 (5848) |
+| Green dragon 260 | 3.17 (90) | 3.50 (79) |
+| Giant spider 2477 | 1.42 (5326) | 1.59 (5325) |
+
+The player bake's largest is 2.02 (`docs/research/osrs-149-animation.md`, "Bone rig clip"). The cause of the larger distances, from scratch fits against the add-on's exact pose (evidence):
+
+- The ent's clips and the green dragon's walk have scale transforms (type 3) that scale one or two axes only, for example `(128, 118, 128)` in 7142 and `(124, 128, 124)` in 79. A bone carries a rotation, a uniform scale and a location, so it cannot follow them.
+- The rest is the client's integer truncation. A best 12-parameter affine fit of each label is still 2.84 (dragon stand), 3.14 (dragon walk), 3.09 (ent walk) and 2.29 (ent stand) away. The similarity fit is 3.46, 3.53, 5.71 and 2.57 away. The worst labels are dragon label 153 and ent labels 40 and 42.
+
+The owner chose on 2026-11-16 (issue 93) to keep the similarity fit and bound each clip's test by its measured distance. A fit with non-uniform bone scale would lower the ent walk to at most about 3.1, and is not planned.
