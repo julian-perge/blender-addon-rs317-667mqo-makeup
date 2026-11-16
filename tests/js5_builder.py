@@ -13,7 +13,7 @@ CONFIG_INDEX, MODEL_INDEX = 2, 7
 REGION_FIXTURES = Path(__file__).parent / "fixtures/region"
 REGION_TERRAINS = tuple(f"m{x}_{y}" for x in (47, 48, 49) for y in (49, 50, 51))
 """The terrain groups of region `48_50` and its 8 neighbours, which `tests/fixtures/region/` holds as the cache stores them."""
-KIT_GROUP, ENUM_GROUP, ITEM_GROUP = 3, 8, 10
+KIT_GROUP, ENUM_GROUP, NPC_GROUP, ITEM_GROUP = 3, 8, 9, 10
 UNDERLAY_GROUP, OVERLAY_GROUP, LOC_GROUP = 1, 4, 6
 SPRITE_INDEX, TEXTURE_INDEX, TEXTURE_GROUP = 8, 9, 0
 
@@ -83,14 +83,15 @@ def build_cache(
     kits: Mapping[int, bytes] | None = None,
     items: Mapping[int, bytes] | None = None,
     enums: Mapping[int, bytes] | None = None,
+    npcs: Mapping[int, bytes] | None = None,
 ) -> None:
-    """Write a disk cache that holds each model as file 0 of its own group in index 7. The kits, enums and items become
-    config groups 3, 8 and 10 in index 2, and each definition's id is its file id. A config group with one file has no
-    size table, as in a real cache. A group with no files is left out. The reference table of index 2 holds each config
-    group's CRC32, as in a real cache."""
+    """Write a disk cache that holds each model as file 0 of its own group in index 7. The kits, enums, NPCs and items
+    become config groups 3, 8, 9 and 10 in index 2, and each definition's id is its file id. A config group with one
+    file has no size table, as in a real cache. A group with no files is left out. The reference table of index 2 holds
+    each config group's CRC32, as in a real cache."""
     config = {
         group: dict(sorted(files.items()))
-        for group, files in ((KIT_GROUP, kits), (ENUM_GROUP, enums), (ITEM_GROUP, items))
+        for group, files in ((KIT_GROUP, kits), (ENUM_GROUP, enums), (NPC_GROUP, npcs), (ITEM_GROUP, items))
         if files
     }
     folder.mkdir(parents=True, exist_ok=True)

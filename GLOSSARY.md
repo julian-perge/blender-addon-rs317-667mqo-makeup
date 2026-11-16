@@ -209,11 +209,15 @@ A conventional vertex skin value for a part of the player body, such as 8 for to
 _Avoid_: preset weight, weight value
 
 **Joint**:
-One of the 15 bones of a player's rig that the user animates, such as `spine` or `hand`. Each comes from a rotate transform of frame map 0 with its pivot (`data/player_joints.json`), and moves the vertices of the vertex skin labels under it rigidly.
+A bone of a rig that the user animates. It comes from a rotate transform of a frame map with its pivot, and moves the vertices of the vertex skin labels under it rigidly. A player has 15 joints with names such as `spine` or `hand`, from frame map 0 (`data/player_joints.json`). An NPC on another frame map gets one joint for each set of labels that a rotate transform moves, from the earliest such transform, with a generic name such as `joint_22.L` ([ADR 0025](docs/adr/0025-an-npc-is-created-and-baked-only.md)).
 _Avoid_: bone (the rig also has hidden label bones), control
 
+**NPC**:
+A character of the game that is not a player, such as a gnome or a cow. An NPC definition (config group 9) names its models, recolours, retextures and scale, and its stand, walk and turn sequences. In Blender an NPC is its own kind of collection, made by Create NPC by id and then only baked, not updated ([ADR 0025](docs/adr/0025-an-npc-is-created-and-baked-only.md)).
+_Avoid_: monster, mob
+
 **Your motion**:
-The NLA track of a player's rig that holds the user's own keys on the joints, layered over the baked clips on the "RS clips" track.
+The NLA track of a rig that holds the user's own keys on the joints, layered over the baked clips on the "RS clips" track.
 _Avoid_: user track, custom animation
 
 **Contact sheet**:

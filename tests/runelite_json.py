@@ -12,6 +12,7 @@ from pathlib import Path
 from rsps_toolkit.formats.appearance import Kit, WornItem
 from rsps_toolkit.formats.floor_definition import Overlay, Underlay
 from rsps_toolkit.formats.loc_definition import LocDefinition
+from rsps_toolkit.formats.npc_definition import NpcDefinition
 
 
 def load_kits(path: Path) -> dict[int, Kit]:
@@ -105,6 +106,30 @@ def load_locs(path: Path) -> dict[int, LocDefinition]:
             impostors=None if row["configChangeDest"] is None else tuple(row["configChangeDest"]),
             impostor_varbit=row["varbitID"],
             impostor_varp=row["varpID"],
+        )
+        for row in json.loads(path.read_text())
+    }
+
+
+def load_npcs(path: Path) -> dict[int, NpcDefinition]:
+    """Read the `npcs.json` that `NpcReference.java` writes."""
+    return {
+        row["id"]: NpcDefinition(
+            models=tuple(row["models"] or ()),
+            name=row["name"],
+            stand=row["standingAnimation"],
+            walk=row["walkingAnimation"],
+            turn_left=row["idleRotateLeftAnimation"],
+            turn_right=row["idleRotateRightAnimation"],
+            walk_back=row["rotate180Animation"],
+            walk_left=row["rotateLeftAnimation"],
+            walk_right=row["rotateRightAnimation"],
+            recolours=_pairs(row["recolorToFind"], row["recolorToReplace"]),
+            retextures=_pairs(row["retextureToFind"], row["retextureToReplace"]),
+            width_scale=row["widthScale"],
+            height_scale=row["heightScale"],
+            ambient=row["ambient"],
+            contrast=row["contrast"],
         )
         for row in json.loads(path.read_text())
     }
