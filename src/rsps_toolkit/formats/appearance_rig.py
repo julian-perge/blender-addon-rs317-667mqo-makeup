@@ -11,9 +11,14 @@ import json
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from ..animation.bundle import FrameMap
 from .model import Model
+
+# The animation package imports formats, so a run-time import of FrameMap here would make an import cycle as soon as
+# formats/__init__.py imports this module.
+if TYPE_CHECKING:
+    from ..animation.bundle import FrameMap
 
 # The cache stores no bone direction or length, so the owner chose that each label bone points up a fixed distance
 # from its head, in game units (issue 20).
@@ -155,7 +160,7 @@ def _names(specs: list[JointSpec], sums: dict[int, list[float]]) -> dict[int, st
     return names
 
 
-def frame_map_joint_specs(frame_map_id: int, frame_map: FrameMap, labels: Collection[int]) -> tuple[JointSpec, ...]:
+def frame_map_joint_specs(frame_map_id: int, frame_map: "FrameMap", labels: Collection[int]) -> tuple[JointSpec, ...]:
     """The joint specs of a frame map for a model that carries `labels` (ADR 0025).
 
     Frame map 0 gives the player table. On any other frame map each rotate transform is a joint named

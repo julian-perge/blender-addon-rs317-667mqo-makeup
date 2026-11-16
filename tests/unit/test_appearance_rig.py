@@ -153,6 +153,11 @@ def test_of_the_rotate_transforms_that_move_the_same_given_labels_only_the_earli
     assert [spec.rotate for spec in frame_map_joint_specs(7, frame_map, {1, 2, 7})] == [1, 3, 5]
 
 
+def test_the_earliest_transform_takes_the_given_labels_it_moves_when_it_also_moves_labels_the_model_lacks():
+    frame_map = FrameMap((0, 2, 2), ((1,), (1, 2, 7), (1, 2)))
+    assert [spec.rotate for spec in frame_map_joint_specs(7, frame_map, {1, 2})] == [1]
+
+
 def test_a_joint_of_another_frame_map_gets_its_side_suffix_from_the_rig():
     specs = frame_map_joint_specs(7, FrameMap((0, 2), ((5,), (5, 9))), {5, 9})
     assert [joint.name for joint in derive_rig(small_model([5, 5, 5, 9]), specs).joints] == ["joint_1.L"]
@@ -183,8 +188,8 @@ def test_a_rotate_transform_whose_pivot_has_no_place_on_the_model_is_not_a_joint
 
 
 def test_two_rotate_transforms_after_one_pivot_transform_share_that_pivot():
-    # The client keeps the pivot until the next pivot transform (Model.java lines 751 to 780 of the 2018 client
-    # are the only code that sets it).
+    # The client keeps the pivot until the next pivot transform. In the 2018 client, Model.java sets it to 0 at the
+    # start of a frame (lines 676 to 678), and only the pivot transform code sets it inside a frame (lines 751 to 780).
     frame_map = FrameMap((0, 2, 2), ((1,), (1, 2), (2,)))
     assert frame_map_joint_specs(7, frame_map, {1, 2}) == (
         JointSpec("joint_1", 1, frozenset({1}), frozenset({1, 2})),
