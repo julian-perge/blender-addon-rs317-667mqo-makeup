@@ -3,13 +3,13 @@
 # requires-python = ">=3.13"
 # dependencies = []
 # ///
-"""Copies the raw kit and style enum definitions of the snapshot 430 cache into `tests/fixtures/appearance/`.
+"""Copies the raw kit, style enum and test NPC definitions of the snapshot 430 cache into `tests/fixtures/`.
 
     uv run scripts/extract-config-fixtures.py --cache <openrs2-430 folder>/cache
 
-It writes every kit of config group 3 to `kits/<id>.dat`, and the enums that `STYLE_ENUMS` names from config group 8
-to `enums/<id>.dat`, unchanged. An existing file with different bytes stops the run, so the fixtures cannot change
-without notice.
+It writes every kit of config group 3 to `appearance/kits/<id>.dat`, the enums that `STYLE_ENUMS` names from config
+group 8 to `appearance/enums/<id>.dat`, and the NPCs that `TEST_NPCS` names from config group 9 to `npc/<id>.dat`, each
+unchanged. An existing file with different bytes stops the run, so the fixtures cannot change without notice.
 """
 
 import argparse
@@ -20,8 +20,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from rsps_toolkit.formats.cache_profile import CONFIG_INDEX, ENUM_GROUP, KIT_GROUP  # noqa: E402
 from rsps_toolkit.formats.js5 import Js5Store  # noqa: E402
 from rsps_toolkit.formats.kit_names import STYLE_ENUMS  # noqa: E402
+from rsps_toolkit.formats.npc_definition import NPC_GROUP  # noqa: E402
 
-OUTPUT = Path(__file__).resolve().parent.parent / "tests/fixtures/appearance"
+FIXTURES = Path(__file__).resolve().parent.parent / "tests/fixtures"
+OUTPUT = FIXTURES / "appearance"
+TEST_NPCS = (4233, 6594, 2805, 260, 2477, 3078)
+"""The test NPCs of spec 13: the gnome, the ent, the cow, the green dragon, the giant spider and Man."""
 
 
 def write(folder: Path, files: dict[int, bytes]) -> None:
@@ -41,6 +45,8 @@ def main() -> None:
     write(OUTPUT / "kits", store.files(CONFIG_INDEX, KIT_GROUP))
     enums = store.files(CONFIG_INDEX, ENUM_GROUP)
     write(OUTPUT / "enums", {enum: enums[enum] for pair in STYLE_ENUMS.values() for enum in pair})
+    npcs = store.files(CONFIG_INDEX, NPC_GROUP)
+    write(FIXTURES / "npc", {npc: npcs[npc] for npc in TEST_NPCS})
 
 
 if __name__ == "__main__":
