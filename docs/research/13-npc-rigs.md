@@ -28,6 +28,8 @@ The five test NPCs. Every model of each one has vertex skins, and none has impos
 
 None of the five has a retexture (opcode 41).
 
+On 2026-11-16 a second scratch probe applied the joint rule of ADR 0025 with the pivot check of issue 91. It parsed each stand frame map from its bytes by hand, without `formats/appearance_rig.py`, and counted the distinct sets of the NPC's labels that a rotate transform moves when the nearest earlier pivot transform has a label on the NPC. The counts are the joints of each rig: gnome 14, ent 69, cow 31, green dragon 58 and giant spider 41. The dragon and the spider lose 1 and 3 sets to the pivot check.
+
 ## How the client builds an NPC model
 
 `NPCComposition.getModel` in the 2018 client (`<RuneLite May 2018 tree>/runescape-client/src/main/java/NPCComposition.java`):

@@ -18,6 +18,8 @@ from . import (
     import_animation,
     import_item,
     import_model,
+    npc_collection,
+    npc_panel,
     painter,
     pmn_texturing,
     preferences,
@@ -37,6 +39,8 @@ classes = (
     *appearance_clip.classes,
     *appearance_contact_sheet.classes,
     *appearance_panel.classes,
+    *npc_collection.classes,
+    *npc_panel.classes,
     *weighter.classes,
     *ui.classes,
     *pmn_texturing.classes,
@@ -79,6 +83,7 @@ def register():
     )
     painter.register_properties()
     appearance_props.register_properties()
+    npc_collection.register_properties()
     bpy.app.handlers.load_post.append(appearance_props.fill_scenes)
     # Registration runs where scene data may not be written, so the open file's scenes are filled a moment later.
     bpy.app.timers.register(appearance_props.fill_scenes, first_interval=0.0)
@@ -189,6 +194,7 @@ def unregister():
             handlers.remove(appearance_collection.follow_active_player)
     appearance_collection.stop_watching_selection()
     appearance_props.unregister_properties()
+    npc_collection.unregister_properties()
     appearance_swatches.unregister()
     cache_profile.clear_shared_profiles()
     weighter.unregister_properties()
