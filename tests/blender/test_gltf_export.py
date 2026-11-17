@@ -883,6 +883,25 @@ def test_the_export_of_textured_faces_leaves_the_scene_unchanged(tmp_path: Path)
     assert sorted(image.name for image in bpy.data.images) == images
 
 
+def test_every_material_draws_both_sides_and_the_source_materials_keep_their_culling(cache: Path, tmp_path: Path):
+    # Row "Both sides" (rule 13, ADR 0029): the page draws both sides of each face, also when a source material culls
+    # its back. The file has the four kinds of material of rules 6 to 9: the pairs of the player, a texture, a face alpha
+    # with no texture, and the plain material.
+    player(cache)
+    imported_mesh("Fire", [(None, 7, 0), (8741, None, 100), (960, None, 0), None])
+    sources = list(bpy.data.materials)
+    for material in sources:
+        material.use_backface_culling = True
+    path = tmp_path / "scene.glb"
+    assert export(path) == {"FINISHED"}
+    gltf, _ = read_glb(path)
+    names = {m["name"] for m in gltf["materials"]}
+    assert {"RS_Texture_7", "rs_lit_100", "rs_lit"} <= names
+    assert any(name.startswith("RS_Colour_") for name in names)
+    assert all(m.get("doubleSided") is True for m in gltf["materials"])
+    assert all(material.use_backface_culling for material in sources)
+
+
 def rigged_player(cache: Path) -> bpy.types.Object:
     """The rig of a player from Create Player's build, selected with the player's meshes."""
     obj, _ = player(cache)

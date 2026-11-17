@@ -2,7 +2,7 @@ Source: [issue 156](https://github.com/julian-perge/blender-addon-rs317-667mqo-m
 
 # Spec delta: the RS Scene page draws both sides of each face
 
-Status: the owner approved this delta on 2026-11-17.
+Status: implemented. The owner approved this delta on 2026-11-17.
 
 This is a delta to [spec 140](140-campfire-glb-export.md). It follows [ADR 0029](../docs/adr/0029-the-gltf-page-draws-both-sides-of-each-face.md). Terms follow [GLOSSARY.md](../GLOSSARY.md). Commands, structure and code style are in [AGENTS.md](../AGENTS.md) and spec 140.
 

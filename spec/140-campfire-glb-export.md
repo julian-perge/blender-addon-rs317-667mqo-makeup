@@ -44,6 +44,7 @@ The user is the owner. The owner builds the campfire scene in the page repo: the
 10. **Clips.** Each action on a strip of a selected rig's NLA tracks, and its active action, becomes one glTF animation with the action's name (decision 6). Every channel that moves has `STEP` interpolation (issue 120, decision 10). A held pose, where no channel moves, still exports each keyed joint with its value.
 11. **Fixed settings.** The operator calls the stock exporter with `export_extras` on and Draco off ([glTF note](../docs/research/82-gltf-export.md), "Form of the exporter"). The user cannot change the other exporter settings.
 12. **No interleave list in v1.** The clips carry no interleave extras (decision 1).
+13. **The side.** Each material that the export makes has backface culling off, set by the export, so every material in the file has `doubleSided` true and the page draws both sides of each face. This holds for each kind of material of rules 6 to 9. The export does not read the backface culling of the source material, and the source materials keep their culling (rule 5). [ADR 0029](../docs/adr/0029-the-gltf-page-draws-both-sides-of-each-face.md) and the [delta spec of issue 156](156-the-page-draws-both-sides.md) decided this.
 
 ## Parts
 
@@ -105,6 +106,7 @@ The test scene is built from the appearance fixtures in `tests/blender/conftest.
 | `STEP` | Every sampler of a channel that moves is `STEP`. | Issue 120, the glTF note row 6. |
 | Held pose | The held pose has a channel for each keyed joint, with the keyed value. | ADR 0028 (the sitting loop is one held pose). |
 | No interleave | No animation has interleave extras. | Decision 1. |
+| Both sides | With source materials that have backface culling on, every material of a player and of a mesh with no `rs_face` with a face alpha and a texture has `doubleSided` true. Each source material has the same backface culling after the export as before. | ADR 0029. |
 
 The pixel checks are not committed tests. On the scratch page of issue 87, the player matches the unlit render of `rs_lit` within about 1 to 2 of 255 (issue 116), and a screenshot between two keys equals the earlier key (issue 120). Issue 140 closes when the owner sees the campfire on the profile page.
 
