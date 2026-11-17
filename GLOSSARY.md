@@ -56,7 +56,11 @@ _Avoid_: texture index, material ID
 
 **Flat shading**:
 A per-face flag that lights the face with one colour instead of blending across its vertices.
-_Avoid_: face render type, face type, draw type
+_Avoid_: face type, draw type
+
+**Face render type**:
+The byte per face that the client lights a model by. 0 is a smooth face, 1 is a flat face, 3 draws the face in the colour 128, and any other value hides it. A model of the new format stores it, and the client stores 1 or 0 for an old-format face by its flat shading. A face alpha of 254 makes it 3 and 255 makes it 2 for the light (2018 client, `ModelData.java` lines 638, 932 to 938, 1444 to 1476 and 1614 to 1673).
+_Avoid_: face type, draw type
 
 **Face alpha**:
 A byte of transparency per face, where 0 is opaque and 255 is fully transparent.
