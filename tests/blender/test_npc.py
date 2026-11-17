@@ -713,8 +713,8 @@ def make_rig(sequence: int):
 
 
 def object_state(obj: bpy.types.Object) -> dict[str, object]:
-    """What Make rig must leave alone on the selected object: its name, transform, collections, mesh, vertex groups
-    and custom properties."""
+    """What Make rig must leave alone on the selected object: its name, transform, collections, mesh, face corners,
+    vertex groups, modifiers and custom properties."""
     data = obj.data
     assert isinstance(data, bpy.types.Mesh)
     return {
