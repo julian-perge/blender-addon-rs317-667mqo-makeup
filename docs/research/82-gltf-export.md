@@ -344,7 +344,7 @@ Not decided yet. Issue 89 writes this section.
 
 ## Issues
 
-Issue 89 opens one issue for each row that does not survive. So far these are row 1 for the game values, row 5 for the visibility keys of a held item, row 6 for the `NLA_TRACKS` mode, row 14, row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, the darker faces with a face alpha of rows 7 and 8, and the face order that the joined form with Draco loses (see [Draco does not keep the face order](#draco-does-not-keep-the-face-order)).
+Issue 89 opens one issue for each row that does not survive. So far these are row 1 for the game values, row 3, row 4 for the stock form, row 5 for the visibility keys of a held item, row 6 for the `NLA_TRACKS` mode, row 7 for faces that use the same three vertices, row 8 for the stock form, row 14, the darker faces with a face alpha of rows 7 and 8, and the face order that the joined form with Draco loses (see [Draco does not keep the face order](#draco-does-not-keep-the-face-order)).
 
 Issue 87 opened [issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103): Create Player refuses an item with textured faces, such as the Fire cape. It also opened [issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105): the scenery needs the client's loc light baked in, so that the page can draw it lit ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).
 
