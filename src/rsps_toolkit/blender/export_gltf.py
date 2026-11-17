@@ -102,9 +102,9 @@ def attribute_problems(objects: Sequence[bpy.types.Object], names: Sequence[str]
 
 def write_glb(path: Path) -> None:
     """Write the selected objects to `path` with the stock exporter. The settings are fixed (spec 140, rule 11): a
-    binary file, the custom properties as extras and no Draco. The file holds the active scene only. The colour settings are the defaults, and they are given
-    here because the copies need them: a material's colour attribute is `COLOR_0`, and every other colour attribute of
-    the mesh follows in the order of the mesh."""
+    binary file, the custom properties as extras and no Draco. The file holds the active scene only. The colour settings
+    are the defaults, and they are given here because the copies need them: a material's colour attribute is `COLOR_0`,
+    and every other colour attribute of the mesh follows in the order of the mesh."""
     # The stubs do not list the operators of add-ons, and the glTF exporter is one.
     bpy.ops.export_scene.gltf(  # pyrefly: ignore[missing-attribute]
         filepath=str(path),
