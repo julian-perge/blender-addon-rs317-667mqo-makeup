@@ -6,9 +6,9 @@ mesh stays in model axes, and the objects hold the scale, the turn and the posit
 client bends to uneven ground, or whose transform Blender cannot hold, gets a mesh of its own with the vertices already
 moved, and its object holds only the position (ADR 0023).
 
-The meshes are made with `model_to_object`, so they keep the materials of model import. Each mesh also has the loc light
-of its placement (`region_loc_light.loc_light`) in the corner colour attribute `rs_lit`, which the materials do not draw
-yet (issue 130).
+The meshes are made with `model_to_object`, so their materials have the names, custom properties and draw settings of
+model import (ADR 0024). Each mesh also has the loc light of its placement (`region_loc_light.loc_light`) in the corner
+colour attribute `rs_lit`, and its materials draw that light with no Blender light (ADR 0027).
 
 A wall of type 2 and a wall decoration of type 8 show two models. Each model is one object, and the second is named with
 ` part 2`. The names of the objects and meshes are the owner's choice of 2026-11-14 (issue 49, Decisions). Two
@@ -29,7 +29,7 @@ from ..formats.region_contour import own_vertices
 from ..formats.region_loc_light import loc_light, refuse_undrawn_decoration
 from ..formats.region_placement import PlacedLoc, PlacedPart
 from .appearance_preview import LIT_ATTRIBUTE
-from .face_materials import srgb_to_linear
+from .face_materials import FACE_COLOUR, MISSING_TEXTURE, TEXTURE_ID, material_values, srgb_to_linear
 from .mesh import MaterialKey, model_to_object
 
 type ModelKey = tuple[tuple[int, ...], tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]
@@ -103,6 +103,7 @@ def scenery_objects(
     """
     shared: dict[MeshKey, bpy.types.Mesh] = {}
     materials: dict[MaterialKey, bpy.types.Material] = {}
+    lit: set[bpy.types.Material] = set()
     objects = own = nothing = 0
     for placed_loc in placed:
         placement, shown_id = placed_loc.placement, placed_loc.shown_id
@@ -121,7 +122,7 @@ def scenery_objects(
             types = render_types[part.model.model_ids]
             if vertices is None:
                 if key not in shared:
-                    mesh = _mesh(model, _shared_name(shown_id, shown, part), images, brightness, materials)
+                    mesh = _mesh(model, _shared_name(shown_id, shown, part), images, brightness, materials, lit)
                     # A shared mesh keeps the model's corner order, which is the reverse of the light's order for a
                     # mirrored part (`loc_light`).
                     shading = loc_light(placement, part, locs, model, height, types)
@@ -134,7 +135,7 @@ def scenery_objects(
                 obj.rotation_euler = (0.0, 0.0, part.rotation)
                 obj.scale = part.scale
             else:
-                mesh = _mesh(_moved(model, vertices, part), name, images, brightness, materials)
+                mesh = _mesh(_moved(model, vertices, part), name, images, brightness, materials, lit)
                 # `_moved` gives an own mesh the light's corner order already.
                 _write_lit(mesh, model, loc_light(placement, part, locs, model, height, types), False, brightness)
                 obj = bpy.data.objects.new(name, mesh)
@@ -168,15 +169,90 @@ def _mesh(
     images: Mapping[int, bpy.types.Image],
     brightness: float,
     materials: dict[MaterialKey, bpy.types.Material],
+    lit: set[bpy.types.Material],
 ) -> bpy.types.Mesh:
     """A new mesh of the model, made as model import makes it, with the textures from `images`. For each material key
-    of the model that is already in `materials` it uses that material, and it puts each new material in `materials`."""
+    of the model that is already in `materials` it uses that material, and it puts each new material in `materials`.
+    Each material of the mesh that is not in `lit` gets the shader of `show_loc_light` and goes into `lit`."""
     obj = model_to_object(model, name, images.get, brightness, materials=materials)
     mesh = obj.data
     assert isinstance(mesh, bpy.types.Mesh)
     bpy.data.objects.remove(obj)
     mesh.name = name
+    for material in mesh.materials:
+        if material is not None and material not in lit:
+            show_loc_light(material, images)
+            lit.add(material)
     return mesh
+
+
+def shows_loc_light(material: bpy.types.Material | None) -> bool:
+    """True for a material that `show_loc_light` gave its shader: one with game values whose shader reads `rs_lit`. The
+    player's material reads `rs_lit` too, but it holds no game values (`appearance_preview._material`)."""
+    if material is None or material.node_tree is None or (FACE_COLOUR not in material and TEXTURE_ID not in material):
+        return False
+    return any(
+        isinstance(node, bpy.types.ShaderNodeVertexColor) and node.layer_name == LIT_ATTRIBUTE
+        for node in material.node_tree.nodes
+    )
+
+
+def show_loc_light(material: bpy.types.Material, images: Mapping[int, bpy.types.Image]) -> None:
+    """Replace the shader of a material of model import with one that emits the corner colours of `rs_lit`, so that no
+    Blender light shades them again, as the player's material does (`appearance_preview._material`, ADR 0027). The name,
+    the custom properties, the render method and the culling of the material stay as model import made them (ADR 0024).
+
+    A textured material emits its image times the grey light value in `rs_lit` (`_write_lit`), read one texel per pixel
+    as model import reads it. With no image it emits magenta times the light value, which the owner chose on 2026-11-17
+    (issue 130).
+
+    The emission covers a share of the face, and the rest is see-through. The share is the alpha of `rs_lit`, which is 0
+    for a face that the client does not draw. The owner chose on 2026-11-17 that such a face is left out (issue 130). For
+    a plain face the share is also (256 - alpha) / 256, because the client blends the new pixel by that share
+    (`Graphics3D.java` lines 817 to 825 of the 2018 client). For a textured face it is also the alpha of the texel, which
+    `face_materials.texture_image` sets to 0 for a texel that the client does not draw. The face alpha does not count,
+    because the client reads it only in `rasterGouraudLine` and `rasterFlatLine` (lines 794 to 859 and 1348 to 1372),
+    and not in `rasterTextureAffine`.
+    """
+    _, texture, alpha = material_values(material)
+    tree = material.node_tree
+    assert tree is not None
+    nodes, links = tree.nodes, tree.links
+    for node in [node for node in nodes if node.type != "OUTPUT_MATERIAL"]:
+        nodes.remove(node)
+    light = nodes.new("ShaderNodeVertexColor")
+    light.layer_name = LIT_ATTRIBUTE
+    emission = nodes.new("ShaderNodeEmission")
+    share = nodes.new("ShaderNodeMath")
+    share.operation = "MULTIPLY"
+    links.new(light.outputs["Alpha"], share.inputs[0])
+    if texture is None:
+        share.inputs[1].default_value = (256 - alpha) / 256
+        links.new(light.outputs["Color"], emission.inputs["Color"])
+    else:
+        multiply = nodes.new("ShaderNodeMix")
+        multiply.data_type = "RGBA"
+        multiply.blend_type = "MULTIPLY"
+        multiply.inputs["Factor"].default_value = 1.0
+        links.new(light.outputs["Color"], multiply.inputs["B"])
+        links.new(multiply.outputs["Result"], emission.inputs["Color"])
+        image = images.get(texture)
+        if image is None:
+            multiply.inputs["A"].default_value = MISSING_TEXTURE
+            share.inputs[1].default_value = 1.0
+        else:
+            texels = nodes.new("ShaderNodeTexImage")
+            texels.image = image
+            texels.interpolation = "Closest"
+            links.new(texels.outputs["Color"], multiply.inputs["A"])
+            links.new(texels.outputs["Alpha"], share.inputs[1])
+    transparent = nodes.new("ShaderNodeBsdfTransparent")
+    mix = nodes.new("ShaderNodeMixShader")
+    links.new(share.outputs["Value"], mix.inputs["Fac"])
+    links.new(transparent.outputs["BSDF"], mix.inputs[1])
+    links.new(emission.outputs["Emission"], mix.inputs[2])
+    output = next(node for node in nodes if node.type == "OUTPUT_MATERIAL")
+    links.new(mix.outputs["Shader"], output.inputs["Surface"])
 
 
 def _write_lit(mesh: bpy.types.Mesh, model: Model, shading: Shading, reverse: bool, brightness: float) -> None:
