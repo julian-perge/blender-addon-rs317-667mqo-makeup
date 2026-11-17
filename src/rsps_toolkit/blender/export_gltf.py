@@ -4,9 +4,10 @@ lights (spec 140, ADR 0028).
 The operator exports copies of the meshes, because the stock exporter validates the meshes that it exports and so
 removes faces from them (`docs/research/82-gltf-export.md`, "Form of the exporter"). On the copy, each face that uses
 the vertices of an earlier face gets vertices of its own, so that the validation keeps it (issue 121). Each copy draws
-one colour attribute through an unlit material, and the stock exporter writes the file with fixed settings."""
+one colour attribute through unlit materials, and the stock exporter writes the file with fixed settings. A copy of a
+player or NPC mesh gets one material for each pair of face colour and face alpha, with the pair as extras (issue 143)."""
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -16,9 +17,14 @@ from bpy_extras.io_utils import ExportHelper
 
 from ..formats.attribute_list import attribute_names, naming_problems
 from ..formats.repeated_faces import repeated_faces
+from .appearance_preview import FACE_ALPHA_ATTRIBUTE, FACE_ATTRIBUTE, FACE_COLOUR_ATTRIBUTE
+from .face_materials import ALPHA, FACE_COLOUR
 
 # An original keeps this suffix on its name while its copy holds the name, so that the file has the names of the scene.
 SET_ASIDE_SUFFIX = ".rs_scene_original"
+
+# A pair of face colour and face alpha, or None for the one material of a mesh with no game values on its faces.
+type MaterialKey = tuple[int, int] | None
 
 
 class RS_OT_export_scene(bpy.types.Operator, ExportHelper):
@@ -65,7 +71,9 @@ class RS_OT_export_scene(bpy.types.Operator, ExportHelper):
         if not meshes:
             problems = ["Select the meshes to export."]
         else:
-            problems = naming_problems(colour, extras) or attribute_problems(meshes, (colour, *extras))
+            problems = naming_problems(colour, extras)
+            if not problems:
+                problems = attribute_problems(meshes, (colour, *extras)) + face_value_problems(meshes)
         if problems:
             self.report({"ERROR"}, " ".join(problems))
             return {"CANCELLED"}
@@ -103,6 +111,22 @@ def attribute_problems(objects: Sequence[bpy.types.Object], names: Sequence[str]
     return problems
 
 
+def face_value_problems(objects: Sequence[bpy.types.Object]) -> list[str]:
+    """One sentence for each mesh object that Create Player, Create NPC or Make Rig built before meshes stored the face
+    colour and face alpha of each face. The owner chose the wording in the build of issue 143 on 2026-11-17."""
+    problems = []
+    names = (FACE_COLOUR_ATTRIBUTE, FACE_ALPHA_ATTRIBUTE)
+    for obj in objects:
+        mesh = obj.data
+        assert isinstance(mesh, bpy.types.Mesh)
+        if FACE_ATTRIBUTE in mesh.attributes and any(name not in mesh.attributes for name in names):
+            problems.append(
+                f"{obj.name} was built before meshes stored their face colours. Run Update Player on a player, or "
+                "Create NPC or Make Rig again on an NPC."
+            )
+    return problems
+
+
 def write_glb(path: Path) -> None:
     """Write the selected objects to `path` with the stock exporter. The settings are fixed (spec 140, rule 11): a
     binary file, the custom properties as extras and no Draco. The file holds the active scene only. The colour settings
@@ -126,23 +150,29 @@ def _copies(
     collection: bpy.types.Collection, objects: Sequence[bpy.types.Object], colour: str, extras: Sequence[str]
 ) -> Iterator[list[bpy.types.Object]]:
     """Copies of `objects` and their meshes in `collection`, with the names of the originals. Each mesh copy has only
-    the colour attributes `colour` and `extras`, and the unlit material that draws `colour`. On leaving, the copies and
-    the material are removed and the originals get their names back."""
-    material: bpy.types.Material | None = None
+    the colour attributes `colour` and `extras`, and unlit materials that draw `colour`. The meshes share one material
+    for each key. On leaving, the copies and the materials are removed and the originals get their names back."""
+    materials: dict[MaterialKey, bpy.types.Material] = {}
     mesh_copies: dict[bpy.types.Mesh, bpy.types.Mesh] = {}
     copies: list[bpy.types.Object] = []
     pairs: list[tuple[bpy.types.ID, bpy.types.ID]] = []
     renamed: list[tuple[bpy.types.ID, str]] = []
+
+    def material_of(key: MaterialKey) -> bpy.types.Material:
+        if key not in materials:
+            # The material goes into the dict before it is drawn, so the clean-up removes it if the drawing fails.
+            materials[key] = _new_material(key, colour)
+            _draw_unlit(materials[key], colour, 0 if key is None else key[1])
+        return materials[key]
+
     try:
-        material = bpy.data.materials.new(colour)
-        _draw_unlit(material, colour)
         for obj in objects:
             mesh = obj.data
             assert isinstance(mesh, bpy.types.Mesh)
             if mesh not in mesh_copies:
                 mesh_copies[mesh] = mesh.copy()
                 pairs.append((mesh, mesh_copies[mesh]))
-                _prepare_mesh(mesh_copies[mesh], material, colour, extras)
+                _prepare_mesh(mesh_copies[mesh], material_of, colour, extras)
             copy = obj.copy()
             copies.append(copy)
             copy.data = mesh_copies[mesh]
@@ -161,20 +191,44 @@ def _copies(
             bpy.data.objects.remove(copy)
         for mesh in mesh_copies.values():
             bpy.data.meshes.remove(mesh)
-        if material is not None:
+        for material in materials.values():
             bpy.data.materials.remove(material)
         for original, name in renamed:
             original.name = name
 
 
-def _prepare_mesh(mesh: bpy.types.Mesh, material: bpy.types.Material, colour: str, extras: Sequence[str]) -> None:
+def _prepare_mesh(
+    mesh: bpy.types.Mesh,
+    material_of: Callable[[MaterialKey], bpy.types.Material],
+    colour: str,
+    extras: Sequence[str],
+) -> None:
+    keys = _face_keys(mesh)
+    slots = list(dict.fromkeys(keys))
     mesh.materials.clear()
-    mesh.materials.append(material)
-    mesh.polygons.foreach_set("material_index", [0] * len(mesh.polygons))
+    for key in slots:
+        mesh.materials.append(material_of(key))
+    index = {key: i for i, key in enumerate(slots)}
+    mesh.polygons.foreach_set("material_index", [index[key] for key in keys])
     # Blender writes a mesh back from bmesh with its attributes ordered by domain and data type, so the faces are
     # separated before the colour attributes are put in the order of the list.
     _separate_repeated_faces(mesh)
     _keep_colour_attributes(mesh, colour, extras)
+
+
+def _face_keys(mesh: bpy.types.Mesh) -> list[MaterialKey]:
+    """The material key of each face of `mesh`: its pair of face colour and face alpha when the mesh has `rs_face`, and
+    None otherwise (spec rules 6 and 7)."""
+    if FACE_ATTRIBUTE not in mesh.attributes:
+        return [None] * len(mesh.polygons)
+    colour_attribute = mesh.attributes.get(FACE_COLOUR_ATTRIBUTE)
+    alpha_attribute = mesh.attributes.get(FACE_ALPHA_ATTRIBUTE)
+    assert colour_attribute is not None and alpha_attribute is not None
+    colours = [0] * len(mesh.polygons)
+    alphas = [0] * len(mesh.polygons)
+    colour_attribute.data.foreach_get("value", colours)
+    alpha_attribute.data.foreach_get("value", alphas)
+    return list(zip(colours, alphas, strict=True))
 
 
 def _separate_repeated_faces(mesh: bpy.types.Mesh) -> None:
@@ -215,17 +269,42 @@ def _keep_colour_attributes(mesh: bpy.types.Mesh, colour: str, extras: Sequence[
         new.data.foreach_set("color", values)
 
 
-def _draw_unlit(material: bpy.types.Material, colour: str) -> None:
+def _new_material(key: MaterialKey, colour: str) -> bpy.types.Material:
+    """A new material for `key`, with no nodes drawn yet. The material of no pair has the name `colour`. A material of
+    a pair has the name that `face_materials` gives a model import's material, and holds the pair as custom
+    properties, which the stock exporter writes as extras."""
+    if key is None:
+        return bpy.data.materials.new(colour)
+    face_colour, alpha = key
+    material = bpy.data.materials.new(f"RS_Colour_{face_colour}_{alpha}")
+    material[FACE_COLOUR] = face_colour
+    material[ALPHA] = alpha
+    return material
+
+
+def _draw_unlit(material: bpy.types.Material, colour: str, alpha: int) -> None:
     """Give `material` only a Color Attribute node of `colour` that feeds the Material Output. The stock exporter
     writes this shape as `KHR_materials_unlit` with the attribute as `COLOR_0` (ADR 0026). The nodes are made by type,
-    because Blender can translate the names of the nodes that a new material starts with."""
+    because Blender can translate the names of the nodes that a new material starts with.
+
+    With an alpha, a Mix Shader puts a Transparent BSDF under the colour, with the opacity `(256 - alpha) / 256` of
+    `face_materials._show_alpha` as its factor. The stock exporter writes this shape as `alphaMode` `BLEND` with the
+    opacity as the alpha of `baseColorFactor` (`io_scene_gltf2/blender/exp/material/unlit.py`, `detect_mix_alpha`)."""
     tree = material.node_tree
     assert tree is not None
     tree.nodes.clear()
     output = tree.nodes.new("ShaderNodeOutputMaterial")
     attribute = tree.nodes.new("ShaderNodeVertexColor")
     attribute.layer_name = colour
-    tree.links.new(attribute.outputs["Color"], output.inputs["Surface"])
+    if not alpha:
+        tree.links.new(attribute.outputs["Color"], output.inputs["Surface"])
+        return
+    mix = tree.nodes.new("ShaderNodeMixShader")
+    transparent = tree.nodes.new("ShaderNodeBsdfTransparent")
+    mix.inputs[0].default_value = (256 - alpha) / 256  # pyrefly: ignore[missing-attribute]
+    tree.links.new(transparent.outputs["BSDF"], mix.inputs[1])
+    tree.links.new(attribute.outputs["Color"], mix.inputs[2])
+    tree.links.new(mix.outputs["Shader"], output.inputs["Surface"])
 
 
 def menu_entry(self, context):
