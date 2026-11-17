@@ -130,14 +130,14 @@ public class RegionReference {
                 + " \"recolorToFind\": %s, \"recolorToReplace\": %s, \"retextureToFind\": %s, \"textureToReplace\": %s,"
                 + " \"modelSizeX\": %d, \"modelSizeHeight\": %d, \"modelSizeY\": %d, \"offsetX\": %d,"
                 + " \"offsetHeight\": %d, \"offsetY\": %d, \"isRotated\": %b, \"contouredGround\": %d,"
-                + " \"mergeNormals\": %b, \"animationID\": %d, \"decorDisplacement\": %d, \"shadow\": %b,"
-                + " \"varbitID\": %d, \"varpID\": %d, \"configChangeDest\": %s}",
+                + " \"mergeNormals\": %b, \"ambient\": %d, \"contrast\": %d, \"animationID\": %d,"
+                + " \"decorDisplacement\": %d, \"shadow\": %b, \"varbitID\": %d, \"varpID\": %d, \"configChangeDest\": %s}",
                 id, json(d.getObjectModels()), json(d.getObjectTypes()), d.getSizeX(), d.getSizeY(),
                 json(d.getRecolorToFind()), json(d.getRecolorToReplace()), json(d.getRetextureToFind()),
                 json(d.getTextureToReplace()), d.getModelSizeX(), d.getModelSizeHeight(), d.getModelSizeY(),
                 d.getOffsetX(), d.getOffsetHeight(), d.getOffsetY(), d.isRotated(), d.getContouredGround(),
-                d.isMergeNormals(), d.getAnimationID(), d.getDecorDisplacement(), d.isShadow(), d.getVarbitID(),
-                d.getVarpID(), json(d.getConfigChangeDest())));
+                d.isMergeNormals(), d.getAmbient(), d.getContrast(), d.getAnimationID(), d.getDecorDisplacement(),
+                d.isShadow(), d.getVarbitID(), d.getVarpID(), json(d.getConfigChangeDest())));
         }
         Files.writeString(output, out.toString());
     }

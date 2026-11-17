@@ -74,6 +74,21 @@ def test_opcode_92_ends_the_impostors_with_its_own_default():
     assert (loc.impostor_varbit, loc.impostor_varp, loc.impostors) == (-1, 3, (11, 42))
 
 
+def test_opcodes_29_and_39_give_the_ambient_and_the_contrast_as_signed_bytes():
+    # ObjectComposition.java line 408 reads the ambient with readByte, and line 410 reads the contrast as readByte() * 25.
+    # readByte is signed, so 0xF6 is -10 and 0xFE is -2.
+    loc = decode_loc(1, bytes([29, 0xF6, 39, 0xFE, 0]))
+    assert (loc.ambient, loc.contrast) == (-10, -50)
+    loc = decode_loc(1, bytes([29, 0x14, 39, 0x03, 0]))
+    assert (loc.ambient, loc.contrast) == (20, 75)
+
+
+def test_a_loc_without_opcodes_29_and_39_has_an_ambient_and_a_contrast_of_0():
+    # ObjectComposition.java lines 274 and 275 set both to 0.
+    loc = decode_loc(1, bytes([14, 2, 0]))
+    assert (loc.ambient, loc.contrast) == (0, 0)
+
+
 def test_an_animation_of_0xffff_is_no_animation():
     # ObjectComposition.java lines 398 to 402: opcode 24 turns an animation id of 65535 into -1.
     assert decode_loc(1, bytes([24, 0xFF, 0xFF, 0])).animation == -1
