@@ -14,11 +14,19 @@ from js5_builder import build_cache
 from mathutils import Quaternion
 
 from rsps_toolkit.animation.frames import decode_frame_map
-from rsps_toolkit.blender import appearance_clip, appearance_collection, appearance_preview, export_gltf, npc_collection
+from rsps_toolkit.blender import (
+    appearance_clip,
+    appearance_collection,
+    appearance_preview,
+    export_gltf,
+    face_materials,
+    npc_collection,
+)
 from rsps_toolkit.blender.face_materials import DEFAULT_BRIGHTNESS
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.lighting import light_hsl
 from rsps_toolkit.formats.model import Model
+from rsps_toolkit.formats.texture import SIZE as TEXTURE_SIZE
 
 # glTF 2.0 specification, sections 3.6.2 (accessor component types) and 4.4 (binary glTF layout).
 COMPONENTS = {5121: ("B", 255), 5123: ("H", 65535), 5126: ("f", 1)}
@@ -732,6 +740,149 @@ def test_each_primitive_of_a_split_mesh_has_its_faces_in_mesh_order(tmp_path: Pa
     assert by_colour == {8741: [0, 2], 960: [1, 3]}
 
 
+# Texture 5 has a texel that the client does not draw, texture 7 has none, and texture 9 has no image, as when model
+# import finds no PNG for it.
+TEXTURES = {5: False, 7: True}
+
+
+def imported_mesh(
+    name: str,
+    faces: list[tuple[int | None, int | None, int] | None],
+    attributes: tuple[tuple[str, float], ...] = (("rs_lit", 0.5),),
+    textures: dict[int, bool] = TEXTURES,
+) -> bpy.types.Object:
+    """A selected mesh with no `rs_face`, with one triangle apart from the others for each item of `faces`, a UV map
+    and the corner colour attributes `attributes`, made in that order with one grey each. An item is the face colour,
+    texture id and face alpha of a material that face_materials makes, as model import does, or None for a material
+    with no game values, such as the owner's ground has. Each call makes its own image for each texture of `textures`,
+    as the region import does for each region, and `textures` tells whether the texture is opaque."""
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(
+        [(x, y, 0) for i in range(len(faces)) for x, y in ((2 * i, 0), (2 * i + 1, 0), (2 * i, 1))],
+        [],
+        [(3 * i, 3 * i + 1, 3 * i + 2) for i in range(len(faces))],
+    )
+    mesh.uv_layers.new(name="UVMap")
+    for attribute, grey in attributes:
+        greys = mesh.color_attributes.new(attribute, "FLOAT_COLOR", "CORNER")
+        assert isinstance(greys, bpy.types.FloatColorAttribute)
+        greys.data.foreach_set("color", [grey] * 4 * len(mesh.loops))
+    images = {
+        texture: face_materials.texture_image(texture, [0] + [0x804020] * (TEXTURE_SIZE * TEXTURE_SIZE - 1), opaque)
+        for texture, opaque in textures.items()
+    }
+    made: dict[tuple[int | None, int | None, int] | None, bpy.types.Material] = {}
+    for face, values in zip(mesh.polygons, faces, strict=True):
+        if values not in made:
+            made[values] = (
+                bpy.data.materials.new(f"{name} ground")
+                if values is None
+                else face_materials.face_material(*values, find_texture=images.get)
+            )
+            mesh.materials.append(made[values])
+        face.material_index = list(made).index(values)
+    obj = bpy.data.objects.new(name, mesh)
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.objects.link(obj)
+    obj.select_set(True)
+    return obj
+
+
+def test_a_textured_face_draws_its_texture_times_color_0_unlit(tmp_path: Path):
+    # Row "Textured face" (spec decision 9, the glTF note "The lit scenery"). The texture is read one texel per pixel,
+    # as model import reads it. The material must use rs_lit, or the stock exporter writes the colour attributes in
+    # the order of the mesh, and fire_strength comes first.
+    imported_mesh("Fire", [(None, 7, 0)], (("fire_strength", 0.25), ("rs_lit", 0.5)))
+    path = tmp_path / "scene.glb"
+    assert export(path, extra_attributes="fire_strength") == {"FINISHED"}
+    gltf, binary = read_glb(path)
+    assert {value[:3] for value in colours(gltf, binary, "COLOR_0")} == {(0.5, 0.5, 0.5)}
+    assert {value[:3] for value in colours(gltf, binary, "COLOR_1")} == {(0.25, 0.25, 0.25)}
+    (material,) = gltf["materials"]
+    assert list(material["extensions"]) == ["KHR_materials_unlit"]
+    texture = gltf["textures"][material["pbrMetallicRoughness"]["baseColorTexture"]["index"]]
+    assert gltf["images"][texture["source"]]["name"] == "RS_Texture_7"
+    assert gltf["samplers"][texture["sampler"]]["magFilter"] == 9728  # NEAREST, glTF 2.0 section 5.26.
+    (primitive,) = gltf["meshes"][0]["primitives"]
+    assert {"COLOR_0", "TEXCOORD_0"} <= set(primitive["attributes"])
+
+
+def test_a_mesh_with_no_rs_face_has_one_material_for_each_texture_and_face_alpha_with_no_extras(tmp_path: Path):
+    # The plan decision comment of issue 140: one material for each pair of texture id and face alpha, and the faces
+    # with no texture and alpha 0 share one, also a face whose material has no game values. The owner chose the names
+    # in the build of issue 144 on 2026-11-17.
+    imported_mesh("Fire", [(None, 5, 0), (None, 7, 0), (8741, None, 100), (8741, None, 0), (960, None, 0), None])
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert sorted(m["name"] for m in gltf["materials"]) == ["RS_Texture_5", "RS_Texture_7", "rs_lit", "rs_lit_100"]
+    assert not any("extras" in m for m in gltf["materials"])
+    assert all(list(m["extensions"]) == ["KHR_materials_unlit"] for m in gltf["materials"])
+
+
+def test_a_face_alpha_on_a_mesh_with_no_rs_face_draws_blended_with_the_clients_opacity(tmp_path: Path):
+    # Spec rule 8 for a mesh with no rs_face.
+    imported_mesh("Fire", [(8741, None, 100), (8741, None, 0)])
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    by_name = {m["name"]: m for m in gltf["materials"]}
+    assert by_name["rs_lit_100"]["alphaMode"] == "BLEND"
+    assert by_name["rs_lit_100"]["pbrMetallicRoughness"]["baseColorFactor"][3] == pytest.approx(156 / 256)
+    assert "alphaMode" not in by_name["rs_lit"]
+
+
+def test_a_textured_face_ignores_its_face_alpha_as_the_client_does(tmp_path: Path):
+    # The client reads the face alpha only for a face with no texture (`Graphics3D.java` lines 794 to 859 and 1348 to
+    # 1372 of the 2018 client, as region_scenery.show_loc_light cites). The owner chose in the build of issue 144 on
+    # 2026-11-17 that the export does the same.
+    imported_mesh("Fire", [(None, 7, 0), (None, 7, 100)])
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    (material,) = gltf["materials"]
+    assert "alphaMode" not in material
+    assert "baseColorFactor" not in material["pbrMetallicRoughness"]
+
+
+def test_the_texels_that_the_client_does_not_draw_are_masked(tmp_path: Path):
+    # face_materials.texture_image gives such a texel the alpha 0. The owner chose in the build of issue 144 on
+    # 2026-11-17 that the page leaves them out with alphaMode MASK.
+    imported_mesh("Fire", [(None, 5, 0)])
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    (material,) = gltf["materials"]
+    assert material["alphaMode"] == "MASK"
+    assert material.get("alphaCutoff", 0.5) == 0.5
+
+
+def test_a_textured_face_with_no_image_draws_magenta_times_color_0(tmp_path: Path):
+    # The owner chose in the build of issue 144 on 2026-11-17 that the file draws it as region_scenery.show_loc_light
+    # draws it in Blender.
+    imported_mesh("Fire", [(None, 9, 0)])
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    (material,) = gltf["materials"]
+    assert material["name"] == "RS_Texture_9"
+    assert material["pbrMetallicRoughness"]["baseColorFactor"] == [1.0, 0.0, 1.0, 1.0]
+    assert "baseColorTexture" not in material["pbrMetallicRoughness"]
+    (primitive,) = gltf["meshes"][0]["primitives"]
+    assert "COLOR_0" in primitive["attributes"]
+
+
+def test_the_export_of_textured_faces_leaves_the_scene_unchanged(tmp_path: Path):
+    # Row "Scene unchanged".
+    imported_mesh("Fire", [(None, 5, 0), (None, 9, 0), (8741, None, 100), None])
+    before = scene_state()
+    images = sorted(image.name for image in bpy.data.images)
+    export(tmp_path / "scene.glb")
+    assert scene_state() == before
+    assert sorted(image.name for image in bpy.data.images) == images
+
+
 def rigged_player(cache: Path) -> bpy.types.Object:
     """The rig of a player from Create Player's build, selected with the player's meshes."""
     obj, _ = player(cache)
@@ -1116,3 +1267,49 @@ def test_an_action_that_a_rig_plays_with_two_slots_is_one_clip_with_the_slot_tha
                 assert Quaternion((w, x, y, z)).rotation_difference(expected).angle == pytest.approx(0, abs=1e-4)
             checked.add(node["name"])
     assert checked == set(SITTING)
+
+
+def test_one_texture_id_is_one_material_and_one_image_also_with_two_images_or_none(tmp_path: Path):
+    # The owner chose in the build of issue 144 on 2026-11-17 that a texture id is one material, with the first image
+    # found for it, also for a material that has no image. The images of two regions hold the same texels.
+    imported_mesh("Lumbridge", [(None, 7, 0)])
+    imported_mesh("Draynor", [(None, 7, 0)])
+    imported_mesh("Missing", [(None, 7, 0)], textures={})
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    (material,) = gltf["materials"]
+    assert material["name"] == "RS_Texture_7"
+    assert "baseColorTexture" in material["pbrMetallicRoughness"]
+    assert len(gltf["images"]) == 1
+
+
+def test_a_textured_material_with_two_images_draws_the_first_image_node(tmp_path: Path):
+    # The owner chose in the build of issue 144 on 2026-11-17 that the first Image Texture node of the node list wins.
+    obj = imported_mesh("Fire", [(None, 7, 0)])
+    material = obj.material_slots[0].material
+    assert material is not None and material.node_tree is not None
+    nodes = material.node_tree.nodes
+    for node in [node for node in nodes if node.type == "TEX_IMAGE"]:
+        nodes.remove(node)
+    for name in ("first", "second"):
+        texels = nodes.new("ShaderNodeTexImage")
+        assert isinstance(texels, bpy.types.ShaderNodeTexImage)
+        texels.image = bpy.data.images.new(name, 2, 2)
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert [image["name"] for image in gltf["images"]] == ["first"]
+
+
+def test_a_face_past_the_last_material_slot_draws_with_the_last_slot(tmp_path: Path):
+    # Blender draws such a face with the last slot. The owner chose in the build of issue 144 on 2026-11-17 that the
+    # export does the same.
+    obj = imported_mesh("Fire", [(None, 7, 0), (8741, None, 100)])
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    mesh.polygons[0].material_index = 9
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert [m["name"] for m in gltf["materials"]] == ["rs_lit_100"]

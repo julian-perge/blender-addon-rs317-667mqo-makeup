@@ -6,10 +6,13 @@ removes faces from them (`docs/research/82-gltf-export.md`, "Form of the exporte
 the vertices of an earlier face gets vertices of its own, so that the validation keeps it (issue 121). Each copy draws
 one colour attribute through unlit materials, and the stock exporter writes the file with fixed settings. A copy of a
 player or NPC mesh gets one material for each pair of face colour and face alpha, with the pair as extras (issue 143).
+A copy of another mesh gets one material for each texture and for each face alpha of its materials, with no extras
+(issue 144).
 The rigs are exported as copies too, so that each action gets an NLA track of its own (issue 145)."""
 
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import bmesh
@@ -19,13 +22,21 @@ from bpy_extras.io_utils import ExportHelper
 from ..formats.attribute_list import attribute_names, naming_problems
 from ..formats.repeated_faces import repeated_faces
 from .appearance_preview import FACE_ALPHA_ATTRIBUTE, FACE_ATTRIBUTE, FACE_COLOUR_ATTRIBUTE
-from .face_materials import ALPHA, FACE_COLOUR
+from .face_materials import ALPHA, FACE_COLOUR, MISSING_TEXTURE, TEXTURE_ID, material_values
 
 # An original keeps this suffix on its name while its copy holds the name, so that the file has the names of the scene.
 SET_ASIDE_SUFFIX = ".rs_scene_original"
 
-# A pair of face colour and face alpha, or None for the one material of a mesh with no game values on its faces.
-type MaterialKey = tuple[int, int] | None
+
+@dataclass(frozen=True)
+class MaterialKey:
+    """What one material of the copies draws. A face of a mesh with `rs_face` has a face colour, which the material
+    holds as an extra with the face alpha. A face of another mesh has a texture id or a face alpha, or neither. A face
+    with no game values has the default key."""
+
+    face_colour: int | None = None
+    texture: int | None = None
+    alpha: int = 0
 
 
 class RS_OT_export_scene(bpy.types.Operator, ExportHelper):
@@ -176,6 +187,7 @@ def _copies(
     with no custom properties, on a track of its own (`_one_track_per_action`).
     On leaving, the copies and the materials are removed and the originals get their names back."""
     materials: dict[MaterialKey, bpy.types.Material] = {}
+    images = _texture_images(objects)
     mesh_copies: dict[bpy.types.Mesh, bpy.types.Mesh] = {}
     action_copies: dict[bpy.types.Action, bpy.types.Action] = {}
     copies: list[bpy.types.Object] = []
@@ -186,7 +198,7 @@ def _copies(
         if key not in materials:
             # The material goes into the dict before it is drawn, so the clean-up removes it if the drawing fails.
             materials[key] = _new_material(key, colour)
-            _draw_unlit(materials[key], colour, 0 if key is None else key[1])
+            _draw_unlit(materials[key], colour, key, images.get(key.texture) if key.texture is not None else None)
         return materials[key]
 
     def action_copy(action: bpy.types.Action) -> bpy.types.Action:
@@ -311,10 +323,15 @@ def _prepare_mesh(
 
 
 def _face_keys(mesh: bpy.types.Mesh) -> list[MaterialKey]:
-    """The material key of each face of `mesh`: its pair of face colour and face alpha when the mesh has `rs_face`, and
-    None otherwise (spec rules 6 and 7)."""
+    """The material key of each face of `mesh`: its pair of face colour and face alpha when the mesh has `rs_face`
+    (spec rule 6), and otherwise the key of its material (`_source_key`)."""
     if FACE_ATTRIBUTE not in mesh.attributes:
-        return [None] * len(mesh.polygons)
+        # Blender draws a face whose index is past the last slot with the last slot. The owner chose in the build of
+        # issue 144 on 2026-11-17 that the export does the same.
+        sources = [_source_key(material) for material in mesh.materials] or [MaterialKey()]
+        indices = [0] * len(mesh.polygons)
+        mesh.polygons.foreach_get("material_index", indices)
+        return [sources[min(index, len(sources) - 1)] for index in indices]
     colour_attribute = mesh.attributes.get(FACE_COLOUR_ATTRIBUTE)
     alpha_attribute = mesh.attributes.get(FACE_ALPHA_ATTRIBUTE)
     assert colour_attribute is not None and alpha_attribute is not None
@@ -322,7 +339,40 @@ def _face_keys(mesh: bpy.types.Mesh) -> list[MaterialKey]:
     alphas = [0] * len(mesh.polygons)
     colour_attribute.data.foreach_get("value", colours)
     alpha_attribute.data.foreach_get("value", alphas)
-    return list(zip(colours, alphas, strict=True))
+    return [MaterialKey(face_colour=c, alpha=a) for c, a in zip(colours, alphas, strict=True)]
+
+
+def _source_key(material: bpy.types.Material | None) -> MaterialKey:
+    """The key of a face of a mesh with no `rs_face` that uses `material`. The plan decision comment of issue 140
+    gives one material for each pair of texture id and face alpha. A textured key has no face alpha, because the client
+    reads the face alpha only for a face with no texture (`region_scenery.show_loc_light`). The owner chose this in the
+    build of issue 144 on 2026-11-17. A material with no game values, such as the owner's ground has, gives the default
+    key."""
+    if material is None or (FACE_COLOUR not in material and TEXTURE_ID not in material):
+        return MaterialKey()
+    _, texture, alpha = material_values(material)
+    return MaterialKey(alpha=alpha) if texture is None else MaterialKey(texture=texture)
+
+
+def _texture_images(objects: Sequence[bpy.types.Object]) -> dict[int, bpy.types.Image]:
+    """The image of each texture id that the materials of the meshes of `objects` with no `rs_face` draw: the image of
+    the first Image Texture node of the first material of that id that has one. The region import makes one image of a
+    texture for each region, with the same texels, so a texture id is one material in the file. The owner chose this,
+    and the first node, in the build of issue 144 on 2026-11-17."""
+    images: dict[int, bpy.types.Image] = {}
+    for obj in objects:
+        mesh = obj.data
+        assert isinstance(mesh, bpy.types.Mesh)
+        if FACE_ATTRIBUTE in mesh.attributes:
+            continue
+        for material in mesh.materials:
+            if material is None or TEXTURE_ID not in material or material.node_tree is None:
+                continue
+            nodes = [node for node in material.node_tree.nodes if isinstance(node, bpy.types.ShaderNodeTexImage)]
+            image = next((node.image for node in nodes if node.image is not None), None)
+            if image is not None:
+                images.setdefault(material[TEXTURE_ID], image)
+    return images
 
 
 def _separate_repeated_faces(mesh: bpy.types.Mesh) -> None:
@@ -364,41 +414,93 @@ def _keep_colour_attributes(mesh: bpy.types.Mesh, colour: str, extras: Sequence[
 
 
 def _new_material(key: MaterialKey, colour: str) -> bpy.types.Material:
-    """A new material for `key`, with no nodes drawn yet. The material of no pair has the name `colour`. A material of
-    a pair has the name that `face_materials` gives a model import's material, and holds the pair as custom
-    properties, which the stock exporter writes as extras."""
-    if key is None:
-        return bpy.data.materials.new(colour)
-    face_colour, alpha = key
-    material = bpy.data.materials.new(f"RS_Colour_{face_colour}_{alpha}")
-    material[FACE_COLOUR] = face_colour
-    material[ALPHA] = alpha
-    return material
+    """A new material for `key`, with no nodes drawn yet. A material of a pair of face colour and face alpha has the
+    name that `face_materials` gives a model import's material, and holds the pair as custom properties, which the stock
+    exporter writes as extras. The other materials have no custom properties (spec decision 3). A textured one has the
+    name `RS_Texture_<texture id>`, and a plain one the name `colour`, with `_<face alpha>` after it when the face alpha
+    is not 0. The owner chose these names in the build of issue 144 on 2026-11-17."""
+    if key.face_colour is not None:
+        material = bpy.data.materials.new(f"RS_Colour_{key.face_colour}_{key.alpha}")
+        material[FACE_COLOUR] = key.face_colour
+        material[ALPHA] = key.alpha
+        return material
+    if key.texture is not None:
+        return bpy.data.materials.new(f"RS_Texture_{key.texture}")
+    return bpy.data.materials.new(f"{colour}_{key.alpha}" if key.alpha else colour)
 
 
-def _draw_unlit(material: bpy.types.Material, colour: str, alpha: int) -> None:
+def _draw_unlit(material: bpy.types.Material, colour: str, key: MaterialKey, image: bpy.types.Image | None) -> None:
     """Give `material` only a Color Attribute node of `colour` that feeds the Material Output. The stock exporter
     writes this shape as `KHR_materials_unlit` with the attribute as `COLOR_0` (ADR 0026). The nodes are made by type,
     because Blender can translate the names of the nodes that a new material starts with.
 
-    With an alpha, a Mix Shader puts a Transparent BSDF under the colour, with the opacity `(256 - alpha) / 256` of
-    `face_materials._show_alpha` as its factor. The stock exporter writes this shape as `alphaMode` `BLEND` with the
-    opacity as the alpha of `baseColorFactor` (`io_scene_gltf2/blender/exp/material/unlit.py`, `detect_mix_alpha`)."""
+    A textured key multiplies `image` by the colour, read one texel per pixel as model import reads it, and the stock
+    exporter writes the image as `baseColorTexture` (spec decision 9). With no image it multiplies magenta, as
+    `region_scenery.show_loc_light` does. The product goes through an Emission node that a Light Path node shows only
+    to camera rays, the shape that the stock importer gives an unlit material (`imp/KHR_materials_unlit.py`). The
+    exporter finds the colour attribute in a multiplication only behind a colour socket, such as the Color of that
+    Emission node (`search_node_tree.py`, `get_multiply_factors`), and without it writes the colour attributes in the
+    order of the mesh.
+
+    The alpha goes into a Mix Shader that puts a Transparent BSDF under the colour, which the stock exporter reads in
+    `io_scene_gltf2/blender/exp/material/unlit.py`, `detect_mix_alpha`. A face alpha gives the opacity
+    `(256 - alpha) / 256` of `face_materials._show_alpha`, and the exporter writes `alphaMode` `BLEND` with the opacity
+    as the alpha of `baseColorFactor`. For an image with a texel that is not opaque, a Round node on the texel alpha
+    gives `alphaMode` `MASK` (`search_node_tree.py`, `detect_alpha_clip`), so that the page leaves out the texels that
+    `texture_image` gives the alpha 0. The owner chose `MASK` in the build of issue 144 on 2026-11-17."""
     tree = material.node_tree
     assert tree is not None
     tree.nodes.clear()
     output = tree.nodes.new("ShaderNodeOutputMaterial")
     attribute = tree.nodes.new("ShaderNodeVertexColor")
     attribute.layer_name = colour
-    if not alpha:
-        tree.links.new(attribute.outputs["Color"], output.inputs["Surface"])
+    drawn = attribute.outputs["Color"]
+    clip = None
+    if key.texture is not None:
+        multiply = tree.nodes.new("ShaderNodeMix")
+        multiply.data_type = "RGBA"  # pyrefly: ignore[missing-attribute]
+        multiply.blend_type = "MULTIPLY"  # pyrefly: ignore[missing-attribute]
+        multiply.inputs["Factor"].default_value = 1.0  # pyrefly: ignore[missing-attribute]
+        tree.links.new(attribute.outputs["Color"], multiply.inputs["B"])
+        emission = tree.nodes.new("ShaderNodeEmission")
+        tree.links.new(multiply.outputs["Result"], emission.inputs["Color"])
+        camera = tree.nodes.new("ShaderNodeLightPath")
+        shown = tree.nodes.new("ShaderNodeMixShader")
+        tree.links.new(camera.outputs["Is Camera Ray"], shown.inputs[0])
+        tree.links.new(tree.nodes.new("ShaderNodeBsdfTransparent").outputs["BSDF"], shown.inputs[1])
+        tree.links.new(emission.outputs["Emission"], shown.inputs[2])
+        drawn = shown.outputs["Shader"]
+        if image is None:
+            multiply.inputs["A"].default_value = MISSING_TEXTURE  # pyrefly: ignore[missing-attribute]
+        else:
+            texels = tree.nodes.new("ShaderNodeTexImage")
+            texels.image = image  # pyrefly: ignore[missing-attribute]
+            texels.interpolation = "Closest"  # pyrefly: ignore[missing-attribute]
+            tree.links.new(texels.outputs["Color"], multiply.inputs["A"])
+            if _has_see_through_texel(image):
+                clip = tree.nodes.new("ShaderNodeMath")
+                clip.operation = "ROUND"  # pyrefly: ignore[missing-attribute]
+                tree.links.new(texels.outputs["Alpha"], clip.inputs[0])
+    if clip is None and (key.texture is not None or not key.alpha):
+        tree.links.new(drawn, output.inputs["Surface"])
         return
     mix = tree.nodes.new("ShaderNodeMixShader")
     transparent = tree.nodes.new("ShaderNodeBsdfTransparent")
-    mix.inputs[0].default_value = (256 - alpha) / 256  # pyrefly: ignore[missing-attribute]
+    if clip is None:
+        mix.inputs[0].default_value = (256 - key.alpha) / 256  # pyrefly: ignore[missing-attribute]
+    else:
+        tree.links.new(clip.outputs["Value"], mix.inputs[0])
     tree.links.new(transparent.outputs["BSDF"], mix.inputs[1])
-    tree.links.new(attribute.outputs["Color"], mix.inputs[2])
+    tree.links.new(drawn, mix.inputs[2])
     tree.links.new(mix.outputs["Shader"], output.inputs["Surface"])
+
+
+def _has_see_through_texel(image: bpy.types.Image) -> bool:
+    size = [0, 0]
+    image.size.foreach_get(size)
+    channels = [0.0] * (size[0] * size[1] * image.channels)
+    image.pixels.foreach_get(channels)
+    return any(alpha < 1.0 for alpha in channels[image.channels - 1 :: image.channels])
 
 
 def menu_entry(self, context):
