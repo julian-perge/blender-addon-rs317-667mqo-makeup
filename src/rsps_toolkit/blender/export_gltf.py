@@ -418,15 +418,20 @@ def _new_material(key: MaterialKey, colour: str) -> bpy.types.Material:
     name that `face_materials` gives a model import's material, and holds the pair as custom properties, which the stock
     exporter writes as extras. The other materials have no custom properties (spec decision 3). A textured one has the
     name `RS_Texture_<texture id>`, and a plain one the name `colour`, with `_<face alpha>` after it when the face alpha
-    is not 0. The owner chose these names in the build of issue 144 on 2026-11-17."""
+    is not 0. The owner chose these names in the build of issue 144 on 2026-11-17.
+
+    Each material has backface culling off, so the stock exporter writes `doubleSided` true and the page draws both
+    sides of each face (ADR 0029). The export sets it, and does not read the culling of the source material."""
     if key.face_colour is not None:
         material = bpy.data.materials.new(f"RS_Colour_{key.face_colour}_{key.alpha}")
         material[FACE_COLOUR] = key.face_colour
         material[ALPHA] = key.alpha
-        return material
-    if key.texture is not None:
-        return bpy.data.materials.new(f"RS_Texture_{key.texture}")
-    return bpy.data.materials.new(f"{colour}_{key.alpha}" if key.alpha else colour)
+    elif key.texture is not None:
+        material = bpy.data.materials.new(f"RS_Texture_{key.texture}")
+    else:
+        material = bpy.data.materials.new(f"{colour}_{key.alpha}" if key.alpha else colour)
+    material.use_backface_culling = False
+    return material
 
 
 def _draw_unlit(material: bpy.types.Material, colour: str, key: MaterialKey, image: bpy.types.Image | None) -> None:
