@@ -79,6 +79,8 @@ def accessor_values(gltf: dict, binary: bytes, index: int) -> list[tuple[float, 
     accessor = gltf["accessors"][index]
     view = gltf["bufferViews"][accessor["bufferView"]]
     code, scale = COMPONENTS[accessor["componentType"]]
+    if not accessor.get("normalized"):
+        scale = 1
     width = WIDTHS[accessor["type"]]
     size = struct.calcsize(code)
     stride = view.get("byteStride", size * width)
@@ -188,6 +190,7 @@ def test_nothing_selected_stops_the_export(tmp_path: Path):
 def test_the_file_has_the_names_of_the_scene_and_the_scene_is_unchanged(tmp_path: Path):
     # Spec Boundaries "Always": the export works on copies and leaves the scene as it was.
     ground = triangle("Ground", ("rs_lit", "scene_lit", "fire_strength"))
+    ground.keyframe_insert("location", frame=1)
     triangle("Other", ("rs_lit",)).select_set(False)
     view_layer = bpy.context.view_layer
     assert view_layer is not None
@@ -242,12 +245,18 @@ def scene_state() -> dict:
         "meshes": {
             mesh.name: (
                 len(mesh.polygons),
+                len(mesh.vertices),
                 [m.name for m in mesh.materials if m is not None],
                 [(a.name, a.domain, a.data_type) for a in mesh.attributes],
             )
             for mesh in bpy.data.meshes
         },
         "materials": sorted(m.name for m in bpy.data.materials),
+        "actions": sorted(action.name for action in bpy.data.actions),
+        "object actions": {
+            obj.name: obj.animation_data.action.name if obj.animation_data and obj.animation_data.action else None
+            for obj in bpy.data.objects
+        },
         "selected": sorted(obj.name for obj in bpy.data.objects if obj.select_get()),
         "active": view_layer.objects.active.name if view_layer.objects.active else None,
         "frame": scene.frame_current,
@@ -370,3 +379,128 @@ def test_a_failure_while_the_copies_are_made_leaves_the_scene_unchanged(tmp_path
     with pytest.raises(RuntimeError):
         export(tmp_path / "scene.glb")
     assert scene_state() == before
+
+
+def test_faces_on_the_same_three_vertices_are_all_in_the_file_in_mesh_order(tmp_path: Path):
+    # Row "Shared vertices" (issue 121). Faces 2 and 3 use the vertices of faces 0 and 1, and Blender's mesh validation,
+    # which the stock exporter runs, removes such a face. Each face has its own three corner colours, so a triangle of
+    # the file tells which face it is.
+    faces = [(0, 1, 2), (1, 3, 2), (2, 1, 0), (1, 3, 2)]
+    mesh = bpy.data.meshes.new("Ground")
+    mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0)], [], faces)
+    face_colours = [
+        [(round(0.1 * (face + 1), 2), 0.2 * corner, 0.5) for corner in range(3)] for face in range(len(faces))
+    ]
+    lit = mesh.color_attributes.new("rs_lit", "FLOAT_COLOR", "CORNER")
+    assert isinstance(lit, bpy.types.FloatColorAttribute)
+    lit.data.foreach_set("color", [v for corners in face_colours for rgb in corners for v in (*rgb, 1.0)])
+    obj = bpy.data.objects.new("Ground", mesh)
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.objects.link(obj)
+    obj.select_set(True)
+    path = tmp_path / "scene.glb"
+    export(path)
+    assert len(mesh.polygons) == 4
+    gltf, binary = read_glb(path)
+    (primitive,) = gltf["meshes"][0]["primitives"]
+    indices = [int(i) for (i,) in accessor_values(gltf, binary, primitive["indices"])]
+    corner_colours = accessor_values(gltf, binary, primitive["attributes"]["COLOR_0"])
+    triangles = [
+        sorted(tuple(round(v, 2) for v in corner_colours[i][:3]) for i in indices[start : start + 3])
+        for start in range(0, len(indices), 3)
+    ]
+    assert triangles == [sorted(corners) for corners in face_colours]
+
+
+def test_a_refused_export_leaves_the_scene_unchanged(tmp_path: Path):
+    # Row "Scene unchanged" (issue 121): a refused export also leaves the scene as it was.
+    ground = triangle("Ground", ("rs_lit",))
+    ground.keyframe_insert("location", frame=1)
+    view_layer = bpy.context.view_layer
+    assert view_layer is not None
+    view_layer.objects.active = ground
+    before = scene_state()
+    with pytest.raises(RuntimeError):
+        export(tmp_path / "scene.glb", colour_attribute="scene_lit")
+    assert scene_state() == before
+
+
+def test_the_export_of_faces_on_the_same_three_vertices_leaves_the_scene_unchanged(tmp_path: Path):
+    # Rows "Shared vertices" and "Scene unchanged" (issue 121): the vertices of their own are made on the copy only.
+    mesh = bpy.data.meshes.new("Ground")
+    mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [], [(0, 1, 2), (2, 1, 0)])
+    mesh.color_attributes.new("rs_lit", "FLOAT_COLOR", "CORNER")
+    obj = bpy.data.objects.new("Ground", mesh)
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.objects.link(obj)
+    obj.select_set(True)
+    before = scene_state()
+    export(tmp_path / "scene.glb")
+    assert scene_state() == before
+
+
+def test_the_vertices_of_their_own_keep_the_vertex_group_weights(tmp_path: Path, monkeypatch):
+    # Issue 121: a player mesh is skinned through its vertex groups, so a face that gets vertices of its own keeps the
+    # weights of the vertices that it used.
+    mesh = bpy.data.meshes.new("Ground")
+    mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [], [(0, 1, 2), (2, 1, 0)])
+    mesh.color_attributes.new("rs_lit", "FLOAT_COLOR", "CORNER")
+    obj = bpy.data.objects.new("Ground", mesh)
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.objects.link(obj)
+    obj.select_set(True)
+    group = obj.vertex_groups.new(name="joint")
+    for vertex, weight in enumerate((0.25, 0.5, 0.75)):
+        group.add([vertex], weight, "REPLACE")
+    seen: list[list[float]] = []
+    vertex_counts: list[int] = []
+
+    def record(path: Path) -> None:
+        selected = bpy.context.selected_objects
+        assert selected is not None and len(selected) == 1
+        copy = selected[0]
+        copy_mesh = copy.data
+        assert isinstance(copy_mesh, bpy.types.Mesh)
+        vertex_counts.append(len(copy_mesh.vertices))
+        group = copy.vertex_groups["joint"]
+        for face in copy_mesh.polygons:
+            corners = copy_mesh.loops[face.loop_start : face.loop_start + face.loop_total]
+            seen.append(sorted(group.weight(corner.vertex_index) for corner in corners))
+
+    monkeypatch.setattr(export_gltf, "write_glb", record)
+    export(tmp_path / "scene.glb")
+    assert vertex_counts == [6]
+    assert seen == [[0.25, 0.5, 0.75], [0.25, 0.5, 0.75]]
+
+
+@pytest.mark.parametrize("extras", [("fire_strength", "wind"), ("wind", "fire_strength")])
+def test_extra_attributes_keep_the_order_of_the_list_on_a_mesh_with_faces_on_the_same_three_vertices(
+    tmp_path: Path, extras: tuple[str, str]
+):
+    # Rows "Extra attributes" and "Shared vertices": the vertices of their own do not change the order of COLOR_1 and
+    # up (spec decision 7). The two extras differ in data type and domain, because Blender orders the attributes by
+    # domain and data type when a mesh is written back from bmesh.
+    mesh = bpy.data.meshes.new("Ground")
+    mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [], [(0, 1, 2), (2, 1, 0)])
+    mesh.color_attributes.new("rs_lit", "FLOAT_COLOR", "CORNER")
+    values = {"fire_strength": 0.4, "wind": 0.8}
+    for name, data_type, domain in (("fire_strength", "FLOAT_COLOR", "CORNER"), ("wind", "BYTE_COLOR", "POINT")):
+        attribute = mesh.color_attributes.new(name, data_type, domain)
+        assert isinstance(attribute, (bpy.types.FloatColorAttribute, bpy.types.ByteColorAttribute))
+        attribute.data.foreach_set("color", [values[name], values[name], values[name], 1.0] * len(attribute.data))
+    obj = bpy.data.objects.new("Ground", mesh)
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.objects.link(obj)
+    obj.select_set(True)
+    path = tmp_path / "scene.glb"
+    export(path, extra_attributes=", ".join(extras))
+    gltf, binary = read_glb(path)
+    (primitive,) = gltf["meshes"][0]["primitives"]
+    for index, name in enumerate(extras, start=1):
+        written = accessor_values(gltf, binary, primitive["attributes"][f"COLOR_{index}"])
+        assert len(written) == 6
+        assert {round(value[0], 1) for value in written} == {values[name]}
