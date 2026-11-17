@@ -2,7 +2,7 @@
 
 This note belongs to [issue 82](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/82) and follows [spec 82](../../spec/82-gltf-export-findings.md). It records what survives when Blender's stock glTF exporter writes a region import and a player with a clip, and a three.js page draws the file. Terms follow [GLOSSARY.md](../../GLOSSARY.md). "Square", "stock export" and "joined export" are used as the spec uses them.
 
-The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). Rows 9, 10 and 11 and the size table were measured on 2026-11-16 for [issue 86](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/86). Rows 1, 12 and 13 and the game values of the player were measured on 2026-11-16 for [issue 87](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/87). Rows 5, 6 and 14 were measured on 2026-11-16 for [issue 88](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/88). [Issue 89](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/89) wrote the form of the exporter and opened the issues on 2026-11-17. It ran no new export.
+The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). Rows 9, 10 and 11 and the size table were measured on 2026-11-16 for [issue 86](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/86). Rows 1, 12 and 13 and the game values of the player were measured on 2026-11-16 for [issue 87](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/87). Rows 5, 6 and 14 were measured on 2026-11-16 for [issue 88](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/88). [Issue 89](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/89) wrote the form of the exporter and opened the issues on 2026-11-17. It ran no new export. [Issue 131](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/131) measured the scenery with the loc light on 2026-11-17.
 
 Each cause is marked as evidence or as a guess. "Read" means that the file or the picture was opened and read in the session that wrote the row.
 
@@ -22,7 +22,8 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 - **Draco loses the face order.** The joined form with Draco keeps every triangle, but not in the order of the mesh. So the priority order of row 8 does not reach the page, and the window of row 8 changes.
 - **Row 1 does not survive for the game values.** The stock exporter writes the look of a loc material (the face colour as `baseColorFactor`, the texture as `baseColorTexture`) and no game value. The player from Create Player has one Emission material with no game value on it. It exports as lit with a white emissive colour, so the page draws the player plain white. Its lit corner colours go to the unused `COLOR_1` (an inference, see [Row 1](#row-1-face-colour-face-alpha-and-textures)).
 - **The game values reach the page through a scratch step.** No exporter setting writes `rs_face_colour` and `rs_alpha` from the player as it is. A scratch step gives each face colour of the player its own material with the two values as custom properties. With `export_extras=True` the exporter writes them as material extras, and three.js puts them in `material.userData`. The rig and the clip do not change.
-- **The page draws the baked client light ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).** Page code first made flat materials from the extras. The owner rejected that look as too flat (RuneScape Classic, not Old School RuneScape). When each split material feeds `rs_lit` from a Color Attribute node straight into the Material Output, the stock exporter writes it as `KHR_materials_unlit` with one colour attribute as `COLOR_0`, which matches the render of `rs_lit` (an inference: the values were not compared one by one). The page then draws the player with the client light and no code of its own, within a mean of 1.0 to 1.3 of 255 of the unlit render. The extras stay on the materials. The scenery has no baked loc light yet ([issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105)).
+- **The page draws the baked client light ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).** Page code first made flat materials from the extras. The owner rejected that look as too flat (RuneScape Classic, not Old School RuneScape). When each split material feeds `rs_lit` from a Color Attribute node straight into the Material Output, the stock exporter writes it as `KHR_materials_unlit` with one colour attribute as `COLOR_0`, which matches the render of `rs_lit` (an inference: the values were not compared one by one). The page then draws the player with the client light and no code of its own, within a mean of 1.0 to 1.3 of 255 of the unlit render. The extras stay on the materials.
+- **The page draws the scenery with the loc light.** The region import bakes the loc light into `rs_lit` ([ADR 0027](../adr/0027-the-region-import-bakes-the-loc-light.md)). A scratch step puts `rs_lit` into the joined 16 square in place of the face colour, and the page draws it as it draws the lit player, within a mean of 0.8 to 1.3 of 255 of the unlit render. See [The lit scenery](#the-lit-scenery).
 - **Row 12 survives.** On the lit page, the straps on the torso and the belt on the skirt look as in the unlit render, at 2 frames and 2 cameras. The pixels that differ by more than 32 lie on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band. The flat page gave the same result.
 - **Row 13 survives.** With no shadow, the lit player on the joined 16 square does not look like it floats. The lowest point of the player is 7.8 units under the flat tile, and the pictures put it on the boots.
 - **The Fire cape is left out.** Create Player refuses it, because 24 of its faces have a texture ([issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103)). So no textured face of a player was exported.
@@ -43,7 +44,7 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 | WebGL renderer string | `ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)`. This is the real GPU, not a software renderer. |
 | Region | `48_50` of snapshot 430, imported by `region_import.import_region` at the default brightness. The import reported 4096 tiles, 1874 placements as 1894 objects, 185 shared meshes and 1154 own meshes. |
 | Exporter settings of the player | `player-stock.glb` uses the settings above. `player-stock-extras.glb`, `player-extras.glb` and `player-lit.glb` add `export_extras=True`. All four export the animation with the defaults. |
-| Add-on code | Commit bd43fcd for rows 2 and 3, commit d8eb169 for rows 4, 7 and 8, commit 015a089 for rows 9, 10 and 11, commit 955f868 for rows 1, 12 and 13, and commit 230d34b for rows 5, 6 and 14 |
+| Add-on code | Commit bd43fcd for rows 2 and 3, commit d8eb169 for rows 4, 7 and 8, commit 015a089 for rows 9, 10 and 11, commit 955f868 for rows 1, 12 and 13, commit 230d34b for rows 5, 6 and 14, and commit da4c057 for the lit scenery of issue 131. At commit da4c057 the import reported 344 shared meshes in place of 185, because the mesh key of ADR 0027 holds every input of the loc light. |
 
 The page reported 60.0 fps and 16.66 or 16.67 ms for each frame on every run of issues 84 and 85, with 1 to 446 draw calls.
 
@@ -80,6 +81,8 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | `player88.py` | The Blender script of issue 88. It builds the player as `player87.py` does, bakes one clip with the Bones method from frame 1, gives the shared player material the unlit shape of `rs_lit` (see [The lit player](#the-lit-player)), exports the player, and renders it at 3 frames at the `player` camera. Step `idle` bakes sequence 2061 as a pose, step `wave` bakes sequence 863 as an action, and step `fade` bakes sequence 1994 as an action and exports it twice. Each step writes `player88-<step>.json` to `out/`. |
 | `glb88.py`, `linear88.py`, `changes88.py` | Print the nodes, the materials and the channels of the clip of a `.glb` file by path, interpolation and key count. Print each `LINEAR` channel whose 2 keys differ. Print the keys where a channel of the clip changes. |
 | `shots88.sh`, `sheet88.py` | The page screenshots of issue 88, and the render and the page of each frame side by side. The page's reports are in `shots88.jsonl`. |
+| `loclit131.py` | The Blender script of issue 131. It imports `48_50`, renders the terrain of the 16 square and its placements as the import made them, joins the square with the corner colours of `rs_lit`, renders the joined form, writes `joinedlit16.glb`, and writes `loclit131.json` to `out/`. It uses the functions of `join.py`. See [The lit scenery](#the-lit-scenery). |
+| `shots131.sh` | The page screenshots of issue 131. The page's reports are in `shots131.jsonl`. |
 | `page/index.html`, `page/main.js` | The scratch page. Issue 88 added the interpolation of each track of each clip to the report. |
 | `page/serve.mjs` | A static file server for `<scratch folder>` on 127.0.0.1. |
 | `page/shot.mjs` | Starts the server, opens the page in headless Chrome at 1920x1080, waits until the page has measured 3 seconds (or the number of seconds of its third argument), saves a screenshot to `out/` and prints the page's report as one JSON line. It exits with code 2 when the WebGL renderer string names a software renderer. The environment variable `CHROME_ARGS` adds more Chrome arguments. |
@@ -240,6 +243,22 @@ bash <scratch folder>/shots88.sh
 
 `compare.py` ran the same way for each frame of each clip and for the pairs of screenshots of row 6. `linear88.py` and `changes88.py` ran the same way for the other files.
 
+The commands of issue 131. `loclit131.py` needs the `views.json` of `export.py`. The compares need the `joined16-page-<view>.png` screenshots of `shots85.sh`, and `shots131.sh` needs the `player-lit.glb` of `player87.py`.
+
+```bash
+bash <scratch folder>/run-blender.sh <repo> <path to cache> loclit131
+bash <scratch folder>/shots131.sh
+uv run python3 <scratch folder>/colours87.py <scratch folder>/out/joined16.glb
+uv run python3 <scratch folder>/colours87.py <scratch folder>/out/joinedlit16.glb
+<scratch folder>/compare.py <scratch folder>/out/joinedlit16-blender-test.png <scratch folder>/out/joinedlit16-page-test.png
+<scratch folder>/compare.py <scratch folder>/out/import131-blender-test.png <scratch folder>/out/joinedlit16-blender-test.png
+<scratch folder>/compare.py <scratch folder>/out/joined16-page-test.png <scratch folder>/out/joinedlit16-page-test.png
+<scratch folder>/diffmap.py map <scratch folder>/out/joinedlit16-blender-test.png <scratch folder>/out/joinedlit16-page-test.png <scratch folder>/out/difflit131-test.png 32
+<scratch folder>/diffmap.py pixel 960 530 <scratch folder>/out/joined16-page-test.png <scratch folder>/out/joinedlit16-blender-test.png <scratch folder>/out/joinedlit16-page-test.png
+```
+
+`compare.py` ran the same way for the `top` and `low` cameras, and `diffmap.py pixel` for the pixels that [The lit scenery](#the-lit-scenery) names.
+
 To look at the page by hand, run `node <scratch folder>/page/serve.mjs` and open `http://127.0.0.1:8082/page/index.html?file=terrain16.glb&view=test`.
 
 ### What `export.py` exports
@@ -349,9 +368,9 @@ These findings decide it:
 - **The materials need a new node shape, evidence.** The stock exporter writes a material as unlit only when a colour socket feeds the Material Output, or through the Is Camera Ray shape (rows 1 and 3). The import and Create Player use an Emission node, and Blender shows both shapes the same. So the export step changes the shape, and the import keeps its own.
 - **The export must run on copies, evidence.** The stock exporter calls `validate()` on the meshes in the scene, and that removed 409 faces of the 16 square (row 7). An export straight from the scene changes the user's file.
 - **The settings must be fixed, evidence.** The animation mode must be one that writes `STEP` (row 6). `export_extras` must be on for the game values (row 1). Draco must stay off while it loses the face order (row 8). Without Draco, the joined 32 square is over 2 MiB (row 10). A doc with the settings can fix these, but it cannot do the join or the copies.
-- **A doc alone is not enough, evidence.** The 24 and 32 squares are over 2 MiB in the stock form (row 10). The 16 square is under 2 MiB in the stock form, but its scenery is lit (row 4). So a square that is under 2 MiB and has unlit scenery needs the join.
+- **A doc alone is not enough, evidence.** The 24 and 32 squares are over 2 MiB in the stock form (row 10). The 16 square is under 2 MiB in the stock form, but its scenery is lit (row 4). So a square that is under 2 MiB and has unlit scenery needs the join. Row 4 was measured at commit d8eb169, before [issue 130](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/130) gave the scenery materials the shape that draws `rs_lit`. The stock export of those materials was not measured. [Issue 118](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/118) covers it.
 
-What the operator does not cover yet: the visibility of a held item (row 5) and a clip that changes face alpha (row 14). Their issues decide how. The scenery gets its light from [issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105).
+What the operator does not cover yet: the visibility of a held item (row 5) and a clip that changes face alpha (row 14). Their issues decide how. The scenery gets its light from the region import ([issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105)), so the join takes `rs_lit` as it does for the player (see [The lit scenery](#the-lit-scenery)).
 
 ## Issues
 
@@ -373,6 +392,8 @@ Issue 89 opened one issue for each row that does not survive, on 2026-11-17. The
 Row 13 survives, so the page gets no issue for a contact shadow.
 
 Issue 87 opened [issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103): Create Player refuses an item with textured faces, such as the Fire cape. It also opened [issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105): the scenery needs the client's loc light baked in, so that the page can draw it lit ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).
+
+Issue 131 opened [#138](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/138), a sub-issue of issue 82: The region import merges the normals of touching sharelight locs before it lights them. See [The lit scenery](#the-lit-scenery).
 
 ## The player
 
@@ -546,8 +567,80 @@ The owner chose, after seeing the flat page, that the page draws the client ligh
 The front at frame 1, read next to the render: the same player with the same shading, such as the darker side of the skirt and of the legs. The maps of the pixels that differ by more than 32, read for all 4 pairs, show them on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band.
 
 - **That `COLOR_0` is `rs_lit`, an inference.** The match of the page with the render of `rs_lit` is the evidence. The values were not compared one by one.
-- **The scenery is still flat.** The joined form of issue 85 takes each placement face's colour from its material, before any light, and the import has no baked loc light ([ADR 0022](../adr/0022-the-region-import-checks-each-value-against-a-second-reader.md)). On the page the lit player stands among flat stalls. [Issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105) bakes the loc light.
+- **The scenery was flat in issue 87.** The joined form of issue 85 takes each placement face's colour from its material, before any light, and the import then had no baked loc light ([ADR 0022](../adr/0022-the-region-import-checks-each-value-against-a-second-reader.md)). On the page the lit player stood among flat stalls. [Issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105) bakes the loc light, and [The lit scenery](#the-lit-scenery) draws it on the page.
 - **Face alpha, not measured.** The outfit has no face alpha, and this unlit shape has no alpha. How a face alpha travels with `rs_lit` was not checked.
+
+## The lit scenery
+
+Issue 131 measured this on 2026-11-17, with the add-on at commit da4c057. It follows [spec 105](../../spec/105-baked-loc-light.md) (part 3).
+
+### Where the light is made
+
+The region import makes the loc light, not the export step ([ADR 0027](../adr/0027-the-region-import-bakes-the-loc-light.md)). `region_scenery.scenery_objects` lights each placement mesh with `region_loc_light.loc_light` and writes the lit corner colours to the corner colour attribute `rs_lit` (`_write_lit`). The scenery materials draw `rs_lit` through an Emission node, with no Blender light (`show_loc_light`). The scratch step adds no light. It only copies `rs_lit` into the joined form.
+
+### The client lines
+
+All lines are in `runescape-client/src/main/java/` of the May 2018 RuneLite tree, the client source of spec 105. Revision 149 is not checked. The code cites the same lines.
+
+| Rule | Client lines | Add-on code |
+| --- | --- | --- |
+| Loc light values | `ObjectComposition.java` lines 274 and 275 (both 0 by default), line 408 (opcode 29, `ambient`) and line 410 (opcode 39, `contrast`, a signed byte times 25) | `loc_definition.py` |
+| The lighting of a loc | `ObjectComposition.java` line 585: ambient + 64, contrast + 768 and the direction -50, -10, -50. A sharelight loc gets the same values from `Region.applyLighting` (`Region.java` lines 846 to 865), which `class24.java` line 316 calls with -50, -10, -50. | `region_loc_light.loc_light` |
+| Plain face | `ModelData.light` (`ModelData.java` lines 1538 to 1718), with the normals of `computeNormals` (lines 1444 to 1476) | `lighting.light` |
+| Textured face | `ModelData.java` lines 1665 to 1699 give a light value per corner through `method2676` (lines 1830 to 1838), which keeps it from 2 to 126. The client multiplies each texel by it (`Graphics3D.java` line 1489). `rs_lit` holds the value over 128 as a grey. | `lighting.light`, `region_scenery._write_lit` |
+| Alpha 254 and 255 | `ModelData.java` lines 1614 to 1620 (alpha 254 makes the render type 3, alpha 255 makes it 2), lines 1632 to 1636 for an untextured face, and lines 1671 and 1672 for a textured face | `lighting.light` |
+| The frame of the light | `ObjectComposition.java` lines 753 to 820: the mirror (`ModelData.method2633`, lines 1380 to 1390), the quarter turns, the diagonal turn of a type 4 wall decoration at rotation 4 to 7 (lines 787 to 790), the scale and the offset come before the light | `region_loc_light.loc_light` |
+| Contour order | `ObjectComposition.java` line 585 lights a loc without `nonFlatShading` before the contour of lines 600 to 606. Lines 586 to 590 leave a loc with it unlit, and `Region.java` lines 846 to 865 light it after the contour. | `region_loc_light.loc_light` |
+| Normal merge of sharelight locs | `Region.applyLighting` (`Region.java` lines 831 to 872) with `method3061`, `method2978` and `ModelData.method2660` | Left out ([spec 105](../../spec/105-baked-loc-light.md), decision 4). [#138](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/138) covers it. |
+
+### The scratch step
+
+`loclit131.py` joins the 16 square with [the join steps](#the-join-steps) of issue 85. Step 4 changes: each placement corner gets its colour from `rs_lit` of its mesh, and not from the Base Color of its material.
+
+- **An untextured face** gets the lit colour of each corner. A face with a face alpha keeps (256 - alpha) / 256 as the alpha, as in issue 85.
+- **A textured face** gets the grey light value of each corner. The textured material of the join multiplies the texture by the colour attribute, so the page draws the texture times the light, as `show_loc_light` does in Blender.
+- **A face whose `rs_lit` alpha is 0** is one that the client does not draw (`_write_lit`). The script leaves it out. The 16 square has no such face, so this rule ran on no face.
+- **The terrain faces** are as in issue 85.
+
+Before the join, the script renders the import itself at the same cameras: the terrain faces of the square and its 140 placements, with every other mesh object hidden from the render. The export has the settings of `joined16.glb`.
+
+### What the file holds
+
+`joinedlit16.glb` is 730,136 bytes. It has the 6 meshes and the face counts of `joined16.glb` in [What the joined 16 square is](#what-the-joined-16-square-is). Its 14,073 placement faces are 13,849 untextured and 224 textured. Every material is `KHR_materials_unlit`, and every `COLOR_0` has the type of issue 85. The 140 placements of the square now use 124 meshes, 110 before. The import of the whole region reported 344 shared meshes and 1,154 own meshes.
+
+| Mesh | Distinct `COLOR_0` values, `joined16.glb` | Distinct `COLOR_0` values, `joinedlit16.glb` |
+| --- | --- | --- |
+| `Joined Colour` | 256 | 1,293 |
+| `Joined Colour blended` | 7 | 44 |
+| `Joined RS_Texture_1` (terrain water) | 6 | 6 |
+| `Joined RS_Texture_8` | 1 (white) | 61 |
+| `Joined RS_Texture_22` | 1 (white) | 22 |
+| `Joined RS_Texture_23` | 1 (white) | 20 |
+
+So the file holds a light for each corner where issue 85 had one colour for each face, evidence from `colours87.py`. The textured meshes hold greys in place of white.
+
+### The page next to the unlit render
+
+The page draws `joinedlit16.glb` with no query parameter of its own, as it draws the lit player. It reported 6 `MeshBasicMaterial` with `vertexColors` true, 7 draw calls and 14,773 triangles, as for `joined16.glb`.
+
+| Measure, `joinedlit16-blender-<view>.png` against `joinedlit16-page-<view>.png` | `test` | `top` | `low` |
+| --- | --- | --- | --- |
+| Pixels that are not black in either picture | 655,074 | 840,844 | 1,065,229 |
+| Pixels that differ by more than 2 of 255 | 87,919 | 65,207 | 107,777 |
+| Pixels that differ by more than 8 of 255 | 28,314 | 21,615 | 34,268 |
+| Pixels that differ by more than 32 of 255 | 1,654 | 1,137 | 3,021 |
+| Largest difference | 139 | 110 | 126 |
+| Mean difference of the drawn pixels | 1.3 | 0.8 | 1.1 |
+
+The flat scenery of issue 85 had a mean of 1.6, 1.1 and 1.3 at the same cameras.
+
+- **The joined copy looks like the import, evidence.** The render of the joined form differs from the render of the import itself by a mean of 0.003, 0.001 and 0.004 of 255 at the three cameras. No pixel differs by more than 25, and 0, 15 and 60 pixels differ by more than 8.
+- **The light changes the page, evidence.** The lit page differs from the flat page of issue 85 by a mean of 7.2, 7.0 and 6.4 of 255, and 52,836, 74,497 and 73,900 pixels differ by more than 32. At the `test` camera, a stall roof pixel at (960, 530) is (216, 210, 199) on the flat page and (167, 151, 125) in the lit render and on the lit page. The grass pixel at (800, 800) is (87, 81, 22), and the water pixel at (450, 950) is (77, 92, 124) on both pages, because the terrain did not change.
+- **The pictures, read.** At the `test` camera, the lit page and the lit render show the same scene. The stall roofs, the fences, the benches and the trees have a light side and a dark side. On the flat page they have one colour for each face.
+- **The pixels that differ by more than 32, read.** The map at the `test` camera shows them in the window of [Row 8](#row-8-render-priority), on the 2 trees and on the white plates of the south stall. A tree pixel at (1270, 690) is (53, 60, 23) in the render and (58, 68, 21) on the page. The window and the trees are as in issue 85, and their causes are the guesses of row 8 and row 2. The cause on the plates was not checked.
+- **The lit player on the lit square, read.** `floatloclit-page-float-near-f1.png` shows the lit player of issue 87 next to the stalls, and both have the shade of the client light. This screenshot is for the owner's check by eye ([issue 132](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/132)). No pixel was compared.
+
+Not checked: the scenery next to the live client, which is the owner's check by eye (issue 132). How many sharelight locs the 16 square holds, and how much the normal merge of [#138](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/138) would change them, was not counted.
 
 ## Row 2: Nearest sampler
 
