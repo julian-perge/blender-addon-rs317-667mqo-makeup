@@ -162,6 +162,10 @@ _Avoid_: transform, morph
 The darkness that a placement adds to the terrain light at the tile corners it covers. Walls write 50, and objects write up to 30 (`PacketBuffer.java` lines 252 to 493).
 _Avoid_: ambient occlusion, shade
 
+**Loc light**:
+The light that the client gives the face corners of a loc model, from the loc's ambient and contrast and the direction `-50, -10, -50` (`ObjectComposition.java` line 585). The region import bakes it into `rs_lit` (ADR 0027).
+_Avoid_: scenery shading, loc lighting
+
 **Landscape**:
 The group `l<x>_<y>` of a region. It lists the placements of the region and is encrypted with landscape keys.
 _Avoid_: scenery file, loc file
