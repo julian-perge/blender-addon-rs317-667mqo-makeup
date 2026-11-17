@@ -808,15 +808,24 @@ def unskinned_gnome() -> bpy.types.Object:
     return obj
 
 
+def unlabelled_gnome() -> bpy.types.Object:
+    # A vertex in no vertex skin group has no label (the decision comment of issue 95).
+    obj = imported_gnome()
+    for group in list(obj.vertex_groups):
+        group.remove([0, 1])
+    return obj
+
+
 @pytest.mark.parametrize(
     ("make_active", "sequence", "message"),
     [
         (lambda: None, 195, "no active object"),
         (armature_object, 195, "'rig' is not a mesh"),
         (unskinned_gnome, 195, "'Gnome model' has no vertex skins"),
+        (unlabelled_gnome, 195, "'Gnome model' cannot have a rig: 2 vertices have no vertex skin label"),
         (imported_gnome, 99999, "no sequence 99999"),
     ],
-    ids=["no active object", "not a mesh", "no vertex skins", "sequence the cache lacks"],
+    ids=["no active object", "not a mesh", "no vertex skins", "vertices with no label", "sequence the cache lacks"],
 )
 def test_make_rig_refuses_and_changes_nothing(make_active, sequence, message):
     obj = make_active()
@@ -860,26 +869,6 @@ def test_make_rig_builds_from_the_mesh_as_the_user_edited_it():
     index = vertices_of(collection).index(0)
     x, y, z = to_rig @ mesh(collection).vertices[index].co
     assert (x, -z, y) == pytest.approx(moved, abs=1e-4)
-
-
-def test_a_vertex_in_no_vertex_skin_group_gets_label_0_as_model_export_reads_it():
-    # The add-on stores label 0 as no weight in every vertex skin group (`rs_layers._spill`), so a vertex that the
-    # owner added and did not weight cannot be told from a vertex with label 0 (the decision comment of issue 95).
-    obj = imported_gnome()
-    groups = [group.index for group in obj.vertex_groups]
-    data = obj.data
-    assert isinstance(data, bpy.types.Mesh)
-    vertex = next(v.index for v in data.vertices if v.groups)
-    for group in groups:
-        obj.vertex_groups[group].remove([vertex])
-    assert make_rig(195) == {"FINISHED"}
-    collection = npc_collection.npc_of(active())
-    assert collection is not None
-    mesh_obj = appearance_collection.mesh_of(collection)
-    names = {group.index: group.name for group in mesh_obj.vertex_groups}
-    built = mesh(collection)
-    index = vertices_of(collection).index(vertex)
-    assert [names[g.group] for g in built.vertices[index].groups] == [f"{appearance_collection.BONE_PREFIX}0"]
 
 
 def test_make_rig_twice_on_one_object_builds_two_npcs():

@@ -87,7 +87,7 @@ RS-Style Render | Cel-shaded viewport setup | Preview your models in authentic R
 </ol>
 <p dir="auto" style="white-space: pre-wrap;">Ready to roll? Let's break it down section by section.</p>
 <h2 dir="auto">1. Model Weighter: Bone Up Your Rigs</h2>
-<p dir="auto" style="white-space: pre-wrap;"><strong>Why?</strong> Gives vertices body-part labels (vertex skins, 0-255) that RS animations move. Stored as vertex groups VSKIN1: to VSKIN3: at label / 100, spilling past 1.0 into the next group; the weighter writes and reads whole labels.</p>
+<p dir="auto" style="white-space: pre-wrap;"><strong>Why?</strong> Gives vertices body-part labels (vertex skins, 0-255) that RS animations move. Stored as vertex groups VSKIN1: to VSKIN3: at label / 100, spilling past 1.0 into the next group; the weighter writes and reads whole labels. Label 0 is a member of VSKIN1: with weight 0, so a vertex in no VSKIN group has no label, and export, mirroring and Make rig refuse it. In Edit Mode, Select Unlabelled selects such vertices, for example the new vertices of a cut.</p>
 <p dir="auto" style="white-space: pre-wrap;"><strong>Step-by-Step</strong>:</p>
 <ul dir="auto">
 <li>Grab a mesh &gt; Tab to <strong>Edit Mode</strong>.</li>

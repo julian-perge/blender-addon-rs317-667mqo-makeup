@@ -83,17 +83,22 @@ def make_rig(obj: bpy.types.Object | None, sequence_id: int, folder: Path, brigh
     frame of the sequence, beside the players and NPCs of the file (spec 13, Make rig).
 
     The new collection has its own mesh, so the object keeps its mesh, transform and collections. The model is the
-    one that model export would write: the mesh's own positions, with no object transform, and a vertex in no vertex
-    skin group has label 0. The collection takes the object's name and has a scale of 1 (the decision comment of
-    issue 95). Everything that can fail runs before any Blender data exists: an object that is not a mesh with vertex
-    skins, and a sequence that the cache lacks, are refused.
+    one that model export would write: the mesh's own positions, with no object transform. The collection takes the
+    object's name and has a scale of 1 (the decision comment of issue 95). Everything that can fail runs before any
+    Blender data exists: an object that is not a mesh with vertex skins, a vertex with no label and a sequence that
+    the cache lacks are refused.
     """
     if obj is None:
         raise ValueError("Make rig needs an active mesh object, and there is no active object")
     if obj.type != "MESH":
         raise ValueError(f"Make rig needs a mesh object, and {obj.name!r} is not a mesh")
-    if rs_layers.read_vertex_skins(obj) is None:
+    labels = rs_layers.read_vertex_labels(obj)
+    if labels is None:
         raise ValueError(f"{obj.name!r} has no vertex skins, so it cannot have a rig")
+    if None in labels:
+        raise ValueError(
+            f"{obj.name!r} cannot have a rig: {rs_layers.unlabelled(labels.count(None))}. {rs_layers.UNLABELLED_ADVICE}"
+        )
     map_id, frame_map = sequence_frame_map(Js5Store(folder), sequence_id, f"Sequence {sequence_id}")
     model = mesh.object_to_model(obj)
     shading = light(model, MADE_RIG_LIGHTING)
