@@ -100,6 +100,8 @@ def load_locs(path: Path) -> dict[int, LocDefinition]:
             mirrored=row["isRotated"],
             contoured_ground=row["contouredGround"],
             non_flat_shading=row["mergeNormals"],
+            ambient=row["ambient"],
+            contrast=row["contrast"],
             animation=row["animationID"],
             decor_displacement=row["decorDisplacement"],
             casts_shadow=row["shadow"],

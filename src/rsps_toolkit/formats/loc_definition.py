@@ -50,6 +50,12 @@ class LocDefinition:
     non_flat_shading: bool
     """The client's `nonFlatShading` (opcode 22), which changes how the client lights the model
     (`ObjectComposition.java` lines 584 and 596)."""
+    ambient: int
+    """The client's `ambient`, read as a signed byte by opcode 29 (`ObjectComposition.java` line 408). It is 0 when no
+    opcode sets it (line 274)."""
+    contrast: int
+    """The client's `contrast`, read as a signed byte times 25 by opcode 39 (`ObjectComposition.java` line 410). It is 0
+    when no opcode sets it (line 275)."""
     animation: int
     """The animation id, or -1."""
     decor_displacement: int
@@ -96,6 +102,7 @@ def decode_loc(loc_id: int, data: bytes) -> LocDefinition:
     scale = [128, 128, 128]
     offset = [0, 0, 0]
     mirrored = non_flat_shading = False
+    ambient = contrast = 0
     casts_shadow = True
     contoured_ground = animation = -1
     decor_displacement = 16
@@ -134,7 +141,11 @@ def decode_loc(loc_id: int, data: bytes) -> LocDefinition:
             animation = _or_none(reader.u16())
         elif opcode == 28:
             decor_displacement = reader.u8()
-        elif opcode in (19, 29, 39, 69, 75):
+        elif opcode == 29:
+            ambient = _s8(reader)
+        elif opcode == 39:
+            contrast = _s8(reader) * 25
+        elif opcode in (19, 69, 75):
             reader.u8()
         elif opcode == 40:
             recolours = tuple((reader.u16(), reader.u16()) for _ in range(reader.u8()))
@@ -183,6 +194,8 @@ def decode_loc(loc_id: int, data: bytes) -> LocDefinition:
         mirrored=mirrored,
         contoured_ground=contoured_ground,
         non_flat_shading=non_flat_shading,
+        ambient=ambient,
+        contrast=contrast,
         animation=animation,
         decor_displacement=decor_displacement,
         casts_shadow=casts_shadow,
@@ -194,6 +207,10 @@ def decode_loc(loc_id: int, data: bytes) -> LocDefinition:
 
 def _or_none(value: int) -> int:
     return -1 if value == _NONE else value
+
+
+def _s8(reader: Reader) -> int:
+    return int.from_bytes(reader.take(1), signed=True)
 
 
 def _parameters(reader: Reader) -> None:
