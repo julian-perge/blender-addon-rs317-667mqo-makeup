@@ -2,17 +2,20 @@
 lights (spec 140, ADR 0028).
 
 The operator exports copies of the meshes, because the stock exporter validates the meshes that it exports and so
-removes faces from them (`docs/research/82-gltf-export.md`, "Form of the exporter"). Each copy draws one colour
-attribute through an unlit material, and the stock exporter writes the file with fixed settings."""
+removes faces from them (`docs/research/82-gltf-export.md`, "Form of the exporter"). On the copy, each face that uses
+the vertices of an earlier face gets vertices of its own, so that the validation keeps it (issue 121). Each copy draws
+one colour attribute through an unlit material, and the stock exporter writes the file with fixed settings."""
 
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
+import bmesh
 import bpy
 from bpy_extras.io_utils import ExportHelper
 
 from ..formats.attribute_list import attribute_names, naming_problems
+from ..formats.repeated_faces import repeated_faces
 
 # An original keeps this suffix on its name while its copy holds the name, so that the file has the names of the scene.
 SET_ASIDE_SUFFIX = ".rs_scene_original"
@@ -168,7 +171,32 @@ def _prepare_mesh(mesh: bpy.types.Mesh, material: bpy.types.Material, colour: st
     mesh.materials.clear()
     mesh.materials.append(material)
     mesh.polygons.foreach_set("material_index", [0] * len(mesh.polygons))
+    # Blender writes a mesh back from bmesh with its attributes ordered by domain and data type, so the faces are
+    # separated before the colour attributes are put in the order of the list.
+    _separate_repeated_faces(mesh)
     _keep_colour_attributes(mesh, colour, extras)
+
+
+def _separate_repeated_faces(mesh: bpy.types.Mesh) -> None:
+    """Give each face of `mesh` that uses the vertices of an earlier face vertices of its own, so that the stock
+    exporter's mesh validation keeps it (issue 121). The faces keep their order, and a new vertex copies the attributes
+    and the vertex group weights of the vertex that it replaces."""
+    corners = [0] * len(mesh.loops)
+    mesh.loops.foreach_get("vertex_index", corners)
+    repeated = repeated_faces(corners[face.loop_start : face.loop_start + face.loop_total] for face in mesh.polygons)
+    if not repeated:
+        return
+    edit = bmesh.new()
+    try:
+        edit.from_mesh(mesh)
+        edit.faces.ensure_lookup_table()
+        for index in repeated:
+            face = edit.faces[index]
+            for vertex in list(face.verts):
+                bmesh.utils.face_vert_separate(face, vertex)
+        edit.to_mesh(mesh)
+    finally:
+        edit.free()
 
 
 def _keep_colour_attributes(mesh: bpy.types.Mesh, colour: str, extras: Sequence[str]) -> None:
