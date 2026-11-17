@@ -1080,3 +1080,39 @@ def test_a_clip_has_the_keys_of_the_slot_that_the_rig_plays(cache: Path, tmp_pat
             expected = Quaternion((w, x, y, z)) @ SITTING[node["name"]]
             for x, y, z, w in accessor_values(gltf, binary, clip["samplers"][channel["sampler"]]["output"]):
                 assert Quaternion((w, x, y, z)).rotation_difference(expected).angle == pytest.approx(0, abs=1e-4)
+
+
+def test_an_action_that_a_rig_plays_with_two_slots_is_one_clip_with_the_slot_that_it_plays_first(
+    cache: Path, tmp_path: Path
+):
+    # The owner chose in the review of issue 145 on 2026-11-17 that such an action is one clip (spec decision 6) with
+    # the slot of the active action, which comes before the slots of the strips.
+    rig = rigged_player(cache)
+    sitting = held_pose(rig)
+    other = sitting.slots.new(id_type="OBJECT", name="Other")
+    strip = sitting.layers[0].strips[0]
+    assert isinstance(strip, bpy.types.ActionKeyframeStrip)
+    bag = strip.channelbag(other, ensure=True)
+    turned = Quaternion((0, 0, 1), math.radians(90))
+    for joint in SITTING:
+        path = f'pose.bones["{joint}"].rotation_quaternion'
+        for index, value in enumerate(turned):
+            bag.fcurves.new(path, index=index).keyframe_points.insert(1, value)
+    animation = rig.animation_data
+    assert animation is not None
+    animation.action = sitting
+    animation.action_slot = other
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, binary = read_glb(path)
+    (clip,) = gltf["animations"]
+    checked = set()
+    for channel in clip["channels"]:
+        node = gltf["nodes"][channel["target"]["node"]]
+        if channel["target"]["path"] == "rotation" and node["name"] in SITTING:
+            x, y, z, w = node.get("rotation", [0, 0, 0, 1])
+            expected = Quaternion((w, x, y, z)) @ turned
+            for x, y, z, w in accessor_values(gltf, binary, clip["samplers"][channel["sampler"]]["output"]):
+                assert Quaternion((w, x, y, z)).rotation_difference(expected).angle == pytest.approx(0, abs=1e-4)
+            checked.add(node["name"])
+    assert checked == set(SITTING)

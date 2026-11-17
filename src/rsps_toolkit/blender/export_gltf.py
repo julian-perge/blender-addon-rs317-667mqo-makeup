@@ -250,7 +250,9 @@ def _played_actions(rig: bpy.types.Object) -> list[tuple[bpy.types.Action, bpy.t
     """Each action of `rig` once, with the slot that it first plays: the active action, then the action of each strip of
     the tracks, also of a muted strip or track. The owner chose in the build of issue 145 on 2026-11-17 that a muted
     strip is a clip too, and spec decision 6 gives one clip for each action. In tweak mode, Blender holds the active
-    action aside and has no slot for it, so it plays its only slot for objects, if it has one (a guess of that build)."""
+    action aside and has no slot for it, so it plays its only slot for objects, if it has one. The owner chose in the
+    review of issue 145 on 2026-11-17 that an action played with two slots keeps the slot that it plays first, and that
+    the slot in tweak mode is the action's only slot for objects."""
     animation = rig.animation_data
     if animation is None:
         return []
