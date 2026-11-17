@@ -817,8 +817,8 @@ The page loads each file with `?view=player` and `?t=<f / 50>`, which is Blender
 | Clip, Blender frame (client frame) | Drawn pixels | More than 8 of 255 | More than 32 of 255 | Largest | Mean of the drawn pixels |
 | --- | --- | --- | --- | --- | --- |
 | Idle, 1 (0) | 74,205 | 3,085 | 529 | 84 | 1.29 |
-| Idle, 70 (2) | 74,281 | 2,943 | 486 | 86 | 1.25 |
-| Idle, 200 (8) | 74,122 | 3,069 | 542 | 75 | 1.31 |
+| Idle, 70 (3) | 74,281 | 2,943 | 486 | 86 | 1.25 |
+| Idle, 200 (9) | 74,122 | 3,069 | 542 | 75 | 1.31 |
 | Wave, 6 (1) | 72,137 | 2,887 | 509 | 78 | 1.24 |
 | Wave, 30 (5) | 72,370 | 2,941 | 498 | 97 | 1.25 |
 | Wave, 38 (6) | 71,695 | 2,915 | 511 | 78 | 1.25 |
