@@ -24,7 +24,9 @@ All lines are in `<RuneLite May 2018 tree>/runescape-client/src/main/java/`.
 - **What the light sees.** The model data that `getModel(type, rotation)` (lines 689 to 820) gives is already turned, mirrored, scaled and offset. The diagonal turn of a type 4 wall decoration at rotation 4 to 7 (lines 787 to 790) comes before the light too. So the lit corner colours depend on the rotation, the mirror, the scale and the diagonal turn of a placement, not only on its model.
 - **The contour.** For a loc without `nonFlatShading`, the light comes before the contour (lines 585 and 600 to 606), so a contoured placement gets the light of its model on flat ground.
 - **Sharelight locs.** For a loc with `nonFlatShading` (opcode 22), `getModel` stores the ambient and the contrast and does not light the model (lines 586 to 590). The contour comes first. `Region.applyLighting` (line 831) lights it later with the same values (lines 846 to 865), and `class24.java` line 316 passes the direction `-50, -10, -50`. Between the two, the client merges the normals of touching locs. This spec leaves the merge out.
-- **Textured faces.** `ModelData.light` (lines 1538 to 1720) gives a textured face a light value from `method2676`, not a lit colour (around lines 1665 to 1698). An alpha of -2 (254) and -1 (255) changes the render type of a face (lines 1612 to 1618).
+- **Textured faces.** `ModelData.light` (lines 1538 to 1718) gives a textured face a light value from `method2676` (lines 1830 to 1838), not a lit colour (lines 1665 to 1699). Part 1 read these lines again on 2026-11-17.
+- **Alpha 254 and 255.** An alpha of -2 (254) makes the render type of a face 3, and -1 (255) makes it 2 (lines 1614 to 1620). An untextured face of render type 3 gets 128 and -1 (lines 1632 to 1634), and one of render type 2 gets -2 (lines 1635 and 1636). A textured face of render type 2 or 3 gets -2 (lines 1671 and 1672). `computeNormals` reads the stored render type and not the alpha (lines 1444 to 1476).
+- **Stored render type 2.** A new-format model keeps the render type byte it reads (line 638). `computeNormals` adds no normal for a face of render type 2 or 3, and `light` hides a face of render type 2 as it hides a face with alpha 255. Part 1 found 33 such faces in 22 test models, model 2269 among them.
 
 ## Objective
 
@@ -89,8 +91,8 @@ There is no reference file (decision 5). Each expected value comes from client l
 | --- | --- | --- |
 | Loc light values | A loc with opcodes 29 and 39 gives its ambient and contrast. A loc with neither gives 0 and 0. | `ObjectComposition.java` lines 274, 275, 408 and 410. |
 | Plain face | The player cases of `test_lighting.py` still pass. A one-face model with the loc lighting gives the client's corner colours. | `tests/fixtures/appearance/reference.json`, `ModelData.java` light. |
-| Textured face | A small model with one textured face gives the client's light value per corner. | `ModelData.java` lines 1665 to 1698, `method2676`. |
-| Alpha 254 and 255 | A face with each alpha gives what the client gives. | `ModelData.java` lines 1612 to 1640. |
+| Textured face | A small model with one textured face gives the client's light value per corner. | `ModelData.java` lines 1665 to 1699, `method2676` (lines 1830 to 1838). |
+| Alpha 254 and 255 | A face with each alpha gives what the client gives. | `ModelData.java` lines 1614 to 1620, 1632 to 1636 and 1671 to 1672. |
 | Lit frame | One model at rotations 0 and 1 gives different corner colours, equal to the light of the turned model. The same for the mirror, a scale and the diagonal turn. | `ObjectComposition.java` lines 787 to 820. |
 | Contour order | A contoured loc on uneven ground has the colours of its flat model. A `nonFlatShading` loc has the colours of its contoured model. | `ObjectComposition.java` lines 585 to 606, `Region.java` lines 846 to 865. |
 | Mesh key | Two placements that differ only in rotation get two meshes. Two that are equal in every key input share one. | Rule 7, ADR 0027. |
@@ -139,6 +141,6 @@ The done check is by eye: the owner looks at the viewport and at the page of the
 ## Guesses and choices to confirm
 
 1. The rules come from the 2018 client, and revision 149 is not checked (decision 8). A difference would show only at the done check.
-2. The line numbers of the textured and alpha branches in "What this stage found" are from a first read. Part 1 reads them again and corrects this spec.
+2. Resolved by part 1 on 2026-11-17: the line numbers of the textured and alpha branches in "What this stage found" are read again and corrected.
 3. The new mesh key makes more meshes than ADR 0022's key. How many more is not counted. The pull request of part 2 records the count.
 4. A `nonFlatShading` loc is lit on its own normals. Where the client merges normals, it looks different.
