@@ -1,7 +1,7 @@
 import bpy.utils.previews
 
 import rsps_toolkit.blender as addon
-from rsps_toolkit.blender import appearance_swatches, import_item
+from rsps_toolkit.blender import appearance_swatches, export_gltf, import_item
 from rsps_toolkit.formats import cache_profile
 
 
@@ -34,6 +34,19 @@ def test_the_item_import_entry_is_added_on_register_and_removed_on_unregister_tw
     def listed() -> bool:
         draw_functions = bpy.types.TOPBAR_MT_file_import.draw._draw_funcs  # pyrefly: ignore[missing-attribute]
         return import_item.menu_entry in draw_functions
+
+    for _ in range(2):
+        addon.register()
+        assert listed()
+        addon.unregister()
+        assert not listed()
+
+
+# The owner chose File > Export > RS Scene (.glb) on 2026-11-17 (spec 140, decision 4).
+def test_the_rs_scene_export_entry_is_added_on_register_and_removed_on_unregister_twice():
+    def listed() -> bool:
+        draw_functions = bpy.types.TOPBAR_MT_file_export.draw._draw_funcs  # pyrefly: ignore[missing-attribute]
+        return export_gltf.menu_entry in draw_functions
 
     for _ in range(2):
         addon.register()

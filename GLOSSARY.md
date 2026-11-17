@@ -166,6 +166,10 @@ _Avoid_: ambient occlusion, shade
 The light that the client gives the face corners of a loc model, from the loc's ambient and contrast and the direction `-50, -10, -50` (`ObjectComposition.java` line 585). The region import bakes it into `rs_lit` (ADR 0027).
 _Avoid_: scenery shading, loc lighting
 
+**Scene light**:
+Light that a Blender renderer bakes into a corner colour attribute of the meshes of one scene, such as the fire light of a night scene. The add-on does not make it. The glTF export draws it when the user names its attribute in place of `rs_lit` (ADR 0028).
+_Avoid_: baked light (the client light in `rs_lit` is baked too), Cycles light
+
 **Landscape**:
 The group `l<x>_<y>` of a region. It lists the placements of the region and is encrypted with landscape keys.
 _Avoid_: scenery file, loc file
@@ -199,6 +203,10 @@ _Avoid_: stance set, which leaves out the attack and block clips
 **Play as**:
 How a bake advances a clip's frames. A Pose starts at frame 0 and ignores the loop offset. An Action plays once, or loops by its loop offset. Picking a clip by name sets Pose for a stance clip in the weapon clips table and Action for any other clip. The Stance and Attack buttons set it for their own clips, and the animator can change it after.
 _Avoid_: play mode, loop mode
+
+**Interleave list**:
+The list of frame map entries that a sequence stores under opcode 3 (`animation/frames.py`). When an action sequence plays over a pose sequence, the client applies the pose's frame to the entries in the action's list, the action's frame to the other entries, and both frames to every pivot entry (`Model.java` lines 709 to 734 of the 2018 client, `jg.w` in revision 149, spec 140). An action sequence with no list replaces the whole pose. The glTF export does not write it yet (ADR 0028).
+_Avoid_: mask, blend list
 
 **Frame map**:
 In legacy game animation, a set of transform types and the skin labels each transform affects.

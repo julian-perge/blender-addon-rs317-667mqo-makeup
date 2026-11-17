@@ -14,6 +14,7 @@ from . import (
     appearance_panel,
     appearance_props,
     appearance_swatches,
+    export_gltf,
     export_model,
     import_animation,
     import_item,
@@ -52,6 +53,7 @@ classes = (
     *region_import.classes,
     *import_animation.classes,
     *export_model.classes,
+    *export_gltf.classes,
     *upgrade_materials.classes,
 )
 
@@ -130,6 +132,7 @@ def register():
     bpy.types.TOPBAR_MT_file_import.append(import_model.menu_entry)  # pyrefly: ignore[bad-argument-type]
     bpy.types.TOPBAR_MT_file_import.append(import_item.menu_entry)  # pyrefly: ignore[bad-argument-type]
     bpy.types.TOPBAR_MT_file_import.append(region_import.menu_entry)  # pyrefly: ignore[bad-argument-type]
+    bpy.types.TOPBAR_MT_file_export.append(export_gltf.menu_entry)  # pyrefly: ignore[bad-argument-type]
 
 
 def unregister():
@@ -144,6 +147,7 @@ def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(import_model.menu_entry)  # pyrefly: ignore[bad-argument-type]
     bpy.types.TOPBAR_MT_file_import.remove(import_item.menu_entry)  # pyrefly: ignore[bad-argument-type]
     bpy.types.TOPBAR_MT_file_import.remove(region_import.menu_entry)  # pyrefly: ignore[bad-argument-type]
+    bpy.types.TOPBAR_MT_file_export.remove(export_gltf.menu_entry)  # pyrefly: ignore[bad-argument-type]
 
     # Remove draw handlers first
     if label_draw_handler:
