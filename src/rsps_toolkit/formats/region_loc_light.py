@@ -7,7 +7,7 @@ not checked against it. The client merges the normals of touching non-flat-shadi
 (`Region.applyLighting`, lines 831 to 865). This module leaves that merge out, as the spec of issue 105 decides.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 
 from .lighting import Shading, light
@@ -25,6 +25,7 @@ def loc_light(
     locs: Mapping[int, LocDefinition],
     model: Model,
     height: Callable[[int, int], int],
+    render_types: Sequence[int] | None = None,
 ) -> Shading:
     """The lit corner colours of one part of a placement, in the face and corner order of the client's model.
 
@@ -33,7 +34,9 @@ def loc_light(
     true, the client swaps the first and the last corner of each face (`ModelData.method2633`, lines 1380 to 1390), so
     `corner_a` of the result belongs to the last corner of the model's face and `corner_c` to the first.
 
-    `height(x, y)` is the height of the tile corner (x, y) in game units, as `place_scenery` reads it.
+    `height(x, y)` is the height of the tile corner (x, y) in game units, as `place_scenery` reads it. `render_types`
+    is the stored render type of each face, which a caller passes for a model that `appearance.merge` joined
+    (`lighting.joined_render_types`). When it is None, they come from the model itself.
     """
     raw = locs[placement.loc]
     shown_id = shown_loc_id(placement.loc, locs)
@@ -66,4 +69,4 @@ def loc_light(
         heights = contour_heights(placement, part, raw, shown, vertices, height)
         if heights is not None:
             vertices = [(x, y, z) for (x, _, z), y in zip(vertices, heights, strict=True)]
-    return light(replace(model, vertices=vertices, faces=faces), lighting)
+    return light(replace(model, vertices=vertices, faces=faces), lighting, render_types)

@@ -6,8 +6,8 @@ import pytest
 from runelite_json import load_items, load_kits
 
 from rsps_toolkit.formats import Model, decode
-from rsps_toolkit.formats.appearance import assemble_body, load_palette
-from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, _divide, light, light_hsl
+from rsps_toolkit.formats.appearance import assemble_body, load_palette, merge
+from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, _divide, joined_render_types, light, light_hsl
 from rsps_toolkit.formats.model import ModelEncoding, NewFormatData
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/appearance"
@@ -224,3 +224,23 @@ def test_the_player_and_npc_light_lights_a_face_of_render_type_3_as_a_flat_face(
     # It adds no normal to vertices 0 and 1, so the tilted face keeps 10713.
     shading = light_hsl(new_model([3, 0]), LOC_LIGHTING)
     assert (shading.corner_a, shading.corner_b, shading.corner_c) == ([10691, 10713], [0, 10713], [-1, 10713])
+
+
+def test_a_joined_model_keeps_the_stored_render_type_of_each_part():
+    # The client's join (ModelData.java lines 192, 207 to 209, 255 and 256) copies the stored render type of each face of
+    # each part. A part without render types stores 0, and an old-format part stores 1 for a flat face (lines 932 to 938).
+    parts = [
+        new_model([2, 0]),
+        old_model([LEVEL], [COLOUR], [None], [0], [True]),
+        old_model([LEVEL], [COLOUR], [None], [0], [False]),
+    ]
+    assert joined_render_types(parts) == [2, 0, 1, 0]
+
+
+def test_a_joined_model_is_lit_with_the_render_types_that_it_is_given():
+    # appearance.merge gives an old-format model, so without the render types the face of render type 2 would be lit
+    # as a smooth face (test_the_player_and_npc_light_lights_a_face_of_render_type_2_as_a_smooth_face).
+    part = new_model([2, 0])
+    joined = merge([part])
+    assert light(joined, LOC_LIGHTING, joined_render_types([part])) == light(part, LOC_LIGHTING)
+    assert light(joined, LOC_LIGHTING) != light(part, LOC_LIGHTING)

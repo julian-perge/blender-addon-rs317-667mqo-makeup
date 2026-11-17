@@ -12,6 +12,7 @@ from ..formats.appearance import merge
 from ..formats.cache_profile import MODEL_INDEX, SET_CACHE_FOLDER
 from ..formats.floor_definition import Overlay, Underlay, read_overlays, read_underlays
 from ..formats.js5 import Js5Store, NotInCacheError
+from ..formats.lighting import joined_render_types
 from ..formats.loc_definition import LocDefinition, read_locs
 from ..formats.model import Model, Vertex
 from ..formats.region import REGION_SIZE, Terrain, bridge_tiles, load_landscape, load_terrain
@@ -22,7 +23,7 @@ from ..formats.region_placement import PlacedLoc, place_scenery
 from ..formats.texture import read_textures, texture_pixels
 from . import preferences
 from .face_materials import texture_image
-from .region_scenery import MeshKey, SceneryCounts, mesh_key, scenery_objects
+from .region_scenery import ModelKey, SceneryCounts, model_key, scenery_objects
 from .region_terrain import drawn_tiles, terrain_object
 
 REGION_MAX = 255
@@ -156,7 +157,7 @@ def import_region(
         return terrain.tile(0, corner_x, corner_y).height
 
     placed = place_scenery(placements, locs, height)
-    models = _loc_models(store, placed, locs)
+    models, render_types = _loc_models(store, placed, locs)
     model_textures = {texture for model in models.values() for texture in model.face_textures if texture is not None}
     textures = read_textures(store, sorted(_textures(terrain, overlays) | model_textures))
     shadows = loc_shadows(placed, locs, _model_vertices(models))
@@ -170,7 +171,7 @@ def import_region(
         region = bpy.data.collections.new(f"Region {x}_{y}")
         scenery = bpy.data.collections.new(f"Scenery {x}_{y}")
         region.children.link(scenery)
-        counts = scenery_objects(scenery, placed, locs, models, images, height, brightness)
+        counts = scenery_objects(scenery, placed, locs, models, render_types, images, height, brightness)
         terrain_obj = terrain_object(f"Terrain {x}_{y}", terrain, underlays, overlays, images, brightness, shadows)
         region.objects.link(terrain_obj)
         parent.children.link(region)
@@ -190,7 +191,7 @@ def import_region(
     return region, RegionReport(drawn_tiles(terrain_obj), counts, bridges, landscape.has_key)
 
 
-def _model_vertices(models: Mapping[MeshKey, Model]) -> Callable[[LocModel], Sequence[Vertex]]:
+def _model_vertices(models: Mapping[ModelKey, Model]) -> Callable[[LocModel], Sequence[Vertex]]:
     """The vertices that `loc_shadows` asks for, as the cache stores them with the cache models of a part joined. They
     come from the models of `_loc_models`, whose recolours and retextures leave the vertices alone. Every part that
     `loc_shadows` asks for is in `models`, because it asks only for the placements that show their own loc."""
@@ -198,11 +199,14 @@ def _model_vertices(models: Mapping[MeshKey, Model]) -> Callable[[LocModel], Seq
     return lambda loc_model: by_ids[loc_model.model_ids]
 
 
-def _loc_models(store: Js5Store, placed: list[PlacedLoc], locs: dict[int, LocDefinition]) -> dict[MeshKey, Model]:
-    """The model of each part of the placements, by its `mesh_key`. The cache models of a part are joined as the client
-    joins them (`ObjectComposition.java` lines 728 to 733), and then recoloured and retextured as the loc says. The join
-    gives an old-format model, so a recolour of 127 on it is refused, which the owner accepted on 2026-11-14 (issue 49,
-    Decisions)."""
+def _loc_models(
+    store: Js5Store, placed: list[PlacedLoc], locs: dict[int, LocDefinition]
+) -> tuple[dict[ModelKey, Model], dict[tuple[int, ...], list[int]]]:
+    """The model of each part of the placements, by its `model_key`, and the stored render types of its joined models,
+    by its model ids. The cache models of a part are joined as the client joins them (`ObjectComposition.java` lines
+    728 to 733), and then recoloured and retextured as the loc says. The join gives an old-format model, so a recolour
+    of 127 on it is refused, which the owner accepted on 2026-11-14 (issue 49, Decisions). The join also drops the
+    stored render types, which the client keeps, so they are returned beside it (`lighting.joined_render_types`)."""
     decoded: dict[int, Model] = {}
 
     def cache_model(model_id: int) -> Model:
@@ -210,19 +214,21 @@ def _loc_models(store: Js5Store, placed: list[PlacedLoc], locs: dict[int, LocDef
             decoded[model_id] = decode(store.container(MODEL_INDEX, model_id), profile="osrs-149")
         return decoded[model_id]
 
-    models: dict[MeshKey, Model] = {}
+    models: dict[ModelKey, Model] = {}
+    render_types: dict[tuple[int, ...], list[int]] = {}
     for placed_loc in placed:
         if placed_loc.shown_id is None:
             continue
         shown = locs[placed_loc.shown_id]
         for part in placed_loc.parts:
-            key = mesh_key(part, shown)
+            key = model_key(part, shown)
             if key in models:
                 continue
             parts = [cache_model(model_id) for model_id in part.model.model_ids]
             joined = parts[0] if len(parts) == 1 else merge(parts)
             models[key] = recolour_model(joined, shown.recolours, shown.retextures)
-    return models
+            render_types[part.model.model_ids] = joined_render_types(parts)
+    return models, render_types
 
 
 def _check_floors(terrain: Terrain, underlays: Mapping[int, Underlay], overlays: Mapping[int, Overlay]) -> None:

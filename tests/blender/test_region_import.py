@@ -4,8 +4,10 @@ import os
 import re
 import time
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import bpy
 import pytest
@@ -31,7 +33,9 @@ from rsps_toolkit.formats.appearance import merge
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.cache_profile import MODEL_INDEX, SET_CACHE_FOLDER
 from rsps_toolkit.formats.js5 import Js5Store
-from rsps_toolkit.formats.loc_definition import read_locs
+from rsps_toolkit.formats.lighting import Shading
+from rsps_toolkit.formats.loc_definition import LocDefinition, read_locs
+from rsps_toolkit.formats.model import Model
 from rsps_toolkit.formats.region import (
     AREA_SIZE,
     EMPTY_TILE,
@@ -45,6 +49,7 @@ from rsps_toolkit.formats.region import (
 )
 from rsps_toolkit.formats.region_colours import HIDDEN, tile_colours
 from rsps_toolkit.formats.region_light import loc_shadows
+from rsps_toolkit.formats.region_loc_light import loc_light
 from rsps_toolkit.formats.region_placement import place_scenery
 from rsps_toolkit.formats.region_shapes import Corner, TilePoint, tile_triangles
 from rsps_toolkit.formats.sprite import decode_sprites
@@ -1092,22 +1097,49 @@ def test_the_terrain_of_48_50_has_the_colours_with_the_wall_and_object_shadows_o
     assert imported != [corner_colours(unlit, face.index) for face in mesh_of(unlit).polygons]
 
 
+LIGHT_FIELDS = ("ambient", "contrast", "mergeNormals", "modelSizeX", "modelSizeHeight", "modelSizeY")
+"""The fields of a reference row that the loc light reads: the ambient, the contrast, `nonFlatShading` (which RuneLite
+names `mergeNormals`) and the scale."""
+
+
 @needs_snapshot_430
-def test_objects_of_locs_that_are_not_contoured_share_a_mesh_exactly_when_they_show_the_same_models_and_colours(
+def test_objects_of_locs_that_are_not_contoured_share_a_mesh_exactly_when_every_input_of_the_light_is_the_same(
     snapshot_430,
 ):
-    # A loc that is not contoured shares its mesh unless Blender cannot hold its transform, which needs a scale that is
-    # not 128 (`region_contour`), and no loc of 48_50 is scaled (spec 35). A name that two objects have is left out,
-    # because Blender numbers the second.
+    # ADR 0027: placements share a mesh only when the models, recolours, retextures, rotation, mirror, scale, diagonal
+    # turn, ambient, contrast and nonFlatShading are the same. The turns of a part come from `place_scenery`, which
+    # `test_region_placement.py` checks. A loc that is not contoured shares its mesh unless Blender cannot hold its
+    # transform, which needs a scale that is not 128 (`region_contour`), and no loc of 48_50 is scaled (spec 35). A
+    # name that two objects have is left out, because Blender numbers the second.
     import_region()
 
+    store = Js5Store(SNAPSHOT_430)
+    terrain = load_terrain(store, 48, 50)
+    placements = [p for p in load_landscape(store, 48, 50).placements if p.level == 0]
+    placed = place_scenery(placements, read_locs(store, {p.loc for p in placements}), terrain_height(terrain))
+    parts = {
+        f"Loc {p.placement.loc} at {p.placement.x}_{p.placement.y}" + (" part 2" if index else ""): part
+        for p in placed
+        for index, part in enumerate(p.parts)
+    }
     objects, _ = reference_scenery()
     names = Counter(name for name, _, _ in objects)
-    keys = {name: key for name, key, contoured in objects if not contoured and names[name] == 1}
-    mesh_by_key: dict[ReferenceKey, bpy.types.Mesh] = {}
-    for name, key in keys.items():
+    mesh_by_key: dict[tuple[object, ...], bpy.types.Mesh] = {}
+    for name, key, contoured in objects:
+        if contoured or names[name] != 1:
+            continue
+        part = parts[name]
+        shown = LOC_ROWS[reference_shown_loc(int(name.split()[1]))]
+        diagonal = part.model_type == 4 and part.model_rotation > 3
+        light_key = (
+            *key,
+            part.model_rotation & 3,
+            part.model.mirrored,
+            diagonal,
+            *(shown[field] for field in LIGHT_FIELDS),
+        )
         mesh = mesh_of(scenery_object(name))
-        assert mesh_by_key.setdefault(key, mesh) is mesh, name
+        assert mesh_by_key.setdefault(light_key, mesh) is mesh, name
     assert len(set(mesh_by_key.values())) == len(mesh_by_key)
 
 
@@ -1118,16 +1150,225 @@ def test_a_placement_that_shows_nothing_makes_no_object_and_is_counted():
     placed = place_scenery([placement], locs, lambda x, y: 0)
     collection = bpy.data.collections.new("Scenery")
 
-    counts = region_scenery.scenery_objects(collection, placed, locs, {}, {}, lambda x, y: 0, BRIGHTNESS)
+    counts = region_scenery.scenery_objects(collection, placed, locs, {}, {}, {}, lambda x, y: 0, BRIGHTNESS)
 
     assert not collection.objects
     assert (counts.placements, counts.placements_made, counts.objects, counts.shown_nothing) == (1, 0, 0, 1)
 
 
+HAND_COLOUR = (10 << 10) | (3 << 7) | 100
+HAND_MODEL = Model(
+    vertices=[(0, 0, 0), (128, -10, 0), (0, -40, 128), (64, -200, 64)],
+    # A smooth face, a flat face, a face that repeats a vertex (set aside, so the mesh has no polygon for it), a
+    # textured face and a face with alpha 255, which the client hides.
+    faces=[(0, 1, 2), (0, 2, 3), (0, 0, 1), (1, 2, 3), (0, 1, 3)],
+    face_colours=[HAND_COLOUR, HAND_COLOUR, HAND_COLOUR, None, HAND_COLOUR],
+    face_textures=[None, None, None, 1, None],
+    render_priorities=[0] * 5,
+    face_alphas=[0, 0, 0, 0, 255],
+    face_texture_triangles=[None] * 5,
+    flat_shaded=[False, True, False, False, False],
+)
+
+
+def hand_loc(**changes: Any) -> LocDefinition:
+    """A loc that shows model 11 for type 10, with the defaults of the `ObjectComposition` constructor (lines 262 to
+    296), the ambient 16 and the contrast 50, changed as given."""
+    defaults: dict[str, Any] = {
+        "models": (11,),
+        "loc_types": None,
+        "width": 1,
+        "length": 1,
+        "recolours": (),
+        "retextures": (),
+        "scale": (128, 128, 128),
+        "offset": (0, 0, 0),
+        "mirrored": False,
+        "contoured_ground": -1,
+        "non_flat_shading": False,
+        "animation": -1,
+        "impostors": None,
+        "impostor_varbit": -1,
+        "impostor_varp": -1,
+        "ambient": 16,
+        "contrast": 50,
+    }
+    return replace(load_locs(REGION_FIXTURES / "locs.json")[83], **(defaults | changes))
+
+
+def hand_scenery(
+    locs: dict[int, LocDefinition], placements: list[Placement], height=lambda x, y: -40
+) -> tuple[bpy.types.Collection, region_scenery.SceneryCounts]:
+    """The scenery of the placements, where every loc shows `HAND_MODEL`."""
+    placed = place_scenery(placements, locs, height)
+    models: dict[tuple[int, ...], Model] = {
+        (model_id,): HAND_MODEL for model_id in {model for loc in locs.values() for model in loc.models}
+    }
+    keys = {
+        region_scenery.model_key(part, locs[p.shown_id]): models[part.model.model_ids]
+        for p in placed
+        if p.shown_id is not None
+        for part in p.parts
+    }
+    render_types: dict[tuple[int, ...], list[int]] = {model_ids: [0, 1, 0, 0, 0] for model_ids in models}
+    collection = bpy.data.collections.new("Scenery")
+    counts = region_scenery.scenery_objects(collection, placed, locs, keys, render_types, {}, height, BRIGHTNESS)
+    return collection, counts
+
+
+def test_two_placements_that_differ_only_in_rotation_get_two_meshes_and_two_equal_ones_share_one():
+    # ADR 0027 and rule 7 of spec 105: the client lights a loc model after its turn (ObjectComposition.java lines 792
+    # to 801 and 585), so the rotation is part of the mesh key.
+    locs = {1: hand_loc()}
+    placements = [Placement(1, 0, 5, 5, 10, 0), Placement(1, 0, 8, 5, 10, 0), Placement(1, 0, 11, 5, 10, 1)]
+
+    collection, counts = hand_scenery(locs, placements)
+
+    first, second, turned = (mesh_of(obj) for obj in collection.objects)
+    assert first is second
+    assert turned is not first
+    assert (counts.shared_meshes, counts.own_meshes) == (2, 0)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"mirrored": True},
+        {"scale": (128, 256, 128)},
+        {"ambient": 20},
+        {"contrast": 75},
+        {"non_flat_shading": True},
+        {"recolours": ((HAND_COLOUR, 200),)},
+    ],
+    ids=lambda change: next(iter(change)),
+)
+def test_two_placements_of_one_model_that_differ_in_one_input_of_the_light_get_two_meshes(change):
+    # ADR 0027 and rule 7 of spec 105. ObjectComposition.java lines 753 to 820 mirror and scale the model before the
+    # light, line 585 lights it with the ambient and the contrast, and lines 586 to 590 leave a nonFlatShading loc to
+    # Region.applyLighting.
+    locs = {1: hand_loc(), 2: hand_loc(**change)}
+
+    collection, _ = hand_scenery(locs, [Placement(1, 0, 5, 5, 10, 0), Placement(2, 0, 8, 5, 10, 0)])
+
+    first, second = (mesh_of(obj) for obj in collection.objects)
+    assert first is not second
+
+
+def lit_corners(obj: bpy.types.Object) -> list[list[tuple[float, ...]]]:
+    """The `rs_lit` colour of each corner of each polygon, in loop order."""
+    mesh = mesh_of(obj)
+    attribute = mesh.color_attributes[appearance_preview.LIT_ATTRIBUTE]
+    assert isinstance(attribute, bpy.types.FloatColorAttribute)
+    assert attribute.domain == "CORNER"
+    flat = [0.0] * (len(mesh.loops) * 4)
+    attribute.data.foreach_get("color", flat)
+    return [
+        [tuple(flat[4 * loop : 4 * loop + 4]) for loop in range(polygon.loop_start, polygon.loop_start + 3)]
+        for polygon in mesh.polygons
+    ]
+
+
+def expected_lit(shading: Shading) -> list[list[tuple[float, ...]]]:
+    """The `rs_lit` colours of the polygons of `HAND_MODEL` in the client's corner order of `shading`.
+
+    An untextured corner shows its lit colour at the Brightness preference, as the player's `rs_lit` does. A textured
+    corner holds its light value as a grey, which the texture is multiplied by (`shown_shade`). A flat face has the
+    third corner -1 and shows its first value at each corner. A face that the client hides has the third corner -2
+    and gets the alpha 0. The owner chose the grey and the alpha 0 on 2026-11-17 (issue 129)."""
+    a, b, c = shading.corner_a, shading.corner_b, shading.corner_c
+    assert (c[1], c[4]) == (-1, -2)
+    return [
+        [(*shown_colour(a[0]), 1.0), (*shown_colour(b[0]), 1.0), (*shown_colour(c[0]), 1.0)],
+        [(*shown_colour(a[1]), 1.0)] * 3,
+        [(*shown_shade(a[3]), 1.0), (*shown_shade(b[3]), 1.0), (*shown_shade(c[3]), 1.0)],
+        [(0.0, 0.0, 0.0, 0.0)] * 3,
+    ]
+
+
+def flat_list(rows) -> list[float]:
+    return [value for row in rows for corner in row for value in corner]
+
+
+def test_each_corner_of_a_shared_mesh_holds_the_loc_light_of_its_placement():
+    locs = {1: hand_loc()}
+    placement = Placement(1, 0, 5, 5, 10, 1)
+
+    collection, _ = hand_scenery(locs, [placement])
+
+    (obj,) = collection.objects
+    (part,) = place_scenery([placement], locs, lambda x, y: -40)[0].parts
+    shading = loc_light(placement, part, locs, HAND_MODEL, lambda x, y: -40, [0, 1, 0, 0, 0])
+    assert flat_list(lit_corners(obj)) == pytest.approx(flat_list(expected_lit(shading)), abs=1e-6)
+    mesh = mesh_of(obj)
+    assert mesh.color_attributes.active_color_name == appearance_preview.LIT_ATTRIBUTE
+    assert mesh.color_attributes.render_color_index == mesh.color_attributes.find(appearance_preview.LIT_ATTRIBUTE)
+
+
+def test_a_shared_mesh_of_a_mirrored_loc_holds_the_light_of_its_last_corner_at_its_first():
+    # The shared mesh keeps the model's corner order, and the object mirrors it with a scale of -1. The client swaps the
+    # first and the last corner of each face before the light (ModelData.method2633, lines 1380 to 1390), so the
+    # light's corner_a belongs to the model's last corner.
+    locs = {1: hand_loc(mirrored=True)}
+    placement = Placement(1, 0, 5, 5, 10, 0)
+
+    collection, _ = hand_scenery(locs, [placement])
+
+    (obj,) = collection.objects
+    (part,) = place_scenery([placement], locs, lambda x, y: -40)[0].parts
+    assert part.model.mirrored
+    shading = loc_light(placement, part, locs, HAND_MODEL, lambda x, y: -40, [0, 1, 0, 0, 0])
+    expected = [row[::-1] for row in expected_lit(shading)]
+    assert flat_list(lit_corners(obj)) == pytest.approx(flat_list(expected), abs=1e-6)
+
+
+def test_an_own_mesh_of_a_mirrored_loc_holds_the_light_in_its_swapped_corner_order():
+    # A contoured loc on uneven ground has its own mesh, whose faces already have the first and last corner swapped
+    # (`region_scenery._moved`), so its corners take the light in the client's order.
+    locs = {1: hand_loc(mirrored=True, contoured_ground=0)}
+    placement = Placement(1, 0, 5, 5, 10, 0)
+
+    def tilt(_x: int, y: int) -> int:
+        return -128 * y
+
+    collection, counts = hand_scenery(locs, [placement], tilt)
+
+    (obj,) = collection.objects
+    assert counts.own_meshes == 1
+    (part,) = place_scenery([placement], locs, tilt)[0].parts
+    shading = loc_light(placement, part, locs, HAND_MODEL, tilt, [0, 1, 0, 0, 0])
+    assert flat_list(lit_corners(obj)) == pytest.approx(flat_list(expected_lit(shading)), abs=1e-6)
+
+
+def test_a_joined_model_is_lit_with_the_render_types_that_the_scenery_is_given():
+    # A loc of several models is joined by appearance.merge, which keeps no render types, so the import passes the
+    # stored render types of the parts (lighting.joined_render_types). Render type 2 hides the first face (ModelData.java
+    # lines 1635 and 1636).
+    locs = {1: hand_loc()}
+    placement = Placement(1, 0, 5, 5, 10, 0)
+    placed = place_scenery([placement], locs, lambda x, y: -40)
+    (part,) = placed[0].parts
+    collection = bpy.data.collections.new("Scenery")
+
+    region_scenery.scenery_objects(
+        collection,
+        placed,
+        locs,
+        {region_scenery.model_key(part, locs[1]): HAND_MODEL},
+        {(11,): [2, 1, 0, 0, 0]},
+        {},
+        lambda x, y: -40,
+        BRIGHTNESS,
+    )
+
+    (obj,) = collection.objects
+    assert lit_corners(obj)[0] == [(0.0, 0.0, 0.0, 0.0)] * 3
+
+
 @needs_snapshot_430
 def test_an_object_with_a_shared_mesh_holds_the_transform_of_its_placement(snapshot_430):
     # The transform rules are in `formats/region_placement.py` and its tests. Loc 84 at (16, 46) is a wall of type 2, so
-    # it has two models, and the first is mirrored. Another placement shares the mesh of the first.
+    # it has two models, and the first is mirrored. Neither is contoured, so both have a shared mesh, which has the name
+    # of its loc model and not of its object.
     import_region()
 
     store = Js5Store(SNAPSHOT_430)
@@ -1136,7 +1377,7 @@ def test_an_object_with_a_shared_mesh_holds_the_transform_of_its_placement(snaps
     placed = place_scenery(placements, read_locs(store, {p.loc for p in placements}), terrain_height(terrain))
     first, second = next(p for p in placed if (p.placement.loc, p.placement.x, p.placement.y) == (84, 16, 46)).parts
     assert first.model.mirrored
-    assert mesh_of(scenery_object("Loc 84 at 16_46")).users > 1
+    assert without_number(mesh_of(scenery_object("Loc 84 at 16_46")).name) == mesh_name(84, 2)
     for name, part in (("Loc 84 at 16_46", first), ("Loc 84 at 16_46 part 2", second)):
         assert part.rotation is not None
         assert part.scale is not None
@@ -1341,6 +1582,19 @@ def test_the_scenery_of_48_50_has_one_material_for_each_material_key(snapshot_43
     materials = {material for mesh in meshes for material in mesh.materials}
     assert None not in materials
     assert len(materials) == len({drawn(material) for material in materials}) == 325
+
+
+@needs_snapshot_430
+def test_every_scenery_mesh_of_48_50_has_rs_lit_on_its_corners(snapshot_430):
+    # ADR 0027: the region import bakes the loc light into `rs_lit`. The hand-made tests above check its values.
+    meshes = scenery_meshes_of_48_50()
+
+    assert meshes
+    for mesh in meshes:
+        attribute = mesh.color_attributes.get(appearance_preview.LIT_ATTRIBUTE)
+        assert attribute is not None, mesh.name
+        assert attribute.domain == "CORNER"
+        assert len(attribute.data) == len(mesh.loops)
 
 
 def drawn_scenery_faces_of_48_50() -> dict[str, list[tuple[object, ...]]]:

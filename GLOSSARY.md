@@ -143,7 +143,7 @@ A fixed thing in the game world, such as a tree, a wall or a door. A loc definit
 _Avoid_: object (reserve for Blender), game object
 
 **Placement**:
-One loc put on one tile, with a loc type and a rotation. A placement becomes one Blender object. Placements with the same loc model, recolours and retextures share one mesh, except a contoured loc on uneven ground.
+One loc put on one tile, with a loc type and a rotation. A placement becomes one Blender object. Placements share one mesh when every input of their loc light is the same: the models, recolours, retextures, rotation, mirror, scale, diagonal turn, ambient, contrast and `nonFlatShading` (ADR 0027). A contoured loc on uneven ground has a mesh of its own.
 _Avoid_: spawn, instance
 
 **Loc type**:

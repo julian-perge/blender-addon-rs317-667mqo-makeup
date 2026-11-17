@@ -228,3 +228,15 @@ def test_an_animated_non_flat_shading_wall_decoration_is_lit():
     # it at ObjectComposition.java line 662 whatever nonFlatShading is.
     definition = loc(loc_types=(4,), non_flat_shading=True, animation=5)
     assert light_one(definition, loc_type=4) == light(model(VERTICES), LOC_LIGHTING)
+
+
+def test_a_loc_is_lit_with_the_render_types_that_it_is_given():
+    # A loc of several models is joined by appearance.merge, which keeps no render types, so the caller passes the
+    # stored render types of the parts (lighting.joined_render_types). Render type 2 hides the face (ModelData.java lines
+    # 1635 and 1636).
+    locs = {1: loc()}
+    placement = Placement(loc=1, level=0, x=5, y=7, loc_type=10, rotation=0)
+    (part,) = place_scenery([placement], locs, level)[0].parts
+    shading = loc_light(placement, part, locs, model(VERTICES), level, render_types=[2])
+    assert shading == light(model(VERTICES), LOC_LIGHTING, [2])
+    assert (shading.corner_a, shading.corner_b, shading.corner_c) == ([0], [0], [-2])
