@@ -12,8 +12,24 @@ from . import face_materials
 # ===============================================================
 # CORE UTILITIES
 # ===============================================================
-def store_original_colors(obj):
-    """Saves the current base colors so we can offset from them."""
+def without_principled(materials) -> set:
+    """The materials that the engine leaves as they are, because they have no Principled BSDF to change."""
+    return {mat for mat in materials if mat and (not mat.node_tree or not mat.node_tree.nodes.get("Principled BSDF"))}
+
+
+def report_skipped(operator, skipped) -> None:
+    """Warn of the materials that an operator left as they are. The owner chose the warning on 2026-11-17, when the
+    region scenery materials lost their Principled BSDF (issue 130)."""
+    if skipped:
+        operator.report(
+            {"WARNING"},
+            f"Skipped {len(skipped)} materials that have no Principled BSDF. The baked-light materials of players,"
+            " terrain and region scenery are such materials.",
+        )
+
+
+def store_original_colors(obj) -> set:
+    """Saves the current base colors so we can offset from them. Returns the materials it skipped."""
     if "original_colors" not in obj:
         obj["original_colors"] = {}
     for mat in obj.data.materials:
@@ -22,6 +38,7 @@ def store_original_colors(obj):
             if bsdf:
                 color = bsdf.inputs["Base Color"].default_value
                 obj["original_colors"][mat.name] = list(color[:3])
+    return without_principled(obj.data.materials)
 
 
 def duplicate_shared_materials(obj):
@@ -51,11 +68,12 @@ def duplicate_shared_materials(obj):
     bmesh.update_edit_mesh(obj.data)
 
 
-def refresh_materials(context):
-    """Forces all selected objects to re-calculate their colors."""
+def refresh_materials(context) -> set:
+    """Forces all selected objects to re-calculate their colors. Returns the materials it skipped."""
     props = context.scene.aether_rgb_props
     selected_objs = [o for o in context.selected_objects if o.type == "MESH"]
     alpha = props.alpha_value / 100.0
+    skipped = set()
     for obj in selected_objs:
         if "original_colors" not in obj or not obj["original_colors"]:
             store_original_colors(obj)
@@ -70,6 +88,7 @@ def refresh_materials(context):
             ]
         else:
             mats_to_process = [(i, mat) for i, mat in enumerate(obj.data.materials) if mat]
+        skipped |= without_principled(mat for _, mat in mats_to_process)
         for mat_index, mat in mats_to_process:
             if not mat or not mat.use_nodes:
                 continue
@@ -164,6 +183,7 @@ def refresh_materials(context):
                 mat.blend_method = "BLEND"
             else:
                 face_materials.stop_blending(mat)
+    return skipped
 
 
 # ===============================================================
@@ -176,9 +196,11 @@ class AETHER_OT_OptimizeShading(bpy.types.Operator):
 
     def execute(self, context):
         count = 0
+        skipped = set()
         for obj in context.selected_objects:
             if obj.type != "MESH":
                 continue
+            skipped |= without_principled(obj.data.materials)
             bpy.context.view_layer.objects.active = obj
             bpy.ops.object.shade_flat()
             for mat in obj.data.materials:
@@ -199,6 +221,7 @@ class AETHER_OT_OptimizeShading(bpy.types.Operator):
                             principled.inputs["Emission Strength"].default_value = 0.0
                         count += 1
         self.report({"INFO"}, f"Optimized {count} materials")
+        report_skipped(self, skipped)
         return {"FINISHED"}
 
 
@@ -224,8 +247,9 @@ class AETHER_OT_ApplyPreset(bpy.types.Operator):
             props.vibrance_value = p.get("vibrance", 0.0)
             props.color_rotation_value = p.get("rotation", 0.0)
             props.shadows_value = p.get("shadows", 0.0)
-            refresh_materials(context)
+            skipped = refresh_materials(context)
             self.report({"INFO"}, f"Applied {self.preset_name}")
+            report_skipped(self, skipped)
         return {"FINISHED"}
 
 
@@ -250,6 +274,7 @@ class AETHER_OT_ResetMaterials(bpy.types.Operator):
         props.color_rotation_value = 0.0
         props.shadows_value = 0.0
         props.alpha_value = 100.0
+        skipped = set()
         for obj in context.selected_objects:
             if obj.type != "MESH" or "original_colors" not in obj:
                 continue
@@ -263,6 +288,7 @@ class AETHER_OT_ResetMaterials(bpy.types.Operator):
                 ]
             else:
                 mats_to_reset = [(i, mat) for i, mat in enumerate(obj.data.materials) if mat]
+            skipped |= without_principled(mat for _, mat in mats_to_reset)
             for mat_index, mat in mats_to_reset:
                 if mat and mat.use_nodes and mat.name in obj["original_colors"]:
                     bsdf = mat.node_tree.nodes.get("Principled BSDF")
@@ -272,6 +298,7 @@ class AETHER_OT_ResetMaterials(bpy.types.Operator):
                         bsdf.inputs["Alpha"].default_value = 1.0
                         face_materials.stop_blending(mat)
         self.report({"INFO"}, "Reset to original colors")
+        report_skipped(self, skipped)
         return {"FINISHED"}
 
 
@@ -372,8 +399,9 @@ class AETHER_OT_RandomizeTheme(bpy.types.Operator):
             props.saturation_value = random.uniform(0.9, 2.0)
             props.value_value = random.uniform(0.9, 1.6)
             props.color_rotation_value = random.uniform(-0.6, 0.6)
-        refresh_materials(context)
+        skipped = refresh_materials(context)
         self.report({"INFO"}, f"Random vibrant {theme.capitalize()} theme applied")
+        report_skipped(self, skipped)
         return {"FINISHED"}
 
 
@@ -383,10 +411,11 @@ class AETHER_OT_ApplyOriginalColors(bpy.types.Operator):
     bl_description = "Save current colors as new baseline"
 
     def execute(self, context):
+        skipped = set()
         for obj in context.selected_objects:
             if obj.type == "MESH":
                 obj["original_colors"] = {}
-                store_original_colors(obj)
+                skipped |= store_original_colors(obj)
         props = context.scene.aether_rgb_props
         props.r_value = 1.0
         props.g_value = 1.0
@@ -402,6 +431,7 @@ class AETHER_OT_ApplyOriginalColors(bpy.types.Operator):
         props.color_rotation_value = 0.0
         props.shadows_value = 0.0
         self.report({"INFO"}, "Current colors set as new baseline")
+        report_skipped(self, skipped)
         return {"FINISHED"}
 
 

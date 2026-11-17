@@ -4,7 +4,7 @@ import bmesh
 import bpy
 import pytest
 
-from rsps_toolkit.blender import face_materials, pmn_texturing, rs_layers
+from rsps_toolkit.blender import face_materials, pmn_texturing, region_scenery, rs_layers
 from rsps_toolkit.blender.mesh import model_to_object, object_to_model
 from rsps_toolkit.formats import decode
 
@@ -102,6 +102,25 @@ def test_apply_refuses_a_selection_with_no_area_in_the_view():
     with pytest.raises(ValueError, match="no area"):
         pmn_texturing.apply_texture(obj, bm, list(bm.faces), 16, lambda position: (position.x, 0.0), None)
     bm.free()
+
+
+def test_apply_refuses_a_mesh_of_region_scenery_and_leaves_its_faces_as_they_were():
+    # The owner chose on 2026-11-17 that Apply Texture refuses region scenery, because its materials show the loc light
+    # that the region import baked into `rs_lit` for the faces as they were (issue 130).
+    obj, mesh = square()
+    material = mesh.materials[0]
+    assert material is not None
+    region_scenery.show_loc_light(material, {})
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+
+    with pytest.raises(ValueError, match="region scenery"):
+        pmn_texturing.apply_texture(obj, bm, list(bm.faces), 16, from_above, None)
+    bm.to_mesh(mesh)
+    bm.free()
+
+    assert list(mesh.materials) == [material]
+    assert object_to_model(obj).face_textures == [None, None]
 
 
 def test_fit_operator_gives_the_selected_faces_the_triangle_their_uvs_describe():

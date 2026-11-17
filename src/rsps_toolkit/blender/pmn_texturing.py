@@ -20,7 +20,7 @@ from bpy_extras.view3d_utils import location_3d_to_region_2d
 from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
 
-from . import face_materials, model_source, preferences, rs_layers, texture_triangles
+from . import face_materials, model_source, preferences, region_scenery, rs_layers, texture_triangles
 from .face_materials import FindTexture
 
 preview_collections = {}
@@ -123,9 +123,16 @@ def apply_texture(
     project maps a vertex's local position to its place in the view, or None when it is behind the view.
     Each face keeps its alpha. Triangles no face uses any more are deleted. Raises ValueError when the faces have no
     area in the view or the model would need too many triangles.
+
+    It also raises ValueError for a mesh of region scenery, because the scenery materials show the loc light that the
+    region import baked into `rs_lit` for the faces as they were. The owner chose this on 2026-11-17 (issue 130).
     """
     mesh = obj.data
     assert isinstance(mesh, bpy.types.Mesh)
+    if any(region_scenery.shows_loc_light(material) for material in mesh.materials):
+        raise ValueError(
+            "the mesh is region scenery, and its materials show the light that the region import baked for its faces"
+        )
     faces = texture_triangles.ready(bm, faces)
     bm.verts.index_update()
     vertices = list({loop.vert for face in faces for loop in face.loops})
