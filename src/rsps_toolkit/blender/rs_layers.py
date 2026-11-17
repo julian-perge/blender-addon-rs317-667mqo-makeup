@@ -5,7 +5,8 @@ painters and the weighter all rely on:
 
 - RSPRI and RSTSKIN are face-corner colour layers whose red channel holds the value divided by 255.
 - A vertex skin label is stored as weight label / 100 in vertex groups VSKIN1:, VSKIN2: and VSKIN3:, each
-  holding at most 1.0, so labels above 100 spill into the next group and 255 needs all three.
+  holding at most 1.0, so labels above 100 spill into the next group and 255 needs all three. Label 0 is a
+  member of VSKIN1: with weight 0, so a vertex in none of the groups has no label.
 """
 
 import json
