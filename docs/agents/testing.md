@@ -13,7 +13,7 @@ PYTHONPATH=src uv run python3 <script.py>
 
 - `uv run pytest` runs unit tests without Blender.
 - `scripts/test-blender.sh` runs `tests/blender/` in headless Blender, importing the extension from `src/` without installing it. With no arguments, one Blender per CPU core runs at the same time (`BLENDER_TEST_JOBS=<n>` sets another number), and each runs its own share of the tests. It prints one result line per share, then the full output of each share that failed. With arguments, one Blender runs pytest with them, on all of `tests/blender/` unless an argument names a path in `tests/`.
-- The pre-push hook runs the Blender tests when the push changes a file that they read. The `files` pattern of the `blender-tests` hook in `prek.toml` lists those files. A push of only docs or other scripts skips them.
+- The pre-push hook runs the Blender tests when the push changes a file that they read. The `files` pattern of the `blender-tests` hook in `prek.toml` lists those files. A push of only docs or other scripts skips them. This hook is the only run of the whole suite, so a session runs only the Blender test files of the area it changed.
 - Ad-hoc scripts need `PYTHONPATH=src` because uv does not install the package.
 
 For cache round trips and installed-extension checks, read [Blender execution and packaging](blender.md).

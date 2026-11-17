@@ -81,7 +81,7 @@ One task, one branch, one pull request. Branch: `<type>/<issue>-<slug>`. Commit 
 
 Implement with `test-driven-development`: one behavior at an approved public seam per red/green cycle. The seams that the spec names give that agreement.
 
-Run the verify command from `AGENTS.md` (`Every task`) with `agent-skills run --` before each commit. Implementation stays with the primary agent unless the user chooses delegation. Open the pull request ready for review, print the review command and stop. The user merges. The review ticks the acceptance criteria boxes, not the build.
+Run the verify command from `AGENTS.md` (`Every task`) with `agent-skills run --` before each commit. Do not run the whole Blender suite before a commit, because the pre-push hook runs it once when the push changes a file that it reads. During a red/green cycle and before a commit, run only the Blender test files of the changed area, with `scripts/test-blender.sh tests/blender/<file>`. When the push hook fails, fix the failure, commit and push again. Implementation stays with the primary agent unless the user chooses delegation. Open the pull request ready for review, print the review command and stop. The user merges. The review ticks the acceptance criteria boxes, not the build.
 
 The review command is the session's last line, and `agent-skills next-cmd review <pr>` prints it:
 
