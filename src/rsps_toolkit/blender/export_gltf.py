@@ -115,10 +115,10 @@ def face_value_problems(objects: Sequence[bpy.types.Object]) -> list[str]:
     """One sentence for each mesh object that Create Player, Create NPC or Make Rig built before meshes stored the face
     colour and face alpha of each face. The owner chose the wording in the build of issue 143 on 2026-11-17."""
     problems = []
+    names = (FACE_COLOUR_ATTRIBUTE, FACE_ALPHA_ATTRIBUTE)
     for obj in objects:
         mesh = obj.data
         assert isinstance(mesh, bpy.types.Mesh)
-        names = (FACE_COLOUR_ATTRIBUTE, FACE_ALPHA_ATTRIBUTE)
         if FACE_ATTRIBUTE in mesh.attributes and any(name not in mesh.attributes for name in names):
             problems.append(
                 f"{obj.name} was built before meshes stored their face colours. Run Update Player on a player, or "
@@ -160,7 +160,9 @@ def _copies(
 
     def material_of(key: MaterialKey) -> bpy.types.Material:
         if key not in materials:
-            materials[key] = _unlit_material(key, colour)
+            # The material goes into the dict before it is drawn, so the clean-up removes it if the drawing fails.
+            materials[key] = _new_material(key, colour)
+            _draw_unlit(materials[key], colour, 0 if key is None else key[1])
         return materials[key]
 
     try:
@@ -267,18 +269,16 @@ def _keep_colour_attributes(mesh: bpy.types.Mesh, colour: str, extras: Sequence[
         new.data.foreach_set("color", values)
 
 
-def _unlit_material(key: MaterialKey, colour: str) -> bpy.types.Material:
-    """A new material that draws `colour` unlit. A material of a pair has the name that `face_materials` gives a model
-    import's material, and holds the pair as custom properties, which the stock exporter writes as extras."""
+def _new_material(key: MaterialKey, colour: str) -> bpy.types.Material:
+    """A new material for `key`, with no nodes drawn yet. The material of no pair has the name `colour`. A material of
+    a pair has the name that `face_materials` gives a model import's material, and holds the pair as custom
+    properties, which the stock exporter writes as extras."""
     if key is None:
-        material = bpy.data.materials.new(colour)
-        _draw_unlit(material, colour, 0)
-        return material
+        return bpy.data.materials.new(colour)
     face_colour, alpha = key
     material = bpy.data.materials.new(f"RS_Colour_{face_colour}_{alpha}")
     material[FACE_COLOUR] = face_colour
     material[ALPHA] = alpha
-    _draw_unlit(material, colour, alpha)
     return material
 
 

@@ -385,6 +385,20 @@ def test_a_failure_while_the_copies_are_made_leaves_the_scene_unchanged(tmp_path
     assert scene_state() == before
 
 
+def test_a_failure_while_a_material_is_drawn_leaves_the_scene_unchanged(tmp_path: Path, monkeypatch):
+    # Spec Boundaries "Always": also when the export fails after it made a material.
+    triangle("Ground", ("rs_lit",))
+    before = scene_state()
+
+    def fail(*args) -> None:
+        raise RuntimeError("the drawing failed")
+
+    monkeypatch.setattr(export_gltf, "_draw_unlit", fail)
+    with pytest.raises(RuntimeError):
+        export(tmp_path / "scene.glb")
+    assert scene_state() == before
+
+
 def test_faces_on_the_same_three_vertices_are_all_in_the_file_in_mesh_order(tmp_path: Path):
     # Row "Shared vertices" (issue 121). Faces 2 and 3 use the vertices of faces 0 and 1, and Blender's mesh validation,
     # which the stock exporter runs, removes such a face. Each face has its own three corner colours, so a triangle of
