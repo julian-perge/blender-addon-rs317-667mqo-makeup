@@ -70,16 +70,31 @@ def _stored_render_types(model: Model) -> list[int]:
     A model read from the new format keeps the byte it read (ModelData.java line 638). Any other model gives 1 for a
     flat face and 0 for any other, as the client stores an old-format model (lines 932 to 938). A model joined by
     `appearance.merge` or made by hand has no new-format data, so a stored render type 2 or 3 of a joined part is lost
-    and the face is lit from its flat shading alone.
+    and the face is lit from its flat shading alone, unless the caller passes `joined_render_types` to `light`.
     """
     if model.new_data is not None:
         return list(model.new_data.face_render_types)
     return [1 if flat else 0 for flat in model.flat_shaded]
 
 
-def light(model: Model, lighting: tuple[int, int, int, int, int] = PLAYER_LIGHTING) -> Shading:
-    """Light an assembled model as `ModelData.light` does, with the lighting (ambient, contrast, x, y, z)."""
-    return _light(model, lighting, _stored_render_types(model))
+def joined_render_types(models: Sequence[Model]) -> list[int]:
+    """The stored render type of each face of `models` joined in order, as `appearance.merge` joins them.
+
+    The client's join copies the stored render type of each face of each part, and a part without render types stores
+    0 (ModelData.java lines 192, 207 to 209, 255 and 256). Such a part has no flat face, so it gives 0 here too.
+    """
+    return [kind for model in models for kind in _stored_render_types(model)]
+
+
+def light(
+    model: Model,
+    lighting: tuple[int, int, int, int, int] = PLAYER_LIGHTING,
+    render_types: Sequence[int] | None = None,
+) -> Shading:
+    """Light an assembled model as `ModelData.light` does, with the lighting (ambient, contrast, x, y, z).
+
+    `render_types` is the stored render type of each face. When it is None, they come from the model itself."""
+    return _light(model, lighting, _stored_render_types(model) if render_types is None else render_types)
 
 
 def light_hsl(model: Model, lighting: tuple[int, int, int, int, int] = PLAYER_LIGHTING) -> Shading:

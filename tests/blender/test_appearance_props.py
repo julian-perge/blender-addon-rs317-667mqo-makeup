@@ -2,7 +2,7 @@ import bpy
 import pytest
 from js5_builder import damage_group, rewrite_cache
 
-from rsps_toolkit.blender import appearance_props
+from rsps_toolkit.blender import appearance_props, appearance_swatches
 from rsps_toolkit.formats import cache_profile
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 
@@ -15,6 +15,9 @@ def props():
         bpy.utils.register_class(cls)
     appearance_props.register_properties()
     yield bpy.context.scene.rs_appearance  # pyrefly: ignore[missing-attribute]
+    # Setting a colour dropdown draws its swatches, which opens the preview collection of `appearance_swatches`.
+    # Closing it here keeps it out of the count of open collections in `test_register.py`.
+    appearance_swatches.unregister()
     appearance_props.unregister_properties()
     for cls in reversed(appearance_props.classes):
         bpy.utils.unregister_class(cls)
@@ -262,7 +265,6 @@ def test_the_skin_dropdown_lists_tones_light_to_dark_with_names_hex_and_swatches
 
 
 def test_a_swatch_is_the_clients_colour_at_the_brightness_setting():
-    from rsps_toolkit.blender import appearance_swatches
     from rsps_toolkit.formats.colour import face_colour_to_rgb
 
     colour = appearance_props.palette().primary_choices[1][0]
