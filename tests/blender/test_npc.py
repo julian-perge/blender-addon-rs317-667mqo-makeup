@@ -23,6 +23,7 @@ from rsps_toolkit.blender import (
     npc_collection,
     npc_panel,
 )
+from rsps_toolkit.blender import mesh as blender_mesh
 from rsps_toolkit.blender.face_materials import DEFAULT_BRIGHTNESS, srgb_to_linear
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.appearance_rig import derive_rig, frame_map_joint_specs, load_joint_specs
@@ -102,10 +103,21 @@ def blender_data() -> dict[str, list[str]]:
 
 @pytest.mark.parametrize("npc_id", (*TEST_NPCS, MAN))
 def test_each_test_npc_shows_the_lit_colours_of_the_revision_149_client(npc_id):
-    # tests/fixtures/npc/lit.json: the unchanged revision 149 client's getModel. The client marks a flat-shaded face
-    # with a third colour of -1 and shows its first colour at every corner.
     client = LIT[str(npc_id)]
     data = mesh(created(npc_id))
+    assert_client_lit_colours(data, client)
+    faces = appearance_preview.face_indices(data)
+    assert faces is not None
+    if npc_id in TEST_NPCS:
+        # None of the five has a face that repeats a vertex or lies exactly on another, so the mesh holds every face.
+        assert sorted(faces) == list(range(client["face_count"]))
+    else:
+        assert len(set(faces)) == len(faces) <= client["face_count"]
+
+
+def assert_client_lit_colours(data: bpy.types.Mesh, client: dict) -> None:
+    # tests/fixtures/npc/lit.json: the unchanged revision 149 client's getModel. The client marks a flat-shaded face
+    # with a third colour of -1 and shows its first colour at every corner.
     faces = appearance_preview.face_indices(data)
     assert faces is not None
     colours = data.color_attributes[appearance_preview.LIT_ATTRIBUTE].data  # pyrefly: ignore[missing-attribute]
@@ -114,11 +126,6 @@ def test_each_test_npc_shows_the_lit_colours_of_the_revision_149_client(npc_id):
         expected = [tuple(srgb_to_linear(c / 255) for c in face_colour_to_rgb(s, DEFAULT_BRIGHTNESS)) for s in shades]
         for corner, want in zip(polygon.loop_indices, expected, strict=True):
             assert tuple(colours[corner].color[:3]) == pytest.approx(want, abs=1e-6)
-    if npc_id in TEST_NPCS:
-        # None of the five has a face that repeats a vertex or lies exactly on another, so the mesh holds every face.
-        assert sorted(faces) == list(range(client["face_count"]))
-    else:
-        assert len(set(faces)) == len(faces) <= client["face_count"]
 
 
 @pytest.mark.parametrize("npc_id", TEST_NPCS)
@@ -682,3 +689,205 @@ def test_the_tooltip_of_a_bake_button_names_its_sequence_and_how_it_plays():
     assert describe(bpy.context, action) == (
         "Bake sequence 189 onto the active NPC as an Action, starting at the current frame"
     )
+
+
+def imported_gnome() -> bpy.types.Object:
+    """The gnome's merged and recoloured model as a plain import: a mesh object with vertex skins and no rig. The
+    gnome has the default ambient, contrast and scale of an NPC (tests/fixtures/npc/npcs.json)."""
+    model = npc_model(read_npc(Js5Store(SNAPSHOT_430), 4233), shared_profile(SNAPSHOT_430).load_model)
+    # model_to_object links to the context's collection. The `clean` fixture removes every collection, which can leave
+    # the active layer collection on a removed one, so the scene's own collection is made active first.
+    layer = bpy.context.view_layer
+    assert layer is not None
+    layer.active_layer_collection = layer.layer_collection
+    obj = blender_mesh.model_to_object(model, "Gnome model")
+    bpy.context.view_layer.objects.active = obj  # pyrefly: ignore[missing-attribute]
+    obj.select_set(True)
+    return obj
+
+
+def make_rig(sequence: int):
+    return bpy.ops.rsps.make_rig(sequence=sequence, cache_folder=str(SNAPSHOT_430))  # pyrefly: ignore[missing-attribute]
+
+
+def object_state(obj: bpy.types.Object) -> dict[str, object]:
+    """What Make rig must leave alone on the selected object: its name, transform, collections, mesh, vertex groups
+    and custom properties."""
+    data = obj.data
+    assert isinstance(data, bpy.types.Mesh)
+    return {
+        "name": obj.name,
+        "matrix": [row[:] for row in obj.matrix_world],
+        "collections": sorted(c.name for c in obj.users_collection),
+        "mesh": data.name,
+        "vertices": [v.co[:] for v in data.vertices],
+        "groups": [(g.name, g.index) for g in obj.vertex_groups],
+        "weights": [[(g.group, g.weight) for g in v.groups] for v in data.vertices],
+        "materials": [m.name for m in data.materials if m is not None],
+        "properties": sorted(obj.keys()),
+        "mesh properties": sorted(data.keys()),
+    }
+
+
+def test_make_rig_builds_an_npc_collection_that_bakes_the_typed_sequence():
+    # docs/research/13-npc-rigs.md: the gnome's stand sequence 195 is on frame map 319. The rig's clip is the fit of
+    # the client's pose of the model, as for an NPC made by id.
+    imported_gnome()
+    assert make_rig(195) == {"FINISHED"}
+    collection = npc_collection.npc_of(active())
+    assert collection is not None
+    assert json.loads(collection[npc_collection.NPC_KEY]) == {
+        "npc": None,
+        "name": "Gnome model",
+        "frame_map": 319,
+        "sequences": {},
+        "sequence": 195,
+    }
+    assert collection.name == "Gnome model"
+    assert appearance_preview.PRESET_KEY not in collection
+    assert not appearance_collection.is_edited(collection)
+    assert appearance_collection.armature_of(collection).scale == Vector((1, 1, 1))
+    bpy.context.scene.frame_set(1)  # pyrefly: ignore[missing-attribute]
+    (stance, typed) = bake_buttons()
+    assert (stance.text, stance.sequence, stance.play_as) == ("Sequence 195", 195, "POSE")
+    assert typed.play_as == "ACTION"
+    assert press(stance) == {"FINISHED"}
+    fitted = fitted_clip(4233, 195)
+    for index, frame in first_frames(195):
+        for vertex, at in evaluated_vertices(collection, frame).items():
+            assert math.dist(at, fitted[index][vertex]) <= RIG_ROUNDING
+
+
+def test_make_rig_gives_the_joints_and_the_lit_colours_of_the_npc_with_that_model():
+    # The gnome's definition has the constructor's ambient and contrast of 0 (NPCComposition.java lines 192 to 217),
+    # so the client lights its model as Make rig lights any model: with the NPC lighting of npc_lighting.
+    imported_gnome()
+    assert make_rig(195) == {"FINISHED"}
+    collection = npc_collection.npc_of(active())
+    assert collection is not None
+    assert_client_lit_colours(mesh(collection), LIT["4233"])
+    # The gnome's own count from the second probe of docs/research/13-npc-rigs.md.
+    assert len(joint_names(collection)) == 14
+
+
+def test_make_rig_leaves_the_selected_object_as_it_is():
+    obj = imported_gnome()
+    obj.location = (3.0, -2.0, 1.0)
+    bpy.context.view_layer.update()  # pyrefly: ignore[missing-attribute]
+    before = object_state(obj)
+    assert make_rig(195) == {"FINISHED"}
+    assert object_state(obj) == before
+    assert npc_collection.npc_of(obj) is None
+
+
+def test_make_rig_places_the_new_npc_a_player_gap_right_of_the_other_npcs():
+    first = created(4233)
+    imported_gnome()
+    assert make_rig(195) == {"FINISHED"}
+    second = npc_collection.npc_of(active())
+    assert second is not None
+
+    def edge(collection, pick):
+        obj = appearance_collection.mesh_of(collection)
+        return pick((obj.matrix_world @ Vector(corner)).x for corner in obj.bound_box)
+
+    bpy.context.view_layer.update()  # pyrefly: ignore[missing-attribute]
+    assert edge(second, min) == pytest.approx(edge(first, max) + appearance_collection.PLAYER_GAP, abs=1e-3)
+
+
+def armature_object() -> bpy.types.Object:
+    obj = bpy.data.objects.new("rig", bpy.data.armatures.new("rig"))
+    bpy.context.scene.collection.objects.link(obj)  # pyrefly: ignore[missing-attribute]
+    return obj
+
+
+def unskinned_gnome() -> bpy.types.Object:
+    obj = imported_gnome()
+    for name in [group.name for group in obj.vertex_groups]:
+        obj.vertex_groups.remove(obj.vertex_groups[name])
+    return obj
+
+
+@pytest.mark.parametrize(
+    ("make_active", "sequence", "message"),
+    [
+        (lambda: None, 195, "no active object"),
+        (armature_object, 195, "'rig' is not a mesh"),
+        (unskinned_gnome, 195, "'Gnome model' has no vertex skins"),
+        (imported_gnome, 99999, "no sequence 99999"),
+    ],
+    ids=["no active object", "not a mesh", "no vertex skins", "sequence the cache lacks"],
+)
+def test_make_rig_refuses_and_changes_nothing(make_active, sequence, message):
+    obj = make_active()
+    bpy.context.view_layer.objects.active = obj  # pyrefly: ignore[missing-attribute]
+    before = (blender_data(), None if obj is None or obj.type != "MESH" else object_state(obj))
+    with pytest.raises(RuntimeError, match=message):
+        make_rig(sequence)
+    assert (blender_data(), None if obj is None or obj.type != "MESH" else object_state(obj)) == before
+
+
+def test_the_npc_panel_draws_the_make_rig_field_and_button_after_create_npc():
+    # Spec 13, Panel item 3: a sequence id field and Make rig, for the active mesh object, after the NPC id row. With no
+    # active NPC the panel draws no bake rows, and in these tests the cache folder row is a label, because the add-on
+    # is not enabled.
+    bpy.context.scene.rs_make_rig_sequence = 195  # pyrefly: ignore[missing-attribute]
+    calls = drawn_panel()
+    names = [item if kind == "prop" else item.idname for kind, item in calls if kind in ("prop", "operator")]
+    assert names == [
+        "rs_npc_id",
+        npc_collection.RSPS_OT_create_npc.bl_idname,
+        "rs_make_rig_sequence",
+        npc_collection.RSPS_OT_make_rig.bl_idname,
+    ]
+    (button,) = [item for kind, item in calls if kind == "operator" and item.idname == "rsps.make_rig"]
+    assert button.sequence == 195
+
+
+def test_make_rig_builds_from_the_mesh_as_the_user_edited_it():
+    # The model is the one that model export would write, so a moved vertex goes into the NPC's mesh as it is now.
+    obj = imported_gnome()
+    data = obj.data
+    assert isinstance(data, bpy.types.Mesh)
+    data.vertices[0].co.z += 7
+    moved = blender_mesh.object_to_model(obj).vertices[0]
+    assert make_rig(195) == {"FINISHED"}
+    collection = npc_collection.npc_of(active())
+    assert collection is not None
+    rig = appearance_collection.armature_of(collection)
+    mesh_obj = appearance_collection.mesh_of(collection)
+    to_rig = rig.matrix_world.inverted() @ mesh_obj.matrix_world
+    index = vertices_of(collection).index(0)
+    x, y, z = to_rig @ mesh(collection).vertices[index].co
+    assert (x, -z, y) == pytest.approx(moved, abs=1e-4)
+
+
+def test_a_vertex_in_no_vertex_skin_group_gets_label_0_as_model_export_reads_it():
+    # The add-on stores label 0 as no weight in every vertex skin group (`rs_layers._spill`), so a vertex that the
+    # owner added and did not weight cannot be told from a vertex with label 0 (the decision comment of issue 95).
+    obj = imported_gnome()
+    groups = [group.index for group in obj.vertex_groups]
+    data = obj.data
+    assert isinstance(data, bpy.types.Mesh)
+    vertex = next(v.index for v in data.vertices if v.groups)
+    for group in groups:
+        obj.vertex_groups[group].remove([vertex])
+    assert make_rig(195) == {"FINISHED"}
+    collection = npc_collection.npc_of(active())
+    assert collection is not None
+    mesh_obj = appearance_collection.mesh_of(collection)
+    names = {group.index: group.name for group in mesh_obj.vertex_groups}
+    built = mesh(collection)
+    index = vertices_of(collection).index(vertex)
+    assert [names[g.group] for g in built.vertices[index].groups] == [f"{appearance_collection.BONE_PREFIX}0"]
+
+
+def test_make_rig_twice_on_one_object_builds_two_npcs():
+    obj = imported_gnome()
+    assert make_rig(195) == {"FINISHED"}
+    first = npc_collection.npc_of(active())
+    bpy.context.view_layer.objects.active = obj  # pyrefly: ignore[missing-attribute]
+    assert make_rig(189) == {"FINISHED"}
+    second = npc_collection.npc_of(active())
+    assert first is not None and second is not None and first != second
+    assert [json.loads(c[npc_collection.NPC_KEY])["sequence"] for c in (first, second)] == [195, 189]
