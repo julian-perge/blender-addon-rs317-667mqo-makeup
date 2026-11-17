@@ -34,7 +34,15 @@ Status 2026-11-07 for decision 3 and the rig-fit guess in section 4: the guess i
 3. `ej.m(et, int)` (javap line 8065) and its twin `ej.ba(et, int)` (javap line 1208; both are the same code behind different obfuscation control flow): returns if `ej.q == null` or the file id is -1; zeroes the three pivot statics `ej.bb`, `ej.bn`, `ej.bs` (offsets 11-15, 28-32, 45-49 in `m`); for each transform `i` of the frame calls `ej.g(frame.v.n[index], frame.v.r[index], frame.s[i], frame.w[i], frame.p[i])` (offsets 73-111); then calls `ej.p()` (bounds reset, offset 120) **[the purpose of `p` is guess]**.
 4. `ej.g(int type, int[] labels, int x, int y, int z)` (javap line 3123) is the transform method. This is the answer to "the method that applies a frame's transforms to label groups". It is the 2018 `Model.animate` (`Model.java:745`) **[evidence by identical structure; the source is the same algorithm]**.
 
-**[evidence]** Two-clip blending uses `ej.u(et,int,et,int,int[])` (javap line 2938): the first frame applies for skeleton indices not in the sorted int list, the second for those in it; `jg.w` is the caller. Offsets 61-70 zero the pivot, and the code walks the list with a cursor. The detailed pairing rule was read only roughly **[guess]**. Milestone 5 does not need it.
+**[evidence]** Two-clip blending uses `ej.u(et,int,et,int,int[])` (javap line 2938): the first frame applies for skeleton indices not in the sorted int list, the second for those in it; `jg.w` is the caller. Offsets 61-70 zero the pivot, and the code walks the list with a cursor.
+
+**The interleave rule (spec 140, 2026-11-17).** The interleave list (opcode 3, `jg.m`) holds the frame map entries that the action sequence leaves to the pose sequence. The action's frame moves the other entries, and both frames move every pivot entry (type 0). An action sequence with no list replaces the whole pose.
+
+- **[evidence]** 2018 client: `PlayerComposition.java` line 333 calls `action.applyTransformations(model, actionFrame, pose, poseFrame)`, so the list is the action sequence's. `Model.java` lines 709 to 734 apply the action's frame where the skeleton index is not the current list entry (`var12 != var10`) and the pose's frame where it is (`var12 == var10`). Both frames apply every pivot entry. With no list, only the action's frame applies (`Model.java` lines 696 and 737 to 738).
+- **[evidence]** Revision 149: `jg.w` passes its own frame first and its own field `m` to `ej.u` (offsets 227 to 240). This is the same call shape as the 2018 client.
+- **[not read again]** The branch tests inside the 149 `ej.u` were not read again at the spec stage. The 2018 lines and the 149 call shape agree, so the rule above is taken from the 2018 client (spec 140, guess 5).
+- **[evidence]** Cache counts, read with `animation/frames.decode_sequence` on a copy of the snapshot 430 cache at the spec stage and again on 2026-11-17 for issue 146: sequence 863 (Wave) has no opcode 3, so the client plays it on the whole body and a sitting player stands up to wave. 471 of the 7,636 sequences have a list. 368 of them hold the list of sequences 25 and 80, and 282 of those also hold entries 164 and up. In the frame map of sequence 25, that list is entry 1 (a translate of labels 1 to 196, except label 180), entry 2 (a scale of labels 1 to 199, except label 180), the pivot entries 9, 11 and 13, the rotate entries 15, 17, 19, 37, 39, 41 and 43, and entry 45 (a translate).
+- **[not read again]** The spec stage names the rotate entries of that list as the rotate entries of the legs. Their labels were not matched to body parts.
 
 Transform types handled by `ej.g` **[evidence]**:
 
@@ -153,7 +161,7 @@ Not verified or not done:
 - Play As defaults to Pose. That is an agent choice that needs the user's decision (issue 21 (`git show 2a78edd:.scratch/osrs-focus/issues/21-play-as-defaults-to-pose.md`)): the clip folder cannot say whether the server plays a sequence as the pose or the action.
 - The start state (frame 0, counter 0) is that of a new actor. In the 149 bytecode the only places that zero the pose counters are the cycle wrap in `ap.fb`, so switching from walk to idle in game keeps the frame index; the bake always starts at frame 0. Where the client resets the action counters when an action starts was not located in 149.
 - How often `ap.fb` runs (once per actor per 20 ms client cycle) is from the 2018 source, not checked in 149. The bake still uses one Blender frame per tick at 50 fps.
-- Not recorded: female body for 1499, held-item substitution, interleaving two sequences (`jg.w`), face alpha (type 5), `stretches` and the precedence and priority fields' effects. Held items and face alpha were recorded later, in plans 12 and 10.
+- Not recorded: female body for 1499, held-item substitution, interleaving two sequences (`jg.w`), face alpha (type 5), `stretches` and the precedence and priority fields' effects. Held items and face alpha were recorded later, in plans 12 and 10. The interleave rule was recorded later, in section 1, from spec 140.
 
 Regenerate (see `tests/fixtures/animation149/README.md` for the variables):
 
