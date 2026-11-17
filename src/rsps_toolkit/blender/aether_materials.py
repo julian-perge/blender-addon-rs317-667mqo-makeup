@@ -21,10 +21,11 @@ def report_skipped(operator, skipped) -> None:
     """Warn of the materials that an operator left as they are. The owner chose the warning on 2026-11-17, when the
     region scenery materials lost their Principled BSDF (issue 130)."""
     if skipped:
+        count = "1 material that has" if len(skipped) == 1 else f"{len(skipped)} materials that have"
         operator.report(
             {"WARNING"},
-            f"Skipped {len(skipped)} materials that have no Principled BSDF. The baked-light materials of players,"
-            " terrain and region scenery are such materials.",
+            f"Skipped {count} no Principled BSDF. The baked-light materials of players, terrain and region scenery are"
+            " such materials.",
         )
 
 

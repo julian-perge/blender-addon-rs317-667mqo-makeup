@@ -86,7 +86,7 @@ def test_resetting_a_material_that_is_not_stacked_still_stops_blending():
 
 
 SKIPPED_WARNING = (
-    "Warning: Skipped 1 materials that have no Principled BSDF. The baked-light materials of players, terrain and"
+    "Warning: Skipped 1 material that has no Principled BSDF. The baked-light materials of players, terrain and"
     " region scenery are such materials."
 )
 
