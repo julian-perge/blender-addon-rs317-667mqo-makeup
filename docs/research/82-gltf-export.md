@@ -368,7 +368,7 @@ These findings decide it:
 - **The materials need a new node shape, evidence.** The stock exporter writes a material as unlit only when a colour socket feeds the Material Output, or through the Is Camera Ray shape (rows 1 and 3). The import and Create Player use an Emission node, and Blender shows both shapes the same. So the export step changes the shape, and the import keeps its own.
 - **The export must run on copies, evidence.** The stock exporter calls `validate()` on the meshes in the scene, and that removed 409 faces of the 16 square (row 7). An export straight from the scene changes the user's file.
 - **The settings must be fixed, evidence.** The animation mode must be one that writes `STEP` (row 6). `export_extras` must be on for the game values (row 1). Draco must stay off while it loses the face order (row 8). Without Draco, the joined 32 square is over 2 MiB (row 10). A doc with the settings can fix these, but it cannot do the join or the copies.
-- **A doc alone is not enough, evidence.** The 24 and 32 squares are over 2 MiB in the stock form (row 10). The 16 square is under 2 MiB in the stock form, but its scenery is lit (row 4). So a square that is under 2 MiB and has unlit scenery needs the join.
+- **A doc alone is not enough, evidence.** The 24 and 32 squares are over 2 MiB in the stock form (row 10). The 16 square is under 2 MiB in the stock form, but its scenery is lit (row 4). So a square that is under 2 MiB and has unlit scenery needs the join. Row 4 was measured at commit d8eb169, before [issue 130](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/130) gave the scenery materials the shape that draws `rs_lit`. The stock export of those materials was not measured. [Issue 118](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/118) covers it.
 
 What the operator does not cover yet: the visibility of a held item (row 5) and a clip that changes face alpha (row 14). Their issues decide how. The scenery gets its light from the region import ([issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105)), so the join takes `rs_lit` as it does for the player (see [The lit scenery](#the-lit-scenery)).
 
@@ -391,9 +391,9 @@ Issue 89 opened one issue for each row that does not survive, on 2026-11-17. The
 
 Row 13 survives, so the page gets no issue for a contact shadow.
 
-Issue 131 opened [#138](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/138), a sub-issue of issue 82: The region import merges the normals of touching sharelight locs before it lights them. See [The lit scenery](#the-lit-scenery).
-
 Issue 87 opened [issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103): Create Player refuses an item with textured faces, such as the Fire cape. It also opened [issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105): the scenery needs the client's loc light baked in, so that the page can draw it lit ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).
+
+Issue 131 opened [#138](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/138), a sub-issue of issue 82: The region import merges the normals of touching sharelight locs before it lights them. See [The lit scenery](#the-lit-scenery).
 
 ## The player
 
