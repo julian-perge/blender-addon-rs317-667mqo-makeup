@@ -32,7 +32,9 @@ class SequenceDefinition:
     durations: tuple[int, ...] = ()
     # Opcode 2 (jg.p): how many frames an action sequence steps back after its last frame; -1 stops it instead.
     loop_offset: int = -1
-    # Opcode 3 (jg.m): the frame map entries this sequence keeps when it plays over another one.
+    # Opcode 3 (jg.m): the frame map entries that this sequence, as the action sequence, leaves to the pose sequence.
+    # The action's frame moves the other entries, and both frames move every pivot entry (2018 client Model.java lines
+    # 709 to 734 and PlayerComposition.java line 333; revision 149 jg.w offsets 227 to 240).
     interleave: tuple[int, ...] | None = None
     # Opcode 4 (jg.u).
     stretches: bool = False
