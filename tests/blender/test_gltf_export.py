@@ -1271,9 +1271,14 @@ def test_an_action_that_a_rig_plays_with_two_slots_is_one_clip_with_the_slot_tha
 
 def test_one_texture_id_is_one_material_and_one_image_also_with_two_images_or_none(tmp_path: Path):
     # The owner chose in the build of issue 144 on 2026-11-17 that a texture id is one material, with the first image
-    # found for it, also for a material that has no image. The images of two regions hold the same texels.
+    # found for it, also for a material that has no image. The images of two regions hold the same texels. Draynor is
+    # first both by name and in the order the meshes are made, so the export finds its image first.
+    draynor = imported_mesh("Draynor", [(None, 7, 0)])
     imported_mesh("Lumbridge", [(None, 7, 0)])
-    imported_mesh("Draynor", [(None, 7, 0)])
+    source = draynor.material_slots[0].material
+    assert source is not None and source.node_tree is not None
+    (first,) = [node.image for node in source.node_tree.nodes if isinstance(node, bpy.types.ShaderNodeTexImage)]
+    assert first is not None
     imported_mesh("Missing", [(None, 7, 0)], textures={})
     path = tmp_path / "scene.glb"
     export(path)
@@ -1281,7 +1286,7 @@ def test_one_texture_id_is_one_material_and_one_image_also_with_two_images_or_no
     (material,) = gltf["materials"]
     assert material["name"] == "RS_Texture_7"
     assert "baseColorTexture" in material["pbrMetallicRoughness"]
-    assert len(gltf["images"]) == 1
+    assert [image["name"] for image in gltf["images"]] == [first.name]
 
 
 def test_a_textured_material_with_two_images_draws_the_first_image_node(tmp_path: Path):
