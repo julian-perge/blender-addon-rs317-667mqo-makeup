@@ -75,9 +75,9 @@ Task body: `Parent`, `Spec` (the spec file's path), `What to build`, `Acceptance
 
 Pick the task with `agent-skills frontier <source issue>`. Claim it with `agent-skills claim <n>`, which also makes the branch.
 
-One task, one branch, one pull request. Branch: `<type>/<issue>-<slug>`. Commit subject: `<type>: <summary> (#<issue>)`, with a conventional-commit type (`feat`, `fix`, `chore`, `docs`). PR title: a plain sentence. Put `Closes #<issue>` in the PR body. Bug tasks start with a failing test.
+One task, one branch, one pull request. Branch: `<type>/<issue>-<slug>`. Commit subject: `<type>: <summary> (#<issue>)`, with a conventional-commit type (`feat`, `fix`, `chore`, `docs`). PR title: a plain sentence. Put `Closes #<issue>` in the PR body. When `agent-skills frontier` shows that the task is the last open sub-issue of its source issue, also put `Closes #<source issue>` in the body, because GitHub does not close a parent when its last sub-issue closes. Bug tasks start with a failing test.
 
-`/agent-skills:build auto` runs every task of one spec on one branch, `<type>/<source issue>-<slug>`, with one commit per task. Its pull request closes every task issue. `agent-skills claim <source issue> --no-assign` makes that branch, and `agent-skills claim <task> --no-branch` claims each task.
+`/agent-skills:build auto` runs every task of one spec on one branch, `<type>/<source issue>-<slug>`, with one commit per task. Its pull request closes every task issue and the source issue. `agent-skills claim <source issue> --no-assign` makes that branch, and `agent-skills claim <task> --no-branch` claims each task.
 
 Implement with `test-driven-development`: one behavior at an approved public seam per red/green cycle. The seams that the spec names give that agreement.
 
@@ -117,3 +117,5 @@ Comments in the code that say "issue 27" mean the old issue file of that number,
 ## Reports and output decisions
 
 Post every decision the user makes in a session, and every guess and gap you accepted, in one decision comment with `agent-skills decide`. Post it on the task issue, or on the source issue when later tasks need it. Mark guesses as guesses. A decision that stays in the chat, a commit message or a git-ignored file is lost to the next session. Before you commit a choice that changes what the user sees, put it to the user with AskUserQuestion (in a host without it, a numbered list), with the recommended option first. Also report every inferred rule. A choice marked "needs the user's decision" (see [CODING_STANDARDS.md](../../CODING_STANDARDS.md)) is such a choice. Merging and installing the extension need their own authorization.
+
+In a pull request title or body, write a closing keyword (close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved) only before an issue that the merge must close. GitHub closes the issue after the keyword wherever it stands, also in "does not close #20". Name any other issue as `Refs #<n>`.
