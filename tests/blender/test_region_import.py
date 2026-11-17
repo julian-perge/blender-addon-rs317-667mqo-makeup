@@ -19,6 +19,7 @@ from rsps_toolkit.blender import (
     appearance_collection,
     appearance_preview,
     appearance_props,
+    face_materials,
     import_item,
     preferences,
     region_import,
@@ -1391,6 +1392,170 @@ def test_a_joined_model_is_lit_with_the_render_types_that_the_scenery_is_given()
     assert lit_corners(obj)[0] == [(0.0, 0.0, 0.0, 0.0)] * 3
 
 
+def hand_materials(images: dict[int, bpy.types.Image], model: Model = HAND_MODEL) -> dict[str, bpy.types.Material]:
+    """The materials of the scenery of one placement of `model` with the textures in `images`, by name. For
+    `HAND_MODEL` they are one plain material, one with the alpha 255 and one textured material."""
+    locs = {1: hand_loc()}
+    placed = place_scenery([Placement(1, 0, 5, 5, 10, 0)], locs, lambda x, y: -40)
+    (part,) = placed[0].parts
+    collection = bpy.data.collections.new("Scenery")
+    region_scenery.scenery_objects(
+        collection,
+        placed,
+        locs,
+        {region_scenery.model_key(part, locs[1]): model},
+        {(11,): [0, 1, 0, 0, 0]},
+        images,
+        lambda x, y: -40,
+        BRIGHTNESS,
+    )
+    (obj,) = collection.objects
+    return {material.name: material for material in mesh_of(obj).materials if material is not None}
+
+
+def hand_image() -> bpy.types.Image:
+    return texture_image(1, [0x806040] * (SIZE * SIZE), True)
+
+
+def lit_attribute_nodes(material: bpy.types.Material) -> list[bpy.types.ShaderNodeVertexColor]:
+    tree = material.node_tree
+    assert tree is not None
+    return [node for node in tree.nodes if isinstance(node, bpy.types.ShaderNodeVertexColor)]
+
+
+def see_through_factor(material: bpy.types.Material) -> list[object]:
+    """What the shader mix multiplies to give the share of the emission over the transparent shader: each linked input
+    as its node type and socket name, and each other input as its value, sorted by their text."""
+    tree = material.node_tree
+    assert tree is not None
+    (mix,) = [node for node in tree.nodes if node.bl_idname == "ShaderNodeMixShader"]
+    factors: list[object] = []
+    pending = [mix.inputs["Fac"]]
+    while pending:
+        socket = pending.pop()
+        links = [link for link in tree.links if link.to_socket == socket]
+        if not links:
+            factors.append(round(getattr(socket, "default_value"), 6))
+            continue
+        node, output = links[0].from_node, links[0].from_socket
+        assert node is not None and output is not None
+        if node.bl_idname == "ShaderNodeMath" and getattr(node, "operation") == "MULTIPLY":
+            pending += [node.inputs[0], node.inputs[1]]
+        else:
+            factors.append((node.bl_idname, output.name))
+    return sorted(factors, key=str)
+
+
+def test_a_plain_scenery_material_emits_the_corner_colours_of_rs_lit_with_no_blender_light():
+    # ADR 0027 and decision 6 of issue 105: the scenery draws its baked loc light as the player does
+    # (`appearance_preview._material`).
+    plain = hand_materials({})[f"RS_Colour_{HAND_COLOUR}_0"]
+
+    links = surface_links(plain)
+    tree = plain.node_tree
+    assert tree is not None
+    assert not [node for node in tree.nodes if node.type == "BSDF_PRINCIPLED"]
+    (attribute,) = lit_attribute_nodes(plain)
+    assert attribute.layer_name == appearance_preview.LIT_ATTRIBUTE
+    assert ("ShaderNodeVertexColor", "Color", "ShaderNodeEmission", "Color") in links
+    assert ("ShaderNodeEmission", "Emission", "ShaderNodeMixShader", "Shader") in links
+    assert ("ShaderNodeBsdfTransparent", "BSDF", "ShaderNodeMixShader", "Shader") in links
+    assert ("ShaderNodeMixShader", "Shader", "ShaderNodeOutputMaterial", "Surface") in links
+
+
+def test_a_textured_scenery_material_emits_its_texture_times_the_light_value_in_rs_lit():
+    # Rule 3 of spec 105: the client multiplies each texel by the light value (`Graphics3D.rasterTextureAffine` line
+    # 1489), which `rs_lit` holds as a grey (issue 129). The texels are read one per pixel, as model import reads them.
+    textured = hand_materials({1: hand_image()})["RS_Texture_1_0"]
+
+    links = surface_links(textured)
+    tree = textured.node_tree
+    assert tree is not None
+    (texels,) = [node for node in tree.nodes if isinstance(node, bpy.types.ShaderNodeTexImage)]
+    image = material_image(textured)
+    assert image is not None and image.name == "RS_Texture_1"
+    assert texels.interpolation == "Closest"
+    (multiply,) = [node for node in tree.nodes if isinstance(node, bpy.types.ShaderNodeMix)]
+    assert (multiply.data_type, multiply.blend_type) == ("RGBA", "MULTIPLY")
+    assert getattr(tree.nodes[multiply.name].inputs["Factor"], "default_value") == 1
+    assert ("ShaderNodeTexImage", "Color", "ShaderNodeMix", "A") in links
+    assert ("ShaderNodeVertexColor", "Color", "ShaderNodeMix", "B") in links
+    assert ("ShaderNodeMix", "Result", "ShaderNodeEmission", "Color") in links
+    assert ("ShaderNodeMixShader", "Shader", "ShaderNodeOutputMaterial", "Surface") in links
+
+
+def test_a_textured_scenery_material_with_no_image_emits_magenta_times_the_light_value():
+    # The owner chose on 2026-11-17 that a missing image still stands out and keeps the light (issue 130).
+    textured = hand_materials({})["RS_Texture_1_0"]
+
+    tree = textured.node_tree
+    assert tree is not None
+    assert not [node for node in tree.nodes if isinstance(node, bpy.types.ShaderNodeTexImage)]
+    (multiply,) = [node for node in tree.nodes if isinstance(node, bpy.types.ShaderNodeMix)]
+    assert tuple(getattr(tree.nodes[multiply.name].inputs["A"], "default_value")) == face_materials.MISSING_TEXTURE
+    assert ("ShaderNodeVertexColor", "Color", "ShaderNodeMix", "B") in surface_links(textured)
+
+
+def test_the_see_through_factor_of_a_scenery_material_is_the_rs_lit_alpha_times_the_alpha_the_client_blends_by():
+    # The owner chose on 2026-11-17 that the alpha 0 that `rs_lit` holds for a face the client does not draw leaves it
+    # out (issue 130). The client blends a plain face with alpha a as new pixel * (256 - a) / 256 (`Graphics3D.java`
+    # lines 817 to 825). It reads no face alpha for a textured face (`rasterAlpha` is read only at lines 794 to 859 and
+    # 1348 to 1372, and not in `rasterTextureAffine`), and it does not draw a texel of value 0 in a texture that is not
+    # opaque (lines 2182 to 2190), which `texture_image` gives the alpha 0.
+    materials = hand_materials({1: hand_image()}, replace(HAND_MODEL, face_alphas=[0, 0, 0, 100, 255]))
+
+    vertex_alpha = ("ShaderNodeVertexColor", "Alpha")
+    assert see_through_factor(materials[f"RS_Colour_{HAND_COLOUR}_0"]) == sorted([vertex_alpha, 1.0], key=str)
+    assert see_through_factor(materials[f"RS_Colour_{HAND_COLOUR}_255"]) == sorted(
+        [vertex_alpha, round(1 / 256, 6)], key=str
+    )
+    assert see_through_factor(materials["RS_Texture_1_100"]) == sorted(
+        [vertex_alpha, ("ShaderNodeTexImage", "Alpha")], key=str
+    )
+
+
+def test_only_a_material_with_game_values_that_emits_rs_lit_counts_as_showing_the_loc_light():
+    # PMN texturing refuses region scenery only, which the owner chose on 2026-11-17 (issue 130). The player's material
+    # also reads `rs_lit` but holds no game values (`appearance_preview._material`).
+    materials = hand_materials({})
+    imported = face_materials.face_material(HAND_COLOUR, None, 0)
+    player_like = bpy.data.materials.new("Player like")
+    tree = player_like.node_tree
+    assert tree is not None
+    attribute = tree.nodes.new("ShaderNodeVertexColor")
+    setattr(attribute, "layer_name", appearance_preview.LIT_ATTRIBUTE)
+
+    assert all(region_scenery.shows_loc_light(material) for material in materials.values())
+    assert not region_scenery.shows_loc_light(imported)
+    assert not region_scenery.shows_loc_light(player_like)
+    assert not region_scenery.shows_loc_light(None)
+
+
+def test_the_scenery_materials_keep_the_names_custom_properties_and_draw_settings_of_model_import():
+    # ADR 0024: the scenery materials keep their material keys and custom properties. Model import keeps its look, so
+    # its materials still have a Principled BSDF.
+    scenery = hand_materials({})
+    imported = model_to_object(HAND_MODEL, "Imported", None, BRIGHTNESS)
+    imported_materials = [material for material in mesh_of(imported).materials if material is not None]
+
+    def settings(material: bpy.types.Material) -> tuple[object, ...]:
+        rgba = [0.0] * 4
+        material.diffuse_color.foreach_get(rgba)
+        return (
+            material.name.split(".")[0],
+            sorted(material.items()),
+            tuple(round(c, 6) for c in rgba),
+            material.surface_render_method,
+            material.use_backface_culling,
+        )
+
+    assert sorted(map(settings, scenery.values()), key=str) == sorted(map(settings, imported_materials), key=str)
+    for material in imported_materials:
+        tree = material.node_tree
+        assert tree is not None
+        assert [node for node in tree.nodes if node.type == "BSDF_PRINCIPLED"]
+
+
 @needs_snapshot_430
 def test_an_object_with_a_shared_mesh_holds_the_transform_of_its_placement(snapshot_430):
     # The transform rules are in `formats/region_placement.py` and its tests. Loc 84 at (16, 46) is a wall of type 2, so
@@ -1612,8 +1777,10 @@ def test_the_scenery_of_48_50_has_one_material_for_each_material_key(snapshot_43
 
 
 @needs_snapshot_430
-def test_every_scenery_mesh_of_48_50_has_rs_lit_on_its_corners(snapshot_430):
-    # ADR 0027: the region import bakes the loc light into `rs_lit`. The hand-made tests above check its values.
+def test_every_scenery_mesh_of_48_50_has_rs_lit_on_its_corners_and_materials_that_emit_it(snapshot_430):
+    # ADR 0027: the region import bakes the loc light into `rs_lit`, and the scenery materials draw it with no Blender
+    # light (decision 6 of issue 105). The hand-made tests above check its values and the shader of each kind of
+    # material. Both checks share one import, because an import of 48_50 is slow.
     meshes = scenery_meshes_of_48_50()
 
     assert meshes
@@ -1622,6 +1789,15 @@ def test_every_scenery_mesh_of_48_50_has_rs_lit_on_its_corners(snapshot_430):
         assert attribute is not None, mesh.name
         assert attribute.domain == "CORNER"
         assert len(attribute.data) == len(mesh.loops)
+    materials = {material for mesh in meshes for material in mesh.materials if material is not None}
+    assert materials
+    for material in materials:
+        tree = material.node_tree
+        assert tree is not None
+        assert not [node for node in tree.nodes if node.type == "BSDF_PRINCIPLED"], material.name
+        (attribute_node,) = lit_attribute_nodes(material)
+        assert attribute_node.layer_name == appearance_preview.LIT_ATTRIBUTE, material.name
+        assert ("ShaderNodeMixShader", "Shader", "ShaderNodeOutputMaterial", "Surface") in surface_links(material)
 
 
 def drawn_scenery_faces_of_48_50() -> dict[str, list[tuple[object, ...]]]:
