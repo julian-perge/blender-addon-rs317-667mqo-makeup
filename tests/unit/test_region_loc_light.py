@@ -131,6 +131,9 @@ def test_a_diagonal_wall_decoration_is_lit_after_the_diagonal_turn_and_move():
     turned = [(45, 0, -45), (33, -10, -102), (16, -200, 11)]
     shading = light_one(loc(loc_types=(4,), mirrored=True), loc_type=6)
     assert shading == light(model(turned), LOC_LIGHTING)
+    # A type 4 decoration of the loc without the mirror flag asks for getModel(4, 0), which is not mirrored either, so
+    # it differs only by the diagonal turn and move.
+    assert shading != light_one(loc(loc_types=(4,)), loc_type=4)
 
 
 def test_an_object_of_type_11_is_lit_before_the_client_turns_it_by_256_units():
@@ -173,6 +176,23 @@ def test_an_animated_non_flat_shading_contoured_loc_has_the_light_of_its_flat_mo
     # model at line 662 whatever nonFlatShading is, and contours it after the light (lines 675 to 677).
     definition = loc(contoured_ground=0, non_flat_shading=True, animation=5)
     assert light_one(definition, tilt) == light(model(VERTICES), LOC_LIGHTING)
+
+
+def test_a_loc_with_impostors_has_the_light_of_the_shown_loc_on_its_flat_model():
+    # A loc with impostors is a DynamicObject (PacketBuffer.java lines 214 to 218). DynamicObject.getModel calls
+    # method5092 on the shown loc (ObjectComposition.getImpostor, lines 830 to 845), which lights the model at line 662
+    # with the ambient and the contrast of the shown loc, whatever nonFlatShading is, and contours it after the light
+    # (lines 675 to 677). The shown loc here has the ambient 0 and the contrast 25, which opcode 39 reads as 1 times 25
+    # (line 410). The contoured model is the one of the non-flat-shading test above.
+    shown = loc(contoured_ground=0, non_flat_shading=True, ambient=0, contrast=25)
+    locs = {1: loc(impostors=(2,), impostor_varbit=5), 2: shown}
+    placement = Placement(loc=1, level=0, x=5, y=7, loc_type=10, rotation=0)
+    (part,) = place_scenery([placement], locs, tilt)[0].parts
+    shading = loc_light(placement, part, locs, model(VERTICES), tilt)
+    lighting = (0 + 64, 25 + 768, -50, -10, -50)
+    assert shading == light(model(VERTICES), lighting)
+    assert shading != light(model([(0, 0, 0), (32, 38, -48), (-60, -220, 20)]), lighting)
+    assert shading != light(model(VERTICES), LOC_LIGHTING)
 
 
 def test_a_non_flat_shading_contoured_loc_on_flat_ground_has_the_light_of_its_model():
