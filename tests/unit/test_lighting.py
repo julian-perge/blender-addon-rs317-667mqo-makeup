@@ -196,6 +196,13 @@ def test_a_new_format_face_of_render_type_2_is_hidden_and_adds_no_normal():
     assert (shading.corner_a, shading.corner_b, shading.corner_c) == ([0, 10713], [0, 10713], [-2, 10713])
 
 
+def test_a_new_format_face_of_render_type_4_is_hidden_and_adds_no_normal():
+    # computeNormals (ModelData.java lines 1444 to 1476) adds a normal only for render types 0 and 1, and light hides an
+    # untextured face of any render type other than 0, 1 and 3 (lines 1635 and 1636). So the tilted face keeps 10713.
+    shading = light(new_model([4, 0]), LOC_LIGHTING)
+    assert (shading.corner_a, shading.corner_b, shading.corner_c) == ([0, 10713], [0, 10713], [-2, 10713])
+
+
 def test_the_player_and_npc_light_lights_a_face_of_render_type_2_as_a_smooth_face():
     # The owner's decision of 2026-11-17 on issue 127: these callers keep today's light of such a face until issue 103.
     # The two faces then share vertices 0 and 1, as in the alpha 255 test above, and the level face gets 10704 at

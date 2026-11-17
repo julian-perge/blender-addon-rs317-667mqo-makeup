@@ -26,7 +26,8 @@ class Shading:
 
     For a face with `light_values` False, a corner holds a lit HSL colour. For a face with it True (a textured face),
     a corner holds a light value from 2 to 126 that the client multiplies the texture by. A flat face holds its one
-    value in `corner_a`, 0 in `corner_b` and -1 in `corner_c`, and a hidden face holds 0, 0 and -2.
+    value in `corner_a`, 0 in `corner_b` and -1 in `corner_c`. An untextured face of render type 3 holds 128, 0 and
+    -1, and a hidden face holds 0, 0 and -2.
     """
 
     corner_a: list[int]
@@ -124,7 +125,6 @@ def _light(model: Model, lighting: tuple[int, int, int, int, int], render_types:
         # ModelData.java lines 1614 to 1620: alpha -2 (254) makes the render type 3 and alpha -1 (255) makes it 2.
         alpha = model.face_alphas[index]
         kind = 3 if alpha == 254 else 2 if alpha == 255 else render_types[index]
-
         if kind == 0:
             # Lines 1639 to 1663 for an untextured face and lines 1674 to 1698 for a textured one.
             for slot, vertex in enumerate(face):
