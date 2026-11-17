@@ -57,7 +57,7 @@ def own_vertices(
         return None
     game = [client_vertex(vertex, part, shown) for vertex in vertices]
     if contoured:
-        contour = _contour(placement, part, raw, shown, game, height)
+        contour = contour_heights(placement, part, raw, shown, game, height)
         if contour is None and not part.own_mesh:
             return None
         if contour is not None:
@@ -89,7 +89,7 @@ def client_vertex(vertex: Vertex, part: PlacedPart, shown: LocDefinition) -> Ver
     return x + offset_x, y + offset_height, z + offset_z
 
 
-def _contour(
+def contour_heights(
     placement: Placement,
     part: PlacedPart,
     raw: LocDefinition,
@@ -97,7 +97,8 @@ def _contour(
     vertices: Sequence[Vertex],
     height: Callable[[int, int], int],
 ) -> list[int] | None:
-    """The game y of each vertex after the contour, or None when the client returns the model unchanged.
+    """The game y of each vertex after the contour, or None when the client returns the model unchanged. `vertices`
+    are the vertices of the part as `client_vertex` gives them, and the result keeps their order.
 
     A loc that is animated or has impostors is a DynamicObject (`PacketBuffer.java` lines 214 to 218 and the same test
     in each branch). `DynamicObject.getModel` places the contour at the footprint of the shown loc, swapped by the
