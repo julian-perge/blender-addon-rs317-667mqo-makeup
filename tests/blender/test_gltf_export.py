@@ -1292,14 +1292,15 @@ def test_a_textured_material_with_two_images_draws_the_first_image_node(tmp_path
     nodes = material.node_tree.nodes
     for node in [node for node in nodes if node.type == "TEX_IMAGE"]:
         nodes.remove(node)
-    for name in ("first", "second"):
+    images = [bpy.data.images.new(name, 2, 2) for name in ("first", "second")]
+    for image in images:
         texels = nodes.new("ShaderNodeTexImage")
         assert isinstance(texels, bpy.types.ShaderNodeTexImage)
-        texels.image = bpy.data.images.new(name, 2, 2)
+        texels.image = image
     path = tmp_path / "scene.glb"
     export(path)
     gltf, _ = read_glb(path)
-    assert [image["name"] for image in gltf["images"]] == ["first"]
+    assert [image["name"] for image in gltf["images"]] == [images[0].name]
 
 
 def test_a_face_past_the_last_material_slot_draws_with_the_last_slot(tmp_path: Path):
