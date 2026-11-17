@@ -1034,3 +1034,49 @@ def test_the_active_action_held_aside_in_tweak_mode_is_a_clip_too(cache: Path, t
     gltf, _ = read_glb(path)
     assert sorted(animation["name"] for animation in gltf["animations"]) == ["Sitting", "Wave"]
     assert animation.use_tweak_mode
+
+
+def test_a_mesh_that_only_an_armature_modifier_binds_to_the_rig_is_skinned_to_the_exported_rig(
+    cache: Path, tmp_path: Path
+):
+    # Spec rule 10: the clips move the meshes of the rig. A mesh that the user unparents, and that the rig still moves
+    # through its Armature modifier, is skinned to the joints of the exported rig.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    mesh = appearance_collection.mesh_of(rig.users_collection[0])
+    world = mesh.matrix_world.copy()
+    mesh.parent = None
+    mesh.matrix_world = world
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    (node,) = [node for node in gltf["nodes"] if "mesh" in node]
+    joints = {gltf["nodes"][joint]["name"] for joint in gltf["skins"][node["skin"]]["joints"]}
+    assert set(SITTING) <= joints
+
+
+def test_a_clip_has_the_keys_of_the_slot_that_the_rig_plays(cache: Path, tmp_path: Path):
+    # Row "Held pose" (spec rule 10): the clip has the keyed values of the rig's slot, also when the action has a slot
+    # for another object before it.
+    rig = rigged_player(cache)
+    sitting = held_pose(rig)
+    decoy = sitting.slots.new(id_type="OBJECT", name="Decoy")
+    strip = sitting.layers[0].strips[0]
+    assert isinstance(strip, bpy.types.ActionKeyframeStrip)
+    bag = strip.channelbag(decoy, ensure=True)
+    for joint in SITTING:
+        path = f'pose.bones["{joint}"].rotation_quaternion'
+        for index, value in enumerate(Quaternion((0, 0, 1), math.radians(90))):
+            bag.fcurves.new(path, index=index).keyframe_points.insert(1, value)
+    sitting.slots.active = decoy
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, binary = read_glb(path)
+    (clip,) = gltf["animations"]
+    for channel in clip["channels"]:
+        node = gltf["nodes"][channel["target"]["node"]]
+        if channel["target"]["path"] == "rotation" and node["name"] in SITTING:
+            x, y, z, w = node.get("rotation", [0, 0, 0, 1])
+            expected = Quaternion((w, x, y, z)) @ SITTING[node["name"]]
+            for x, y, z, w in accessor_values(gltf, binary, clip["samplers"][channel["sampler"]]["output"]):
+                assert Quaternion((w, x, y, z)).rotation_difference(expected).angle == pytest.approx(0, abs=1e-4)
