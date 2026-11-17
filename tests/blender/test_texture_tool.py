@@ -111,6 +111,10 @@ def test_apply_refuses_a_mesh_of_region_scenery_and_leaves_its_faces_as_they_wer
     material = mesh.materials[0]
     assert material is not None
     region_scenery.show_loc_light(material, {})
+    # A face that the user recolours after the import gets a material of model import, and the mesh is still scenery.
+    recoloured = face_materials.face_material(2000, None, 0)
+    mesh.materials.append(recoloured)
+    mesh.polygons[1].material_index = 1
     bm = bmesh.new()
     bm.from_mesh(mesh)
 
@@ -119,7 +123,7 @@ def test_apply_refuses_a_mesh_of_region_scenery_and_leaves_its_faces_as_they_wer
     bm.to_mesh(mesh)
     bm.free()
 
-    assert list(mesh.materials) == [material]
+    assert list(mesh.materials) == [material, recoloured]
     assert object_to_model(obj).face_textures == [None, None]
 
 
