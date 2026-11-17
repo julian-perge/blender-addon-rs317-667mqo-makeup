@@ -151,26 +151,28 @@ def test_two_extra_attributes_follow_the_order_of_the_list_and_not_of_the_mesh(t
     ids=["colour", "extra"],
 )
 def test_a_mesh_without_an_attribute_stops_the_export_and_the_message_names_it(tmp_path: Path, options, missing):
-    # Row "Refusal" (spec decision 5).
+    # Row "Refusal" (spec decision 5). The owner chose the wording of the message in the build of issue 141 on
+    # 2026-11-17.
     triangle("Ground", ("rs_lit",))
     triangle("Rock", ("rs_lit", "scene_lit", "fire_strength"))
     path = tmp_path / "scene.glb"
     with pytest.raises(RuntimeError) as refusal:
         export(path, **options)
-    assert "Ground" in str(refusal.value) and missing in str(refusal.value)
+    assert f"Ground has no colour attribute {missing}." in str(refusal.value)
     assert "Rock" not in str(refusal.value)
     assert not path.exists()
 
 
 def test_an_attribute_that_is_not_a_colour_attribute_stops_the_export(tmp_path: Path):
-    # Spec rule 4: the named attribute must be a colour attribute.
+    # Spec rule 4: the named attribute must be a colour attribute. The owner chose the wording of the message in the
+    # build of issue 141 on 2026-11-17.
     obj = triangle("Ground", ("rs_lit",))
     assert isinstance(obj.data, bpy.types.Mesh)
     obj.data.attributes.new("fire_strength", "FLOAT", "CORNER")
     path = tmp_path / "scene.glb"
     with pytest.raises(RuntimeError) as refusal:
         export(path, extra_attributes="fire_strength")
-    assert "Ground" in str(refusal.value) and "fire_strength" in str(refusal.value)
+    assert "Ground: fire_strength is not a colour attribute." in str(refusal.value)
     assert not path.exists()
 
 
