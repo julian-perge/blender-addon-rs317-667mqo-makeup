@@ -430,69 +430,84 @@ def _new_material(key: MaterialKey, colour: str) -> bpy.types.Material:
 
 
 def _draw_unlit(material: bpy.types.Material, colour: str, key: MaterialKey, image: bpy.types.Image | None) -> None:
-    """Give `material` only a Color Attribute node of `colour` that feeds the Material Output. The stock exporter
-    writes this shape as `KHR_materials_unlit` with the attribute as `COLOR_0` (ADR 0026). The nodes are made by type,
-    because Blender can translate the names of the nodes that a new material starts with.
+    """Give `material` unlit nodes that draw a Color Attribute node of `colour` into the Material Output. For a key with
+    no texture the attribute feeds the output, and the stock exporter writes this shape as `KHR_materials_unlit` with
+    the attribute as `COLOR_0` (ADR 0026). A textured key draws `image` times the attribute with the nodes of
+    `_draw_textured`. The nodes are made by type, because Blender can translate the names of the nodes that a new
+    material starts with.
 
-    A textured key multiplies `image` by the colour, read one texel per pixel as model import reads it, and the stock
-    exporter writes the image as `baseColorTexture` (spec decision 9). With no image it multiplies magenta, as
-    `region_scenery.show_loc_light` does. The product goes through an Emission node that a Light Path node shows only
-    to camera rays, the shape that the stock importer gives an unlit material (`imp/KHR_materials_unlit.py`). The
-    exporter finds the colour attribute in a multiplication only behind a colour socket, such as the Color of that
-    Emission node (`search_node_tree.py`, `get_multiply_factors`), and without it writes the colour attributes in the
-    order of the mesh.
-
-    The alpha goes into a Mix Shader that puts a Transparent BSDF under the colour, which the stock exporter reads in
-    `io_scene_gltf2/blender/exp/material/unlit.py`, `detect_mix_alpha`. A face alpha gives the opacity
-    `(256 - alpha) / 256` of `face_materials._show_alpha`, and the exporter writes `alphaMode` `BLEND` with the opacity
-    as the alpha of `baseColorFactor`. For an image with a texel that is not opaque, a Round node on the texel alpha
-    gives `alphaMode` `MASK` (`search_node_tree.py`, `detect_alpha_clip`), so that the page leaves out the texels that
-    `texture_image` gives the alpha 0. The owner chose `MASK` in the build of issue 144 on 2026-11-17."""
+    An opacity goes into a Mix Shader that puts a Transparent BSDF under the drawn colour, which the stock exporter
+    reads in `io_scene_gltf2/blender/exp/material/unlit.py`, `detect_mix_alpha`. A face alpha on a key with no texture
+    gives the opacity `(256 - alpha) / 256` of `face_materials._show_alpha`, and the exporter writes `alphaMode` `BLEND`
+    with the opacity as the alpha of `baseColorFactor`. A textured key has the opacity that `_draw_textured` gives, or
+    none."""
     tree = material.node_tree
     assert tree is not None
     tree.nodes.clear()
     output = tree.nodes.new("ShaderNodeOutputMaterial")
     attribute = tree.nodes.new("ShaderNodeVertexColor")
     attribute.layer_name = colour
-    drawn = attribute.outputs["Color"]
-    clip = None
-    if key.texture is not None:
-        multiply = tree.nodes.new("ShaderNodeMix")
-        multiply.data_type = "RGBA"  # pyrefly: ignore[missing-attribute]
-        multiply.blend_type = "MULTIPLY"  # pyrefly: ignore[missing-attribute]
-        multiply.inputs["Factor"].default_value = 1.0  # pyrefly: ignore[missing-attribute]
-        tree.links.new(attribute.outputs["Color"], multiply.inputs["B"])
-        emission = tree.nodes.new("ShaderNodeEmission")
-        tree.links.new(multiply.outputs["Result"], emission.inputs["Color"])
-        camera = tree.nodes.new("ShaderNodeLightPath")
-        shown = tree.nodes.new("ShaderNodeMixShader")
-        tree.links.new(camera.outputs["Is Camera Ray"], shown.inputs[0])
-        tree.links.new(tree.nodes.new("ShaderNodeBsdfTransparent").outputs["BSDF"], shown.inputs[1])
-        tree.links.new(emission.outputs["Emission"], shown.inputs[2])
-        drawn = shown.outputs["Shader"]
-        if image is None:
-            multiply.inputs["A"].default_value = MISSING_TEXTURE  # pyrefly: ignore[missing-attribute]
-        else:
-            texels = tree.nodes.new("ShaderNodeTexImage")
-            texels.image = image  # pyrefly: ignore[missing-attribute]
-            texels.interpolation = "Closest"  # pyrefly: ignore[missing-attribute]
-            tree.links.new(texels.outputs["Color"], multiply.inputs["A"])
-            if _has_see_through_texel(image):
-                clip = tree.nodes.new("ShaderNodeMath")
-                clip.operation = "ROUND"  # pyrefly: ignore[missing-attribute]
-                tree.links.new(texels.outputs["Alpha"], clip.inputs[0])
-    if clip is None and (key.texture is not None or not key.alpha):
+    opacity: float | bpy.types.NodeSocket | None
+    if key.texture is None:
+        drawn = attribute.outputs["Color"]
+        opacity = (256 - key.alpha) / 256 if key.alpha else None
+    else:
+        drawn, opacity = _draw_textured(tree, attribute.outputs["Color"], image)
+    if opacity is None:
         tree.links.new(drawn, output.inputs["Surface"])
         return
     mix = tree.nodes.new("ShaderNodeMixShader")
     transparent = tree.nodes.new("ShaderNodeBsdfTransparent")
-    if clip is None:
-        mix.inputs[0].default_value = (256 - key.alpha) / 256  # pyrefly: ignore[missing-attribute]
+    if isinstance(opacity, float):
+        mix.inputs[0].default_value = opacity  # pyrefly: ignore[missing-attribute]
     else:
-        tree.links.new(clip.outputs["Value"], mix.inputs[0])
+        tree.links.new(opacity, mix.inputs[0])
     tree.links.new(transparent.outputs["BSDF"], mix.inputs[1])
     tree.links.new(drawn, mix.inputs[2])
     tree.links.new(mix.outputs["Shader"], output.inputs["Surface"])
+
+
+def _draw_textured(
+    tree: bpy.types.NodeTree, colour: bpy.types.NodeSocket, image: bpy.types.Image | None
+) -> tuple[bpy.types.NodeSocket, bpy.types.NodeSocket | None]:
+    """Add nodes to `tree` that multiply `image` by the colour attribute output `colour`, and return the shader output
+    that draws the product, with the opacity output of the texels or None. The image is read one texel per pixel as
+    model import reads it, and the stock exporter writes it as `baseColorTexture` (spec decision 9). With no image the
+    nodes multiply magenta, as `region_scenery.show_loc_light` does.
+
+    The product goes through an Emission node that a Light Path node shows only to camera rays, the shape that the
+    stock importer gives an unlit material (`imp/KHR_materials_unlit.py`). The exporter finds the colour attribute in a
+    multiplication only behind a colour socket, such as the Color of that Emission node (`search_node_tree.py`,
+    `get_multiply_factors`), and without it writes the colour attributes in the order of the mesh.
+
+    For an image with a texel that is not opaque, the opacity is a Round node on the texel alpha, which the exporter
+    writes as `alphaMode` `MASK` (`search_node_tree.py`, `detect_alpha_clip`), so that the page leaves out the texels
+    that `texture_image` gives the alpha 0. The owner chose `MASK` in the build of issue 144 on 2026-11-17."""
+    multiply = tree.nodes.new("ShaderNodeMix")
+    multiply.data_type = "RGBA"  # pyrefly: ignore[missing-attribute]
+    multiply.blend_type = "MULTIPLY"  # pyrefly: ignore[missing-attribute]
+    multiply.inputs["Factor"].default_value = 1.0  # pyrefly: ignore[missing-attribute]
+    tree.links.new(colour, multiply.inputs["B"])
+    emission = tree.nodes.new("ShaderNodeEmission")
+    tree.links.new(multiply.outputs["Result"], emission.inputs["Color"])
+    camera = tree.nodes.new("ShaderNodeLightPath")
+    shown = tree.nodes.new("ShaderNodeMixShader")
+    tree.links.new(camera.outputs["Is Camera Ray"], shown.inputs[0])
+    tree.links.new(tree.nodes.new("ShaderNodeBsdfTransparent").outputs["BSDF"], shown.inputs[1])
+    tree.links.new(emission.outputs["Emission"], shown.inputs[2])
+    if image is None:
+        multiply.inputs["A"].default_value = MISSING_TEXTURE  # pyrefly: ignore[missing-attribute]
+        return shown.outputs["Shader"], None
+    texels = tree.nodes.new("ShaderNodeTexImage")
+    texels.image = image  # pyrefly: ignore[missing-attribute]
+    texels.interpolation = "Closest"  # pyrefly: ignore[missing-attribute]
+    tree.links.new(texels.outputs["Color"], multiply.inputs["A"])
+    if not _has_see_through_texel(image):
+        return shown.outputs["Shader"], None
+    clip = tree.nodes.new("ShaderNodeMath")
+    clip.operation = "ROUND"  # pyrefly: ignore[missing-attribute]
+    tree.links.new(texels.outputs["Alpha"], clip.inputs[0])
+    return shown.outputs["Shader"], clip.outputs["Value"]
 
 
 def _has_see_through_texel(image: bpy.types.Image) -> bool:
