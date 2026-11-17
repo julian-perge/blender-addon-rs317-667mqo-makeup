@@ -17,9 +17,12 @@ from .face_materials import DEFAULT_BRIGHTNESS, srgb_to_linear
 
 PRESET_KEY = "rs_appearance_preset"
 LIT_ATTRIBUTE = "rs_lit"
-# Face attributes the clip bake reads to fade faces: the face's skin label and its alpha at rest.
+# Face attributes the clip bake reads to fade faces: the face's skin label and its alpha at rest. A model with no face
+# skins has no label attribute.
 FACE_LABEL_ATTRIBUTE = "rs_face_label"
 FACE_ALPHA_ATTRIBUTE = "rs_face_alpha"
+# A face attribute: each polygon's face colour. The RS Scene export reads it with the face alpha (issue 143).
+FACE_COLOUR_ATTRIBUTE = "rs_face_colour"
 # A point attribute: each vertex's index in the merged model, so the parts of a player can be posed together.
 VERTEX_ATTRIBUTE = "rs_vertex"
 # A face attribute: each polygon's face index in the merged model.
@@ -47,7 +50,8 @@ def build_mesh(
     Game y points down, so a game vertex (x, y, z) becomes Blender (x, z, -y). Faces that repeat a vertex are not
     drawn. A flat-shaded face uses its one lit colour at all three corners. The mesh holds the vertices its faces use
     and, when `loose` is set, the vertices no drawn face of the model uses, in model order. Each vertex's index in the
-    model is stored in the VERTEX_ATTRIBUTE point attribute and each polygon's in the FACE_ATTRIBUTE face attribute.
+    model is stored in the VERTEX_ATTRIBUTE point attribute and each polygon's in the FACE_ATTRIBUTE face attribute,
+    with its face colour in FACE_COLOUR_ATTRIBUTE and its face alpha in FACE_ALPHA_ATTRIBUTE.
     """
     visible = set(visible_faces(model))
     drawn = [i for i, face in enumerate(model.faces) if len(set(face)) == 3 and i in visible]
@@ -115,8 +119,12 @@ def _fill_mesh(
         mesh.attributes.new(FACE_LABEL_ATTRIBUTE, "INT", "FACE").data.foreach_set(
             "value", [model.face_skins[i] for i in kept]
         )
-        alphas = model.face_alphas or [0] * len(model.faces)
-        mesh.attributes.new(FACE_ALPHA_ATTRIBUTE, "INT", "FACE").data.foreach_set("value", [alphas[i] for i in kept])
+    alphas = model.face_alphas or [0] * len(model.faces)
+    mesh.attributes.new(FACE_ALPHA_ATTRIBUTE, "INT", "FACE").data.foreach_set("value", [alphas[i] for i in kept])
+    # Every caller lights the model with light_hsl, which refuses textured faces, so every face has a face colour.
+    mesh.attributes.new(FACE_COLOUR_ATTRIBUTE, "INT", "FACE").data.foreach_set(
+        "value", [model.face_colours[i] for i in kept]
+    )
     mesh.materials.append(_material())
 
 

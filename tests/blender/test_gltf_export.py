@@ -10,11 +10,15 @@ import bmesh
 import bpy
 import pytest
 
-from rsps_toolkit.blender import export_gltf
+from rsps_toolkit.blender import appearance_collection, appearance_preview, export_gltf
+from rsps_toolkit.formats.appearance_preset import AppearancePreset
+from rsps_toolkit.formats.lighting import light_hsl
+from rsps_toolkit.formats.model import Model
 
 # glTF 2.0 specification, sections 3.6.2 (accessor component types) and 4.4 (binary glTF layout).
 COMPONENTS = {5121: ("B", 255), 5123: ("H", 65535), 5126: ("f", 1)}
 WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
+REFERENCE = json.loads((Path(__file__).parent.parent / "fixtures" / "appearance" / "reference.json").read_text())
 JSON_CHUNK = 0x4E4F534A
 BIN_CHUNK = 0x004E4942
 
@@ -504,3 +508,171 @@ def test_extra_attributes_keep_the_order_of_the_list_on_a_mesh_with_faces_on_the
         written = accessor_values(gltf, binary, primitive["attributes"][f"COLOR_{index}"])
         assert len(written) == 6
         assert {round(value[0], 1) for value in written} == {values[name]}
+
+
+def player(cache: Path) -> tuple[bpy.types.Object, dict]:
+    """A selected player mesh from Create Player's build, and the client's model of it before lighting
+    (tests/fixtures/appearance/reference.json)."""
+    case = next(c for c in REFERENCE["cases"] if not c.get("outfit") and not c["female"] and c["colours"] == [0] * 5)
+    preset = AppearancePreset(149, 430, False, tuple(case["equipment"]), tuple(case["colours"]))
+    body, shading, slots = appearance_preview.assemble_parts(preset, cache)
+    collection = appearance_collection.build_collection(body, shading, preset, "Player", slots=slots)
+    obj = appearance_collection.mesh_of(collection)
+    obj.select_set(True)
+    return obj, case["before_lighting"]
+
+
+def model_mesh(name: str, alphas: list[int]) -> bpy.types.Object:
+    """A selected mesh built as Create NPC and Make Rig build theirs, from a model of two faces with these face alphas
+    and the face colours 8741 and 960. The model has no face skins, as a Make Rig model can have none."""
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, 960],
+        face_textures=[None, None],
+        render_priorities=[0, 0],
+        face_alphas=alphas,
+        face_texture_triangles=[None, None],
+        flat_shaded=[True, True],
+    )
+    obj = bpy.data.objects.new(name, appearance_preview.build_mesh(model, light_hsl(model), name))
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.objects.link(obj)
+    obj.select_set(True)
+    return obj
+
+
+def test_the_player_has_one_unlit_material_for_each_pair_of_face_colour_and_face_alpha(cache: Path, tmp_path: Path):
+    # Row "Split" (issue 116, ADR 0026): the pairs are the client's face colours and face alphas of the faces that the
+    # mesh holds.
+    obj, before = player(cache)
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    faces = appearance_preview.face_indices(mesh)
+    assert faces is not None
+    alphas = before["face_alphas"] or [0] * before["face_count"]
+    pairs = {(before["face_colours"][face], alphas[face]) for face in faces}
+    path = tmp_path / "scene.glb"
+    assert export(path) == {"FINISHED"}
+    gltf, _ = read_glb(path)
+    assert sorted((m["extras"]["rs_face_colour"], m["extras"]["rs_alpha"]) for m in gltf["materials"]) == sorted(pairs)
+    assert all(list(m["extensions"]) == ["KHR_materials_unlit"] for m in gltf["materials"])
+    (gltf_mesh,) = gltf["meshes"]
+    assert all("COLOR_0" in primitive["attributes"] for primitive in gltf_mesh["primitives"])
+    triangles = sum(gltf["accessors"][primitive["indices"]]["count"] for primitive in gltf_mesh["primitives"]) // 3
+    assert triangles == len(mesh.polygons)
+
+
+def test_each_face_draws_with_the_material_of_its_face_colour_and_face_alpha(tmp_path: Path):
+    # Row "Split": each face of the file uses the material whose extras hold its own game values.
+    model_mesh("Fire", [0, 0])
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, binary = read_glb(path)
+    (gltf_mesh,) = gltf["meshes"]
+    drawn = []
+    for primitive in gltf_mesh["primitives"]:
+        extras = gltf["materials"][primitive["material"]]["extras"]
+        count = gltf["accessors"][primitive["indices"]]["count"] // 3
+        drawn += [(extras["rs_face_colour"], extras["rs_alpha"])] * count
+    assert sorted(drawn) == [(960, 0), (8741, 0)]
+
+
+def test_a_face_with_an_alpha_draws_blended_with_the_clients_opacity(tmp_path: Path):
+    # Row "Face alpha" (spec decision 8). The client blends a face at (256 - alpha) / 256, the rule that
+    # face_materials._show_alpha cites.
+    model_mesh("Fire", [0, 100])
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    by_alpha = {m["extras"]["rs_alpha"]: m for m in gltf["materials"]}
+    assert sorted(by_alpha) == [0, 100]
+    assert by_alpha[100]["alphaMode"] == "BLEND"
+    assert by_alpha[100]["pbrMetallicRoughness"]["baseColorFactor"][3] == pytest.approx(156 / 256)
+    assert "alphaMode" not in by_alpha[0]
+    assert list(by_alpha[100]["extensions"]) == ["KHR_materials_unlit"]
+
+
+def test_two_meshes_share_the_material_of_a_pair(tmp_path: Path):
+    # The owner chose in the build of issue 143 on 2026-11-17 that the file has one material for each pair, also when
+    # several meshes use it, and that it has the name that face_materials gives a model import's material.
+    model_mesh("Fire", [0, 0])
+    model_mesh("Embers", [0, 0])
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert sorted(m["name"] for m in gltf["materials"]) == ["RS_Colour_8741_0", "RS_Colour_960_0"]
+
+
+@pytest.mark.parametrize("attribute", ["rs_face_colour", "rs_face_alpha"])
+def test_a_mesh_built_before_meshes_stored_their_face_colours_stops_the_export(tmp_path: Path, attribute: str):
+    # Issue 143. The owner chose the wording of the message in the build of issue 143 on 2026-11-17.
+    obj = model_mesh("Fire", [0, 0])
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    mesh.attributes.remove(mesh.attributes[attribute])
+    model_mesh("Embers", [0, 0])
+    path = tmp_path / "scene.glb"
+    with pytest.raises(RuntimeError) as refusal:
+        export(path)
+    assert (
+        "Fire was built before meshes stored their face colours. Run Update Player on a player, or Create NPC or Make "
+        "Rig again on an NPC." in str(refusal.value)
+    )
+    assert "Embers" not in str(refusal.value)
+    assert not path.exists()
+
+
+def test_the_export_of_a_player_leaves_the_scene_unchanged(cache: Path, tmp_path: Path):
+    # Row "Scene unchanged": the materials of the pairs are made for the copies only.
+    obj, _ = player(cache)
+    view_layer = bpy.context.view_layer
+    assert view_layer is not None
+    view_layer.objects.active = obj
+    model_mesh("Fire", [0, 100])
+    before = scene_state()
+    export(tmp_path / "scene.glb")
+    assert scene_state() == before
+
+
+def test_each_primitive_of_a_split_mesh_has_its_faces_in_mesh_order(tmp_path: Path):
+    # Row "Shared vertices". The owner chose in the build of issue 143 on 2026-11-17 that each primitive keeps the
+    # mesh order of its faces, and that the order across primitives is left to the page. The four faces lie apart, and
+    # their face colours take turns, so each primitive holds two faces that are not next to each other in the mesh.
+    model = Model(
+        vertices=[(x, y, 0) for i in range(4) for x, y in ((200 * i, 0), (200 * i + 100, 0), (200 * i, -100))],
+        faces=[(0, 1, 2), (3, 4, 5), (6, 7, 8), (9, 10, 11)],
+        face_colours=[8741, 960, 8741, 960],
+        face_textures=[None] * 4,
+        render_priorities=[0] * 4,
+        face_alphas=[0] * 4,
+        face_texture_triangles=[None] * 4,
+        flat_shaded=[True] * 4,
+    )
+    obj = bpy.data.objects.new("Fire", appearance_preview.build_mesh(model, light_hsl(model), "Fire"))
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.objects.link(obj)
+    obj.select_set(True)
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    # The glTF x is the Blender x, and the faces start at different x.
+    face_at = {
+        round(
+            min(mesh.vertices[corner.vertex_index].co.x for corner in mesh.loops[f.loop_start : f.loop_start + 3]), 3
+        ): f.index
+        for f in mesh.polygons
+    }
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, binary = read_glb(path)
+    by_colour = {}
+    for primitive in gltf["meshes"][0]["primitives"]:
+        indices = [int(i) for (i,) in accessor_values(gltf, binary, primitive["indices"])]
+        positions = accessor_values(gltf, binary, primitive["attributes"]["POSITION"])
+        by_colour[gltf["materials"][primitive["material"]]["extras"]["rs_face_colour"]] = [
+            face_at[round(min(positions[i][0] for i in indices[start : start + 3]), 3)]
+            for start in range(0, len(indices), 3)
+        ]
+    assert by_colour == {8741: [0, 2], 960: [1, 3]}
