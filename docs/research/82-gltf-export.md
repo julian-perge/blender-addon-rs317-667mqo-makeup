@@ -729,7 +729,7 @@ The screenshots are at the `player` camera.
 | 0.45 and 0.84 | 0 | 0 |
 
 - **The check holds, evidence.** A screenshot between two keys (0.43 and 0.439 after key 21, 0.85 and 0.859 after key 42) is equal to the screenshot of the earlier key in every pixel. The pose changes at once at the key where the client frame changes.
-- **The times at a key, evidence.** 0.44 is at or after key 22, so it shows the new pose. 0.86 is before key 43, so it still shows the old pose. This confirms the guess of [Row 6](#row-6-stepped-playback) about the time 0.46 of `idle88.glb`.
+- **The times at a key, evidence.** 0.44 is at or after key 22, so it shows the new pose. 0.86 is before key 43, so it still shows the old pose. The review of issue 147 read the key times of `idle88.glb` as 32-bit floats: key 22 is at 0.46000001 seconds. So the page at 0.46 shows the earlier key there too, and the guess of [Row 6](#row-6-stepped-playback) holds.
 - **The same change as row 6, evidence.** The first change has 3,675 pixels over 32, as the change of `idle88.glb` at 0.46 had.
 - **The pictures, read.** `sheet147-step.png` puts the screenshots at 0.42, 0.439, 0.441, 0.86 and 0.861 side by side. The eye finds no difference between 0.42 and 0.439. At 0.441 and at 0.861 the player has moved a little.
 
@@ -1068,7 +1068,7 @@ The bake keys one constant value on each tick, and the exporter samples each Ble
 ### The page
 
 - **Three.js plays `STEP` as stepped, evidence.** The page reported the interpolation of each track. For `idle88.glb`: 173 tracks discrete (2300) with a `DiscreteInterpolant` and 10 linear (2301). For `wave88.glb`: 183 discrete.
-- **The pose changes at once, evidence.** In `idle88.glb`, client frame 1 starts at key 22, at 0.46 seconds. The page screenshots at `t=0.44`, `0.45`, `0.459` and `0.46` are equal in every pixel. The ones at `t=0.461` and `0.47` are equal to each other, and differ from the first 4 in 3,675 pixels by more than 32. `t=0.46` still shows frame 0. A guess is that the key time is the 32-bit float just over 0.46. In `wave88.glb`, client frame 1 starts at 0.12 seconds. The screenshots at `t=0.10`, `0.11` and `0.119` are equal in every pixel, and the one at `t=0.12` differs in 5,870 pixels by more than 32.
+- **The pose changes at once, evidence.** In `idle88.glb`, client frame 1 starts at key 22, at 0.46 seconds. The page screenshots at `t=0.44`, `0.45`, `0.459` and `0.46` are equal in every pixel. The ones at `t=0.461` and `0.47` are equal to each other, and differ from the first 4 in 3,675 pixels by more than 32. `t=0.46` still shows frame 0. The key time is the 32-bit float just over 0.46 (0.46000001), read in the review of issue 147. In `wave88.glb`, client frame 1 starts at 0.12 seconds. The screenshots at `t=0.10`, `0.11` and `0.119` are equal in every pixel, and the one at `t=0.12` differs in 5,870 pixels by more than 32.
 - **`NLA_TRACKS` blends on the page, evidence.** For `fade88-pointer.glb`, the screenshots at `t=0.10`, `0.11`, `0.119` and `0.12` all differ from each other. The same times of `fade88.glb` (mode `ACTIONS`) are equal from `0.10` to `0.119`.
 - **Not checked.** The page with the clip playing, not frozen, was not recorded. The three.js mixer loops a clip by default, and the client plays an action once. The page code has to set that.
 
