@@ -3,14 +3,19 @@
 The rows named in the tests are the rows of the test table of spec 140 (`spec/140-campfire-glb-export.md`)."""
 
 import json
+import math
 import struct
 from pathlib import Path
 
 import bmesh
 import bpy
 import pytest
+from js5_builder import build_cache
+from mathutils import Quaternion
 
-from rsps_toolkit.blender import appearance_collection, appearance_preview, export_gltf
+from rsps_toolkit.animation.frames import decode_frame_map
+from rsps_toolkit.blender import appearance_clip, appearance_collection, appearance_preview, export_gltf, npc_collection
+from rsps_toolkit.blender.face_materials import DEFAULT_BRIGHTNESS
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 from rsps_toolkit.formats.lighting import light_hsl
 from rsps_toolkit.formats.model import Model
@@ -18,7 +23,9 @@ from rsps_toolkit.formats.model import Model
 # glTF 2.0 specification, sections 3.6.2 (accessor component types) and 4.4 (binary glTF layout).
 COMPONENTS = {5121: ("B", 255), 5123: ("H", 65535), 5126: ("f", 1)}
 WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
-REFERENCE = json.loads((Path(__file__).parent.parent / "fixtures" / "appearance" / "reference.json").read_text())
+FIXTURES = Path(__file__).parent.parent / "fixtures"
+REFERENCE = json.loads((FIXTURES / "appearance" / "reference.json").read_text())
+NPC_FIXTURES = FIXTURES / "npc"
 JSON_CHUNK = 0x4E4F534A
 BIN_CHUNK = 0x004E4942
 
@@ -257,14 +264,46 @@ def scene_state() -> dict:
         },
         "materials": sorted(m.name for m in bpy.data.materials),
         "actions": sorted(action.name for action in bpy.data.actions),
-        "object actions": {
-            obj.name: obj.animation_data.action.name if obj.animation_data and obj.animation_data.action else None
-            for obj in bpy.data.objects
-        },
+        "animation data": {obj.name: animation_state(obj.animation_data) for obj in bpy.data.objects},
         "selected": sorted(obj.name for obj in bpy.data.objects if obj.select_get()),
         "active": view_layer.objects.active.name if view_layer.objects.active else None,
         "frame": scene.frame_current,
     }
+
+
+def animation_state(animation: bpy.types.AnimData | None) -> tuple | None:
+    """The active action and slot of `animation`, and its tracks with their strips."""
+    if animation is None:
+        return None
+    return (
+        animation.action.name if animation.action else None,
+        animation.action_slot.identifier if animation.action_slot else None,
+        animation.use_nla,
+        animation.use_tweak_mode,
+        [
+            (
+                track.name,
+                track.mute,
+                track.is_solo,
+                [
+                    (
+                        strip.name,
+                        strip.action.name if strip.action else None,
+                        strip.action_slot.identifier if strip.action_slot else None,
+                        strip.frame_start,
+                        strip.frame_end,
+                        strip.mute,
+                    )
+                    for strip in track.strips
+                ],
+            )
+            for track in animation.nla_tracks
+        ],
+    )
+
+
+def raw_files(folder: Path) -> dict[int, bytes]:
+    return {int(path.stem): path.read_bytes() for path in folder.glob("*.dat")}
 
 
 def test_a_material_linked_to_the_object_is_replaced_too(tmp_path: Path):
@@ -339,9 +378,10 @@ def test_the_file_has_the_edit_mode_edits_and_the_mesh_stays_in_edit_mode(tmp_pa
     assert gltf["accessors"][primitive["indices"]]["count"] == 6
 
 
-def test_objects_that_are_not_meshes_are_left_out_with_a_warning(tmp_path: Path, capfd):
+def test_objects_that_are_not_meshes_or_rigs_are_left_out_with_a_warning(tmp_path: Path, capfd):
     # The owner chose in the build of issue 141 on 2026-11-17 that the export leaves out the selected objects that are
-    # not meshes, and says which.
+    # not meshes, and says which. Since the build of issue 145 the export also writes rigs, and the owner chose there on
+    # 2026-11-17 that the warning names them.
     triangle("Ground", ("rs_lit",))
     marker = bpy.data.objects.new("Marker", None)
     scene = bpy.context.scene
@@ -351,7 +391,7 @@ def test_objects_that_are_not_meshes_are_left_out_with_a_warning(tmp_path: Path,
     path = tmp_path / "scene.glb"
     capfd.readouterr()
     export(path)
-    assert "Warning: Left out Marker: only meshes are exported." in capfd.readouterr().out.splitlines()
+    assert "Warning: Left out Marker: only meshes and rigs are exported." in capfd.readouterr().out.splitlines()
     gltf, _ = read_glb(path)
     assert [node["name"] for node in gltf["nodes"]] == ["Ground"]
 
@@ -690,3 +730,307 @@ def test_each_primitive_of_a_split_mesh_has_its_faces_in_mesh_order(tmp_path: Pa
             for start in range(0, len(indices), 3)
         ]
     assert by_colour == {8741: [0, 2], 960: [1, 3]}
+
+
+def rigged_player(cache: Path) -> bpy.types.Object:
+    """The rig of a player from Create Player's build, selected with the player's meshes."""
+    obj, _ = player(cache)
+    collection = obj.users_collection[0]
+    rig = appearance_collection.armature_of(collection)
+    rig.select_set(True)
+    return rig
+
+
+# The keyed joints of the test motions, as rotations of the joints from their rest frames.
+SITTING = {
+    "thigh.L": Quaternion((1, 0, 0), math.radians(-80)),
+    "thigh.R": Quaternion((1, 0, 0), math.radians(-85)),
+    "shin.L": Quaternion((1, 0, 0), math.radians(75)),
+    "spine": Quaternion((0, 1, 0), math.radians(10)),
+}
+WAVE = {
+    1: {"upper_arm.R": Quaternion((0, 0, 1), math.radians(120))},
+    5: {"upper_arm.R": Quaternion((0, 0, 1), math.radians(140))},
+    9: {"upper_arm.R": Quaternion((0, 0, 1), math.radians(120))},
+}
+
+
+def hand_keyed(
+    rig: bpy.types.Object,
+    name: str,
+    keys: dict[int, dict[str, Quaternion]],
+    start: int,
+    interpolation: str,
+    track_name: str = appearance_clip.USER_TRACK,
+) -> bpy.types.Action:
+    """An action of rotation keys on the joints, made as the hand-made motion runbook makes one, on a strip on the
+    track `track_name`. The first key of `keys` is on frame 1, and the action and its strip start on frame `start`."""
+    action = bpy.data.actions.new(name)
+    slot = action.slots.new(id_type="OBJECT", name=rig.name)
+    keyframes = action.layers.new("Layer").strips.new(type="KEYFRAME")
+    assert isinstance(keyframes, bpy.types.ActionKeyframeStrip)
+    bag = keyframes.channelbag(slot, ensure=True)
+    for frame, rotations in keys.items():
+        for joint, rotation in rotations.items():
+            path = f'pose.bones["{joint}"].rotation_quaternion'
+            for index in range(4):
+                curve = bag.fcurves.find(path, index=index) or bag.fcurves.new(path, index=index, group_name=joint)
+                point = curve.keyframe_points.insert(frame + start - 1, rotation[index], options={"FAST"})
+                point.interpolation = interpolation
+    animation = rig.animation_data or rig.animation_data_create()
+    track = animation.nla_tracks.get(track_name)
+    if track is None:
+        track = animation.nla_tracks.new()
+        track.name = track_name
+    strip = track.strips.new(name, start, action)
+    strip.action_slot = slot
+    return action
+
+
+def held_pose(rig: bpy.types.Object, start: int = 1) -> bpy.types.Action:
+    """The sitting pose, held from frame `start` for 20 frames: each joint has the same key on both frames."""
+    return hand_keyed(rig, "Sitting", {1: SITTING, 21: SITTING}, start, "CONSTANT")
+
+
+def npc_with_clip(tmp_path: Path, monkeypatch) -> bpy.types.Object:
+    """The rig of the gnome (NPC 4233) with its stand clip (sequence 195) baked by Bake NPC Clip, selected with its
+    mesh. The test cache has no sequences or frames, so the frame map of the rig is read from the clip folder."""
+    folder = tmp_path / "npc cache"
+    build_cache(folder, npcs=raw_files(NPC_FIXTURES), models=raw_files(NPC_FIXTURES / "models"))
+    stand = NPC_FIXTURES / "clips" / "195"
+    frame_map = decode_frame_map((stand / "maps" / "319.dat").read_bytes())
+    monkeypatch.setattr(npc_collection, "stand_frame_map", lambda store, npc: (319, frame_map))
+    collection = npc_collection.create_npc(4233, folder, DEFAULT_BRIGHTNESS)
+    appearance_clip.bake_npc_clip(collection, stand)
+    for obj in collection.objects:
+        obj.select_set(True)
+    return appearance_collection.armature_of(collection)
+
+
+def strip_actions(rig: bpy.types.Object) -> list[str]:
+    animation = rig.animation_data
+    assert animation is not None
+    return [strip.action.name for track in animation.nla_tracks for strip in track.strips if strip.action is not None]
+
+
+def moves(gltf: dict, binary: bytes, sampler: dict) -> bool:
+    values = accessor_values(gltf, binary, sampler["output"])
+    return any(not all(math.isclose(a, b, abs_tol=1e-6) for a, b in zip(value, values[0])) for value in values)
+
+
+def test_each_action_of_a_player_and_an_npc_rig_is_one_animation_with_the_actions_name(
+    cache: Path, tmp_path: Path, monkeypatch
+):
+    # Row "Clips" (spec decision 6). The held pose and the wave are on one track, as the hand-made motion runbook puts
+    # them, and the NPC's baked clip is on the RS clips track.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    hand_keyed(rig, "Wave", WAVE, 30, "CONSTANT")
+    npc = npc_with_clip(tmp_path, monkeypatch)
+    path = tmp_path / "scene.glb"
+    assert export(path) == {"FINISHED"}
+    gltf, _ = read_glb(path)
+    assert sorted(animation["name"] for animation in gltf["animations"]) == sorted(
+        ["Sitting", "Wave", *strip_actions(npc)]
+    )
+    # The clips move the joints of the rigs, and each mesh is skinned to the joints of its rig.
+    assert [("skin" in node) for node in gltf["nodes"] if "mesh" in node] == [True, True]
+
+
+def test_the_active_action_of_a_rig_is_one_animation_too(cache: Path, tmp_path: Path):
+    # Row "Clips" (spec decision 6): the rig's active action and the actions of its strips.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    wave = hand_keyed(rig, "Wave", WAVE, 30, "CONSTANT")
+    animation = rig.animation_data
+    assert animation is not None
+    track = animation.nla_tracks[appearance_clip.USER_TRACK]
+    track.strips.remove(track.strips[-1])
+    animation.action = wave
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert sorted(animation["name"] for animation in gltf["animations"]) == ["Sitting", "Wave"]
+
+
+def test_an_action_that_no_selected_rig_plays_is_not_exported(cache: Path, tmp_path: Path):
+    # Spec rule 10: the clips are the actions of the selected rigs, not every action of the file.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    other = hand_keyed(rig, "Elsewhere", WAVE, 30, "CONSTANT")
+    animation = rig.animation_data
+    assert animation is not None
+    track = animation.nla_tracks[appearance_clip.USER_TRACK]
+    track.strips.remove(track.strips[-1])
+    other.use_fake_user = True
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert [animation["name"] for animation in gltf["animations"]] == ["Sitting"]
+
+
+@pytest.mark.parametrize("interpolation", ["CONSTANT", "BEZIER"])
+def test_every_channel_that_moves_is_step(cache: Path, tmp_path: Path, monkeypatch, interpolation: str):
+    # Row "STEP" (issue 120, spec decision 10): the client shows one frame on each tick and does not blend between
+    # frames. The hand-made motion runbook keys constant keys, and a key that the user adds by hand is a Bezier key.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    hand_keyed(rig, "Wave", WAVE, 30, interpolation)
+    npc = npc_with_clip(tmp_path, monkeypatch)
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, binary = read_glb(path)
+    moving = [
+        (animation["name"], sampler["interpolation"])
+        for animation in gltf["animations"]
+        for sampler in animation["samplers"]
+        if moves(gltf, binary, sampler)
+    ]
+    assert {name for name, _ in moving} == {"Wave", *strip_actions(npc)}
+    assert [m for m in moving if m[1] != "STEP"] == []
+
+
+def test_the_held_pose_has_a_channel_for_each_keyed_joint_with_the_keyed_value(cache: Path, tmp_path: Path):
+    # Row "Held pose": no channel of the sitting pose moves, and the page still needs each keyed joint. A glTF joint
+    # has no rest pose of its own, so its value is the rest rotation of its node turned by the keyed rotation.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, binary = read_glb(path)
+    (sitting,) = gltf["animations"]
+    rotations = {}
+    for channel in sitting["channels"]:
+        if channel["target"]["path"] == "rotation":
+            node = gltf["nodes"][channel["target"]["node"]]
+            values = accessor_values(gltf, binary, sitting["samplers"][channel["sampler"]]["output"])
+            rotations[node["name"]] = (node.get("rotation", [0, 0, 0, 1]), values)
+    assert set(SITTING) <= set(rotations)
+    for joint, keyed in SITTING.items():
+        rest, values = rotations[joint]
+        x, y, z, w = rest
+        expected = Quaternion((w, x, y, z)) @ keyed
+        for x, y, z, w in values:
+            assert Quaternion((w, x, y, z)).rotation_difference(expected).angle == pytest.approx(0, abs=1e-4)
+
+
+def test_no_animation_has_interleave_extras(cache: Path, tmp_path: Path, monkeypatch):
+    # Row "No interleave" (spec decision 1): the first version writes no interleave list.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    npc_with_clip(tmp_path, monkeypatch)
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert gltf["animations"]
+    assert ["interleave" in json.dumps(animation.get("extras", {})) for animation in gltf["animations"]] == [
+        False
+    ] * len(gltf["animations"])
+
+
+def test_the_export_of_rigs_leaves_their_actions_tracks_and_active_actions_unchanged(
+    cache: Path, tmp_path: Path, monkeypatch
+):
+    # Spec Boundaries "Always": the scene keeps its actions, NLA tracks and active actions.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    wave = hand_keyed(rig, "Wave", WAVE, 30, "CONSTANT")
+    animation = rig.animation_data
+    assert animation is not None
+    animation.action = wave
+    npc_with_clip(tmp_path, monkeypatch)
+    view_layer = bpy.context.view_layer
+    assert view_layer is not None
+    view_layer.objects.active = rig
+    before = scene_state()
+    export(tmp_path / "scene.glb")
+    assert scene_state() == before
+
+
+def test_each_clip_starts_at_0_seconds(cache: Path, tmp_path: Path):
+    # The owner chose in the build of issue 145 on 2026-11-17 that each clip starts at 0 seconds, so that the page plays
+    # the wave at once. The wave starts on frame 30.
+    rig = rigged_player(cache)
+    hand_keyed(rig, "Wave", WAVE, 30, "CONSTANT")
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    (wave,) = gltf["animations"]
+    assert {gltf["accessors"][sampler["input"]]["min"][0] for sampler in wave["samplers"]} == {0}
+
+
+def test_a_muted_strip_and_a_strip_on_a_muted_track_are_clips_too(cache: Path, tmp_path: Path):
+    # The owner chose in the build of issue 145 on 2026-11-17 that each action on a strip becomes a clip, also when the
+    # strip or its track is muted (spec decision 6).
+    rig = rigged_player(cache)
+    held_pose(rig)
+    hand_keyed(rig, "Wave", WAVE, 30, "CONSTANT")
+    animation = rig.animation_data
+    assert animation is not None
+    animation.nla_tracks[appearance_clip.USER_TRACK].strips[1].mute = True
+    hand_keyed(rig, "Nod", WAVE, 60, "CONSTANT", "Muted")
+    animation.nla_tracks["Muted"].mute = True
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert sorted(animation["name"] for animation in gltf["animations"]) == ["Nod", "Sitting", "Wave"]
+
+
+def test_a_rig_with_no_mesh_stops_the_export(cache: Path, tmp_path: Path):
+    # The owner chose in the build of issue 145 on 2026-11-17 that a selection with a rig and no mesh stops the export,
+    # because the page has nothing to draw.
+    rig = rigged_player(cache)
+    for obj in bpy.context.selected_objects or []:
+        obj.select_set(obj == rig)
+    path = tmp_path / "scene.glb"
+    with pytest.raises(RuntimeError, match="Select the meshes to export."):
+        export(path)
+    assert not path.exists()
+
+
+def test_the_message_names_the_meshes_and_the_rigs(cache: Path, tmp_path: Path, capfd):
+    # The owner chose the wording in the build of issue 145 on 2026-11-17.
+    rigged_player(cache)
+    path = tmp_path / "scene.glb"
+    capfd.readouterr()
+    export(path)
+    assert f"Info: Exported 1 mesh and 1 rig to {path}." in capfd.readouterr().out.splitlines()
+
+
+def test_a_clip_has_no_extras_and_the_action_keeps_its_custom_properties(cache: Path, tmp_path: Path, monkeypatch):
+    # The owner chose in the build of issue 145 on 2026-11-17 that the clips have no extras, because the clip record of
+    # a baked clip holds the local path of its cache, and the page is public.
+    rig = rigged_player(cache)
+    held_pose(rig)["rs_note"] = 7
+    npc = npc_with_clip(tmp_path, monkeypatch)
+    records = {name: bpy.data.actions[name].get(appearance_collection.CLIP_KEY) for name in strip_actions(npc)}
+    assert all(records.values())
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert sorted(animation["name"] for animation in gltf["animations"]) == sorted(["Sitting", *strip_actions(npc)])
+    assert [animation.get("extras") for animation in gltf["animations"]] == [None] * len(gltf["animations"])
+    assert bpy.data.actions["Sitting"]["rs_note"] == 7
+    assert {name: bpy.data.actions[name].get(appearance_collection.CLIP_KEY) for name in records} == records
+
+
+def test_the_active_action_held_aside_in_tweak_mode_is_a_clip_too(cache: Path, tmp_path: Path):
+    # Row "Clips" (spec decision 6): in tweak mode Blender holds the rig's active action aside.
+    rig = rigged_player(cache)
+    held_pose(rig)
+    wave = hand_keyed(rig, "Wave", WAVE, 30, "CONSTANT")
+    animation = rig.animation_data
+    assert animation is not None
+    track = animation.nla_tracks[appearance_clip.USER_TRACK]
+    track.strips.remove(track.strips[-1])
+    animation.action = wave
+    for other in animation.nla_tracks:
+        other.select = other == track
+    track.strips[0].select = True
+    animation.use_tweak_mode = True
+    assert animation.action_tweak_storage == wave
+    path = tmp_path / "scene.glb"
+    export(path)
+    gltf, _ = read_glb(path)
+    assert sorted(animation["name"] for animation in gltf["animations"]) == ["Sitting", "Wave"]
+    assert animation.use_tweak_mode

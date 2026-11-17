@@ -1,11 +1,12 @@
-"""File > Export > RS Scene (.glb): the selected meshes as one binary glTF file that the profile page draws with no
-lights (spec 140, ADR 0028).
+"""File > Export > RS Scene (.glb): the selected meshes and rigs as one binary glTF file that the profile page draws
+with no lights, with one clip for each action of a rig (spec 140, ADR 0028).
 
 The operator exports copies of the meshes, because the stock exporter validates the meshes that it exports and so
 removes faces from them (`docs/research/82-gltf-export.md`, "Form of the exporter"). On the copy, each face that uses
 the vertices of an earlier face gets vertices of its own, so that the validation keeps it (issue 121). Each copy draws
 one colour attribute through unlit materials, and the stock exporter writes the file with fixed settings. A copy of a
-player or NPC mesh gets one material for each pair of face colour and face alpha, with the pair as extras (issue 143)."""
+player or NPC mesh gets one material for each pair of face colour and face alpha, with the pair as extras (issue 143).
+The rigs are exported as copies too, so that each action gets an NLA track of its own (issue 145)."""
 
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -28,7 +29,8 @@ type MaterialKey = tuple[int, int] | None
 
 
 class RS_OT_export_scene(bpy.types.Operator, ExportHelper):
-    """Export the selected meshes as one binary glTF file whose unlit materials draw a colour attribute"""
+    """Export the selected meshes and rigs as one binary glTF file whose unlit materials draw a colour attribute, with
+    one clip for each action of a rig"""
 
     bl_idname = "export_scene.rs_scene"
     bl_label = "Export RS Scene"
@@ -68,6 +70,7 @@ class RS_OT_export_scene(bpy.types.Operator, ExportHelper):
         extras = attribute_names(self.extra_attributes)
         selected = list(context.selected_objects)
         meshes = [obj for obj in selected if obj.type == "MESH"]
+        rigs = [obj for obj in selected if obj.type == "ARMATURE"]
         if not meshes:
             problems = ["Select the meshes to export."]
         else:
@@ -77,10 +80,10 @@ class RS_OT_export_scene(bpy.types.Operator, ExportHelper):
         if problems:
             self.report({"ERROR"}, " ".join(problems))
             return {"CANCELLED"}
-        left_out = [obj.name for obj in selected if obj.type != "MESH"]
+        left_out = [obj.name for obj in selected if obj.type not in ("MESH", "ARMATURE")]
         if left_out:
-            self.report({"WARNING"}, f"Left out {', '.join(left_out)}: only meshes are exported.")
-        with _copies(context.scene.collection, meshes, colour, extras) as copies:
+            self.report({"WARNING"}, f"Left out {', '.join(left_out)}: only meshes and rigs are exported.")
+        with _copies(context.scene.collection, meshes, rigs, colour, extras) as copies:
             for obj in selected:
                 obj.select_set(False)
             for copy in copies:
@@ -90,8 +93,10 @@ class RS_OT_export_scene(bpy.types.Operator, ExportHelper):
             finally:
                 for obj in selected:
                     obj.select_set(True)
-        noun = "mesh" if len(meshes) == 1 else "meshes"
-        self.report({"INFO"}, f"Exported {len(meshes)} {noun} to {self.filepath}.")
+        counted = f"{len(meshes)} {'mesh' if len(meshes) == 1 else 'meshes'}"
+        if rigs:
+            counted += f" and {len(rigs)} {'rig' if len(rigs) == 1 else 'rigs'}"
+        self.report({"INFO"}, f"Exported {counted} to {self.filepath}.")
         return {"FINISHED"}
 
 
@@ -131,7 +136,14 @@ def write_glb(path: Path) -> None:
     """Write the selected objects to `path` with the stock exporter. The settings are fixed (spec 140, rule 11): a
     binary file, the custom properties as extras and no Draco. The file holds the active scene only. The colour settings
     are the defaults, and they are given here because the copies need them: a material's colour attribute is `COLOR_0`,
-    and every other colour attribute of the mesh follows in the order of the mesh."""
+    and every other colour attribute of the mesh follows in the order of the mesh.
+
+    The animation settings write one clip for each action of a rig copy (spec 140, rule 10). The animation mode
+    `ACTIONS` is the default, and it writes `STEP` for a channel whose keys are constant (`docs/research/82-gltf-export.md`,
+    row 6). The fallback `STEP` also makes a channel of other keys `STEP`, because the client does not blend between
+    frames. With one rig in the file, the default `export_anim_single_armature` adds every action of the file that keys a
+    bone, so it is off. Each clip starts at 0 seconds, so that the page plays it at once. The owner chose this in the
+    build of issue 145 on 2026-11-17."""
     # The stubs do not list the operators of add-ons, and the glTF exporter is one.
     bpy.ops.export_scene.gltf(  # pyrefly: ignore[missing-attribute]
         filepath=str(path),
@@ -142,18 +154,30 @@ def write_glb(path: Path) -> None:
         export_draco_mesh_compression_enable=False,
         export_vertex_color="MATERIAL",
         export_all_vertex_colors=True,
+        export_animation_mode="ACTIONS",
+        export_sampling_interpolation_fallback="STEP",
+        export_anim_single_armature=False,
+        export_anim_slide_to_zero=True,
     )
 
 
 @contextmanager
 def _copies(
-    collection: bpy.types.Collection, objects: Sequence[bpy.types.Object], colour: str, extras: Sequence[str]
+    collection: bpy.types.Collection,
+    objects: Sequence[bpy.types.Object],
+    rigs: Sequence[bpy.types.Object],
+    colour: str,
+    extras: Sequence[str],
 ) -> Iterator[list[bpy.types.Object]]:
-    """Copies of `objects` and their meshes in `collection`, with the names of the originals. Each mesh copy has only
-    the colour attributes `colour` and `extras`, and unlit materials that draw `colour`. The meshes share one material
-    for each key. On leaving, the copies and the materials are removed and the originals get their names back."""
+    """Copies of the mesh objects `objects` and their meshes, and of the armature objects `rigs`, in `collection`, with
+    the names of the originals. Each mesh copy has only the colour attributes `colour` and `extras`, and unlit materials
+    that draw `colour`. The meshes share one material for each key. A mesh copy that a rig of `rigs` moves through its
+    parent or an Armature modifier is moved by the copy of that rig. Each rig copy plays a copy of each of its actions
+    with no custom properties, on a track of its own (`_one_track_per_action`).
+    On leaving, the copies and the materials are removed and the originals get their names back."""
     materials: dict[MaterialKey, bpy.types.Material] = {}
     mesh_copies: dict[bpy.types.Mesh, bpy.types.Mesh] = {}
+    action_copies: dict[bpy.types.Action, bpy.types.Action] = {}
     copies: list[bpy.types.Object] = []
     pairs: list[tuple[bpy.types.ID, bpy.types.ID]] = []
     renamed: list[tuple[bpy.types.ID, str]] = []
@@ -165,7 +189,25 @@ def _copies(
             _draw_unlit(materials[key], colour, 0 if key is None else key[1])
         return materials[key]
 
+    def action_copy(action: bpy.types.Action) -> bpy.types.Action:
+        # A baked clip's action holds its clip record, with the local path of the cache, as a custom property, and the
+        # stock exporter writes the custom properties of an action as extras. The owner chose in the build of issue
+        # 145 on 2026-11-17 that the clips have no extras.
+        if action not in action_copies:
+            action_copies[action] = action.copy()
+            pairs.append((action, action_copies[action]))
+            for key in list(action_copies[action].keys()):
+                del action_copies[action][key]
+        return action_copies[action]
+
     try:
+        rig_copies: dict[bpy.types.Object, bpy.types.Object] = {}
+        for rig in rigs:
+            rig_copies[rig] = rig.copy()
+            copies.append(rig_copies[rig])
+            collection.objects.link(rig_copies[rig])
+            pairs.append((rig, rig_copies[rig]))
+            _one_track_per_action(rig, rig_copies[rig], action_copy)
         for obj in objects:
             mesh = obj.data
             assert isinstance(mesh, bpy.types.Mesh)
@@ -178,6 +220,11 @@ def _copies(
             copy.data = mesh_copies[mesh]
             for slot in copy.material_slots:
                 slot.link = "DATA"
+            if copy.parent in rig_copies:
+                copy.parent = rig_copies[copy.parent]
+            for modifier in copy.modifiers:
+                if isinstance(modifier, bpy.types.ArmatureModifier) and modifier.object in rig_copies:
+                    modifier.object = rig_copies[modifier.object]
             collection.objects.link(copy)
             pairs.append((obj, copy))
         for original, copy in pairs:
@@ -189,12 +236,57 @@ def _copies(
     finally:
         for copy in copies:
             bpy.data.objects.remove(copy)
+        for action in action_copies.values():
+            bpy.data.actions.remove(action)
         for mesh in mesh_copies.values():
             bpy.data.meshes.remove(mesh)
         for material in materials.values():
             bpy.data.materials.remove(material)
         for original, name in renamed:
             original.name = name
+
+
+def _played_actions(rig: bpy.types.Object) -> list[tuple[bpy.types.Action, bpy.types.ActionSlot | None]]:
+    """Each action of `rig` once, with the slot that it first plays: the active action, then the action of each strip of
+    the tracks, also of a muted strip or track. The owner chose in the build of issue 145 on 2026-11-17 that a muted
+    strip is a clip too, and spec decision 6 gives one clip for each action. In tweak mode, Blender holds the active
+    action aside and has no slot for it, so it plays its only slot for objects, if it has one (a guess of that build)."""
+    animation = rig.animation_data
+    if animation is None:
+        return []
+    if animation.use_tweak_mode:
+        active = animation.action_tweak_storage
+        slots = [] if active is None else [slot for slot in active.slots if slot.target_id_type == "OBJECT"]
+        played = [(active, slots[0] if len(slots) == 1 else None)]
+    else:
+        played = [(animation.action, animation.action_slot)]
+    played += [(strip.action, strip.action_slot) for track in animation.nla_tracks for strip in track.strips]
+    first: dict[bpy.types.Action, bpy.types.ActionSlot | None] = {}
+    for action, slot in played:
+        if action is not None and action not in first:
+            first[action] = slot
+    return list(first.items())
+
+
+def _one_track_per_action(
+    rig: bpy.types.Object, copy: bpy.types.Object, action_copy: Callable[[bpy.types.Action], bpy.types.Action]
+) -> None:
+    """Give `copy` no active action and one NLA track for each action of `rig`, with the copy of that action that
+    `action_copy` gives. The stock exporter writes the action of a track with one strip as a clip, and leaves out a
+    track with more strips and a muted strip (`io_scene_gltf2/blender/exp/animation/action.py`, `__track_extract`). A
+    strip plays the slot of the copy that has the identifier of the rig's slot, which tells the exporter which channels
+    of the action are the rig's."""
+    copy.animation_data_clear()
+    played = _played_actions(rig)
+    if not played:
+        return
+    copied = copy.animation_data_create()
+    for action, slot in played:
+        new = action_copy(action)
+        track = copied.nla_tracks.new()
+        strip = track.strips.new(new.name, round(new.frame_range[0]), new)
+        if slot is not None:
+            strip.action_slot = next(s for s in new.slots if s.identifier == slot.identifier)
 
 
 def _prepare_mesh(
