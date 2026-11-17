@@ -2,7 +2,7 @@
 
 This note belongs to [issue 82](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/82) and follows [spec 82](../../spec/82-gltf-export-findings.md). It records what survives when Blender's stock glTF exporter writes a region import and a player with a clip, and a three.js page draws the file. Terms follow [GLOSSARY.md](../../GLOSSARY.md). "Square", "stock export" and "joined export" are used as the spec uses them.
 
-The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). Rows 9, 10 and 11 and the size table were measured on 2026-11-16 for [issue 86](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/86). Rows 1, 12 and 13 and the game values of the player were measured on 2026-11-16 for [issue 87](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/87). The rows that say "not measured yet" belong to issues 88 and 89.
+The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). Rows 9, 10 and 11 and the size table were measured on 2026-11-16 for [issue 86](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/86). Rows 1, 12 and 13 and the game values of the player were measured on 2026-11-16 for [issue 87](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/87). Rows 5, 6 and 14 were measured on 2026-11-16 for [issue 88](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/88). Issue 89 writes the form of the exporter and opens the issues.
 
 Each cause is marked as evidence or as a guess. "Read" means that the file or the picture was opened and read in the session that wrote the row.
 
@@ -25,6 +25,9 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 - **Row 12 survives.** On the lit page, the straps on the torso and the belt on the skirt look as in the unlit render, at 2 frames and 2 cameras. The pixels that differ by more than 32 lie on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band. The flat page gave the same result.
 - **Row 13 survives.** With no shadow, the lit player on the joined 16 square does not look like it floats. The lowest point of the player is 7.8 units under the flat tile, and the pictures put it on the boots.
 - **The Fire cape is left out.** Create Player refuses it, because 24 of its faces have a texture ([issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103)). So no textured face of a player was exported.
+- **Row 5 survives for the idle clip and the Wave emote.** Both clips, baked with the Bones method, play on the page. At 3 frames of each, the page differs from the unlit render by a mean of 1.24 to 1.31 of 255, as the still player of issue 87 does. The Wave emote (sequence 863) hides the flail for the whole clip. The exporter leaves the hidden flail out of the file, so the page shows no flail either. The visibility keys of a held item do not export.
+- **Row 6 survives with the default animation mode.** The client shows one frame on each tick and does not blend between frames. The exporter samples each Blender frame and writes `STEP` for every channel that moves, and three.js plays `STEP` with its discrete interpolant. On the page the pose stays the same until the key of the next client frame, and then changes at once. With the animation mode `NLA_TRACKS`, the exporter writes `LINEAR`, and the page blends between ticks. That does not survive.
+- **Row 14 does not survive.** In a clip with a fade group (sequence 1994), the fade does not export. The file has no alpha on the fade materials and no channel for the fade, also with the experimental animation pointer on. The page draws the player opaque on every frame.
 
 ## Environment
 
@@ -39,7 +42,7 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 | WebGL renderer string | `ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)`. This is the real GPU, not a software renderer. |
 | Region | `48_50` of snapshot 430, imported by `region_import.import_region` at the default brightness. The import reported 4096 tiles, 1874 placements as 1894 objects, 185 shared meshes and 1154 own meshes. |
 | Exporter settings of the player | `player-stock.glb` uses the settings above. `player-stock-extras.glb`, `player-extras.glb` and `player-lit.glb` add `export_extras=True`. All four export the animation with the defaults. |
-| Add-on code | Commit bd43fcd for rows 2 and 3, commit d8eb169 for rows 4, 7 and 8, commit 015a089 for rows 9, 10 and 11, and commit 955f868 for rows 1, 12 and 13 |
+| Add-on code | Commit bd43fcd for rows 2 and 3, commit d8eb169 for rows 4, 7 and 8, commit 015a089 for rows 9, 10 and 11, commit 955f868 for rows 1, 12 and 13, and commit 230d34b for rows 5, 6 and 14 |
 
 The page reported 60.0 fps and 16.66 or 16.67 ms for each frame on every run of issues 84 and 85, with 1 to 446 draw calls.
 
@@ -72,7 +75,11 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | `player87.py` | The Blender script of issue 87. It builds the player with Create Player, puts its rig at the tile-to-position point of a tile, and bakes the stance clip with the Bones method. Step `inspect` prints the objects, materials, attributes, rig and clip. Step `stock` writes `player-stock.glb` and `player-stock-extras.glb`. Step `export` splits the materials, writes `player-extras.glb`, adds the player cameras to `views.json`, renders the player, and writes `player87.json`. Step `lit` splits the materials, gives them the unlit shape of `rs_lit`, writes `player-lit.glb` and renders the player again. See [The player](#the-player). |
 | `glbjson87.py`, `cliptimes87.py`, `colours87.py` | Print the materials, primitives, skin, clip and extras of a `.glb` file, the key times and the interpolation of its clip, and the number of distinct values of `COLOR_0` and `COLOR_1` in each primitive. |
 | `shots87.sh`, `shots87lit.sh` | The page screenshots of issue 87, flat and lit. The page's reports are in `shots87.jsonl` and `shots87lit.jsonl`. |
-| `page/index.html`, `page/main.js` | The scratch page. |
+| `alpha88.py` | Prints the frames, the durations, the opcodes, the held items and the number of alpha transforms (type 5) of some sequences of the cache. |
+| `player88.py` | The Blender script of issue 88. It builds the player as `player87.py` does, bakes one clip with the Bones method from frame 1, gives the shared player material the unlit shape of `rs_lit` (see [The lit player](#the-lit-player)), exports the player, and renders it at 3 frames at the `player` camera. Step `idle` bakes sequence 2061 as a pose, step `wave` bakes sequence 863 as an action, and step `fade` bakes sequence 1994 as an action and exports it twice. Each step writes `player88-<step>.json` to `out/`. |
+| `glb88.py`, `linear88.py`, `changes88.py` | Print the nodes, the materials and the channels of the clip of a `.glb` file by path, interpolation and key count. Print each `LINEAR` channel whose 2 keys differ. Print the keys where a channel of the clip changes. |
+| `shots88.sh`, `sheet88.py` | The page screenshots of issue 88, and the render and the page of each frame side by side. The page's reports are in `shots88.jsonl`. |
+| `page/index.html`, `page/main.js` | The scratch page. Issue 88 added the interpolation of each track of each clip to the report. |
 | `page/serve.mjs` | A static file server for `<scratch folder>` on 127.0.0.1. |
 | `page/shot.mjs` | Starts the server, opens the page in headless Chrome at 1920x1080, waits until the page has measured 3 seconds (or the number of seconds of its third argument), saves a screenshot to `out/` and prints the page's report as one JSON line. It exits with code 2 when the WebGL renderer string names a software renderer. The environment variable `CHROME_ARGS` adds more Chrome arguments. |
 | `page/node_modules/` | The local copy of three.js and Playwright. |
@@ -215,6 +222,23 @@ node <scratch folder>/page/shot.mjs loc-page-low-87.png "file=loc.glb&view=low"
 
 `compare.py` and `diffmap.py` ran the same way for the `player-side` camera, for frame 26, and for the lit renders and screenshots.
 
+The commands of issue 88. `player88.py` needs the `views.json` that `export.py` and `player87.py` wrote.
+
+```bash
+uv run python3 <scratch folder>/alpha88.py <repo>/src <path to cache> 863 2061 1994
+bash <scratch folder>/run-blender.sh <repo> <path to cache> player88 idle
+bash <scratch folder>/run-blender.sh <repo> <path to cache> player88 wave
+bash <scratch folder>/run-blender.sh <repo> <path to cache> player88 fade
+uv run python3 <scratch folder>/glb88.py <scratch folder>/out/idle88.glb <scratch folder>/out/wave88.glb <scratch folder>/out/fade88.glb <scratch folder>/out/fade88-pointer.glb
+uv run python3 <scratch folder>/linear88.py <scratch folder>/out/idle88.glb
+uv run python3 <scratch folder>/changes88.py <scratch folder>/out/idle88.glb
+bash <scratch folder>/shots88.sh
+<scratch folder>/compare.py <scratch folder>/out/idle88-blender-player-f1.png <scratch folder>/out/idle88-page-player-f1.png
+<scratch folder>/sheet88.py <scratch folder>/out/sheet88-idle.png <scratch folder>/out/idle88-{blender,page}-player-f1.png <scratch folder>/out/idle88-{blender,page}-player-f70.png <scratch folder>/out/idle88-{blender,page}-player-f200.png
+```
+
+`compare.py` ran the same way for each frame of each clip and for the pairs of screenshots of row 6. `linear88.py` and `changes88.py` ran the same way for the other files.
+
 To look at the page by hand, run `node <scratch folder>/page/serve.mjs` and open `http://127.0.0.1:8082/page/index.html?file=terrain16.glb&view=test`.
 
 ### What `export.py` exports
@@ -237,8 +261,8 @@ The 16 square is centred on tile 3080, 3250. It covers tiles x 3072 to 3087 and 
 | 2. Nearest sampler | Yes for magnification. The minification filter uses mipmaps. | The sampler in the glTF JSON of `loc.glb`, `terrain16.glb` and `terrain16-direct.glb`. See [Row 2](#row-2-nearest-sampler). | `magFilter` 9728, `minFilter` 9984 |
 | 3. Unlit terrain | No | The materials in the glTF JSON of `terrain16.glb`, and the page screenshot next to the unlit render. See [Row 3](#row-3-unlit-terrain). | All 636,551 drawn pixels differ, 633,671 of them by more than 32 of 255. The mean difference is 217. |
 | 4. Scenery materials | No for the stock form. Yes for the joined form. | The materials in the glTF JSON of `stock16.glb` and `joined16.glb`, and the page screenshots next to the unlit render. See [Row 4](#row-4-scenery-materials). | Stock: 96 lit materials, 446 draw calls. Joined: 6 unlit materials, 7 draw calls, mean difference 1.6 of 255 from the render. |
-| 5. Bones-method clip | Not measured yet (issue 88) | | |
-| 6. Stepped playback | Not measured yet (issue 88) | | |
+| 5. Bones-method clip | Yes for the idle clip and the Wave emote. The visibility keys of a held item do not export: the exporter leaves out an object that is hidden when it exports. | The clips in the glTF JSON of `idle88.glb` and `wave88.glb`, and the page screenshots next to the unlit renders at 3 frames of each clip, read. See [Row 5](#row-5-bones-method-clip). | Mean difference 1.25 to 1.31 of 255 (idle) and 1.24 to 1.25 (Wave). 486 to 542 pixels differ by more than 32. |
+| 6. Stepped playback | Yes with the default animation mode (`ACTIONS`). No with `NLA_TRACKS`, which writes `LINEAR`. | The client rule from the 149 bytecode and the client runs of `docs/research/osrs-149-animation.md`, the samplers in the glTF JSON, the interpolants that three.js reported, and page screenshots between two keys. See [Row 6](#row-6-stepped-playback). | Idle: 173 `STEP` and 10 `LINEAR` channels, and each `LINEAR` channel moves by at most 1.4e-5 units. Wave: 183 `STEP`. Between two keys the page is equal to the earlier key in every pixel. |
 | 7. Face order | Yes, when each face has vertices of its own. No for a face that uses the same three vertices as another face: the exporter removes it. | The index accessors of `joined16.glb` against the Blender meshes, and two stacked faces in both orders. See [Row 7](#row-7-face-order). | 14,627 of 14,627 triangles keep their place. The stock form of the 16 square loses 409 faces. |
 | 8. Render priority | No for the stock form. Yes for the joined form in priority order on the 16 square, except that the faces with a face alpha are darker on the page (the blend of row 7). | The page screenshots of the joined 16 square in two face orders next to the unlit renders. See [Row 8](#row-8-render-priority). | The two face orders differ in 1,248 pixels on the page by more than 8 of 255, and in 0 pixels in the render. |
 | 9. Shared mesh data | Yes | The meshes and the nodes in the glTF JSON of `region.glb`, against the objects on each mesh of the import. See [Row 9](#row-9-shared-mesh-data). | 185 shared meshes in the import, 3 of them with no face. 1,337 meshes in the file, 98 of them used by more than one node. 16,484 accessors. |
@@ -246,7 +270,7 @@ The 16 square is centred on tile 3080, 3250. It covers tiles x 3072 to 3087 and 
 | 11. Frame rate | Yes for every cell | The page's reports at the `size` camera, with the frame rate cap and without it. See [Size table](#size-table). | 60 fps with the cap in every cell. Without the cap, 128 fps (whole region) to 825 fps (joined 16 square). The `size` camera shows only the north-west part of the region: the page drew 89,234 triangles of its 139,117 exported faces. |
 | 12. Nearly coplanar faces | Yes, lit and flat | The lit page screenshots next to the unlit render of the player, at frames 1 and 26 and the `player` and `player-side` cameras, and the maps of the pixels that differ. The flat page next to a flat render gave the same result. See [Row 12](#row-12-nearly-coplanar-faces). | Lit: mean difference 1.0 to 1.3 of 255, 246 to 529 pixels differ by more than 32, on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band. Flat: mean 1.9 to 2.0, 1,045 to 1,329 pixels, on outlines and on the edges of the straps and of the flail. |
 | 13. Floating player | Yes: the player does not look like it floats | The page screenshots of the lit and the flat player on the joined 16 square at 5 cameras, read, and the bounds of the player. See [Row 13](#row-13-floating-player). | The tile is flat at height 280. The lowest point of the player is at 272.2, 7.8 units under the ground. That this point is on the boots is an inference from the pictures. |
-| 14. Clip that changes face alpha | Not measured yet (issue 88) | | |
+| 14. Clip that changes face alpha | No | The materials and the channels in the glTF JSON of `fade88.glb` and `fade88-pointer.glb`, and the page screenshots next to the unlit renders, read. See [Row 14](#row-14-clip-that-changes-face-alpha). | 0 channels on a material or a pointer in both files. The fade materials export with no `alphaMode`. |
 
 The issue numbers come from the bodies of the open tasks of issue 82. Issue 89 links an issue for each row that does not survive.
 
@@ -320,7 +344,7 @@ Not decided yet. Issue 89 writes this section.
 
 ## Issues
 
-Issue 89 opens one issue for each row that does not survive. So far these are row 1 for the game values, row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, the darker faces with a face alpha of rows 7 and 8, and the face order that the joined form with Draco loses (see [Draco does not keep the face order](#draco-does-not-keep-the-face-order)).
+Issue 89 opens one issue for each row that does not survive. So far these are row 1 for the game values, row 5 for the visibility keys of a held item, row 6 for the `NLA_TRACKS` mode, row 14, row 3, row 4 for the stock form, row 7 for faces that use the same three vertices, row 8 for the stock form, the darker faces with a face alpha of rows 7 and 8, and the face order that the joined form with Draco loses (see [Draco does not keep the face order](#draco-does-not-keep-the-face-order)).
 
 Issue 87 opened [issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103): Create Player refuses an item with textured faces, such as the Fire cape. It also opened [issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105): the scenery needs the client's loc light baked in, so that the page can draw it lit ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).
 
@@ -758,6 +782,86 @@ The pair of pictures at the `test`, `top` and `low` cameras, all read: the page 
 - **The trees, a guess.** A tree pixel at (1270, 690) is (54, 61, 24) in the render and (59, 69, 21) on the page. The trees use texture 8 with `alphaMode` `MASK`. A guess is that the mipmaps of the `NEAREST_MIPMAP_NEAREST` sampler of row 2 cause the finer grain, because the page draws the texture smaller than its image. This was not tested with another sampler.
 - **The other pixels, a guess.** The map of the pixels that differ by more than 32 at the `test` camera, read, shows them on the outlines of the placements, on the trees and in the window. A guess is that the outlines differ by the antialiasing, as in row 3.
 
+## Row 5: Bones-method clip
+
+### The clips
+
+| Clip | Sequence | Played as | Frames and durations in ticks | Blender frames |
+| --- | --- | --- | --- | --- |
+| Idle | 2061 (`BARROW_GUTHAN_READY`), the stance clip of the flail, as in [The scene](#the-scene) | Pose | 12 frames of 21 ticks | 1 to 253 |
+| Wave emote | 863 (`EMOTE_WAVE`) | Action | 15 frames: 4, 4, 4, 4, 8, 8, 8, 8, 8, 8, 8, 4, 4, 4, 4 | 1 to 89 |
+
+- **The sequence id of the Wave emote, evidence.** `data/animation_names.json` names sequence 863 `EMOTE_WAVE`. `alpha88.py` read it from the cache of snapshot 430.
+- **The Wave emote changes no face alpha, evidence.** Its 15 frames have 0 alpha transforms (type 5) (`alpha88.py`). Sequence 2061 has 0 too. The bake made no fade group for either clip.
+- **The Wave emote plays as an action, a choice.** The client plays an emote as an action. A guess is that this is how the server starts the Wave emote, because the sequence file cannot say it (`docs/research/osrs-149-animation.md`, "Not verified or not done").
+- **The Wave emote hides the flail, evidence.** The sequence sets both held items to 0 (opcodes 6 and 7). As an action, the bake keys `hide_render` and `hide_viewport` of `Player Weapon` on, in the action `Player Weapon visibility`. The flail is hidden at each of the 3 frames.
+
+`player88.py` builds the player of issue 87 and bakes one clip with the Bones method from frame 1. Then it gives the shared material `RS Appearance Preview` the unlit shape of `rs_lit` of [The lit player](#the-lit-player). It does not split the materials, because rows 5 and 6 do not need the game values. The export has the default settings with `use_selection=True`.
+
+### The files
+
+| File | Size | Nodes with a mesh | Clip | Keys |
+| --- | --- | --- | --- | --- |
+| `idle88.glb` | 520,560 bytes | `Player`, `Player Weapon` | `Player BARROW_GUTHAN_READY (2061)`, 183 channels | 254, from 0.02 to 5.08 seconds |
+| `wave88.glb` | 228,128 bytes | `Player` | `Player EMOTE_WAVE (863)`, 183 channels | 90, from 0.02 to 1.80 seconds |
+
+Both files have one material with `KHR_materials_unlit`. The page reported one `MeshBasicMaterial` for each file.
+
+- **The exporter leaves the hidden flail out, evidence.** `wave88.glb` has no node `Player Weapon` and no mesh for it. The script selects every object of the player, but the flail is hidden at the frame of the export, and `use_selection` exports only the selected objects. A guess is that a hidden object cannot be selected, so the exporter does not see it. That step was not traced.
+- **The visibility keys do not export, evidence.** No channel of either file targets the visibility of a node. The exporter has a comment that `KHR_node_visibility` is for the future (`io_scene_gltf2/blender/exp/tree.py` line 726 of Blender 5.3.0). For the Wave emote this gives the right look, because the flail is hidden for the whole clip. A clip that shows a held item for a part of the clip, or a file with the idle clip and the Wave emote together, cannot show it this way.
+
+### The page next to the render
+
+The page loads each file with `?view=player` and `?t=<f / 50>`, which is Blender frame f (see [Row 12](#row-12-nearly-coplanar-faces)). The frames are in different client frames.
+
+| Clip, Blender frame (client frame) | Drawn pixels | More than 8 of 255 | More than 32 of 255 | Largest | Mean of the drawn pixels |
+| --- | --- | --- | --- | --- | --- |
+| Idle, 1 (0) | 74,205 | 3,085 | 529 | 84 | 1.29 |
+| Idle, 70 (2) | 74,281 | 2,943 | 486 | 86 | 1.25 |
+| Idle, 200 (8) | 74,122 | 3,069 | 542 | 75 | 1.31 |
+| Wave, 6 (1) | 72,137 | 2,887 | 509 | 78 | 1.24 |
+| Wave, 30 (5) | 72,370 | 2,941 | 498 | 97 | 1.25 |
+| Wave, 38 (6) | 71,695 | 2,915 | 511 | 78 | 1.25 |
+
+- **The pictures, read.** `sheet88-idle.png` and `sheet88-wave.png` put each render next to its page screenshot. Each pair shows the same pose: in the idle clip, the flail hangs at one hand and moves a little between the frames. In the Wave emote, the arm is half up at frame 6 and up at frames 30 and 38, with the hand turned a different way at 38. No flail shows in the Wave emote, in the render or on the page.
+- **The poses differ between frames, evidence.** Page frames 1 and 70 of the idle clip differ in 6,385 pixels by more than 32, and Wave frames 6 and 30 in 6,895. So `?t=` selects the pose, and the equal numbers in the table are not one pose drawn 3 times.
+- **The differences, a guess.** The numbers are close to those of the still player of issue 87 (mean 1.0 to 1.3). A guess is that they come from the antialiasing of EEVEE and of the browser at the edges, as in row 12. The maps of the pixels were not made for these pairs.
+- **Two Wave frames are one pose, evidence.** Wave frames 30 and 60 (client frames 5 and 9) were equal in every pixel, in the render and on the page, and so were frames 30 and 45 (client frames 5 and 7). Frame 38 replaced them. A guess is that the emote moves between two poses in its middle frames.
+
+## Row 6: Stepped playback
+
+### The client rule
+
+**The revision-149 client shows one frame on each tick and does not blend between frames, evidence.** Sources:
+
+- `docs/research/osrs-149-animation.md`, section 1, read from the 149 bytecode: `hu.l(jg, int, jg, int, byte)` takes one whole frame index for each sequence. `jg.e(ej, int, short)` loads that one frame and applies it with `ej.m(et, int)`. No step of this chain takes a second frame of the same sequence or a fraction of a tick. The only call that applies two frames, `ej.u`, takes them from two sequences and splits them by skeleton index (interleave), not by time.
+- `animation/frames.py`, `_frames_per_tick`: the counter of `ap.fb` counts whole ticks, and a frame changes only when the counter passes its duration.
+- `docs/research/osrs-149-animation.md`, "Clip coverage": in runs of the unchanged client, `evaluate_frame` of one frame equals the client's posed vertices on every frame of walk 819, idle 808 and run 824 for both bodies, and of sequence 1499.
+
+That no other code path of the 149 client blends two frames of one sequence is an inference from this chain. The whole client was not searched for one. One tick is one client cycle of 20 ms, which is from the 2018 source and not checked in 149 (same note, "Not verified or not done").
+
+### The exported sampler
+
+The bake keys one constant value on each tick, and the exporter samples each Blender frame (`export_force_sampling` is on by default). Each channel then has one key for each Blender frame, or 2 keys when it does not move.
+
+| File | Channels | Interpolation |
+| --- | --- | --- |
+| `idle88.glb` | 90 with 254 keys, 83 with 2 keys, 10 with 2 keys | `STEP`, `STEP`, `LINEAR` |
+| `wave88.glb` | 21 with 90 keys, 162 with 2 keys | `STEP` |
+| `fade88.glb` (row 14), mode `ACTIONS` | 162 with 112 keys, 6 with 2 keys, 15 with 2 keys | `STEP`, `STEP`, `LINEAR` |
+| `fade88-pointer.glb` (row 14), mode `NLA_TRACKS` | 162 with 112 keys, 21 with 2 keys | `LINEAR`, `STEP` |
+
+- **The `LINEAR` channels of the default mode do not move, evidence.** Of the 10 `LINEAR` channels of `idle88.glb`, 7 hold one value. The other 3 are translations of `label_19`, `label_22` and `label_28`, whose 2 keys differ by at most 1.4e-5 units (`linear88.py`). In `fade88.glb`, 2 of 15 differ, by at most 5.7e-5 units.
+- **The keys follow the client's frames, evidence.** The channels of `idle88.glb` change only at keys 22, 43, 64 and on, every 21 keys. The channels of `wave88.glb` change at keys 5, 9, 13, 17, 25, 33 and on (`changes88.py`). These are the frame changes of `frame_schedule` for the durations of the two sequences: frame 0 shows one tick longer than its duration.
+- **`NLA_TRACKS` writes `LINEAR`, evidence.** With `export_animation_mode="NLA_TRACKS"` the exporter wrote `LINEAR` for all 162 channels that move. A guess is that this mode bakes the scene and uses the interpolation fallback, whose default is `LINEAR` (`export_sampling_interpolation_fallback`, `io_scene_gltf2/__init__.py` lines 763 to 770). The fallback set to `STEP` was not tried.
+
+### The page
+
+- **Three.js plays `STEP` as stepped, evidence.** The page reported the interpolation of each track. For `idle88.glb`: 173 tracks discrete (2300) with a `DiscreteInterpolant` and 10 linear (2301). For `wave88.glb`: 183 discrete.
+- **The pose changes at once, evidence.** In `idle88.glb`, client frame 1 starts at key 22, at 0.46 seconds. The page screenshots at `t=0.44`, `0.45`, `0.459` and `0.46` are equal in every pixel. The ones at `t=0.461` and `0.47` are equal to each other, and differ from the first 4 in 3,675 pixels by more than 32. `t=0.46` still shows frame 0. A guess is that the key time is the 32-bit float just over 0.46. In `wave88.glb`, client frame 1 starts at 0.12 seconds. The screenshots at `t=0.10`, `0.11` and `0.119` are equal in every pixel, and the one at `t=0.12` differs in 5,870 pixels by more than 32.
+- **`NLA_TRACKS` blends on the page, evidence.** For `fade88-pointer.glb`, the screenshots at `t=0.10`, `0.11`, `0.119` and `0.12` all differ from each other. The same times of `fade88.glb` (mode `ACTIONS`) are equal from `0.10` to `0.119`.
+- **Not checked.** The page with the clip playing, not frozen, was not recorded. The three.js mixer loops a clip by default, and the client plays an action once. The page code has to set that.
+
 ## Row 7: Face order
 
 ### The exporter keeps the order of the faces
@@ -899,3 +1003,17 @@ The page loads `player-extras.glb` with `?flat=1` and the joined 16 square of is
 - **The feet go into the ground, evidence for the depth and an inference for the place.** The tile is flat at Blender z 280. The lowest point of the bounding box of the player at frame 1 is 272.2, which is 7.8 units under the ground. The bounding box holds the body and the flail. That this point is on the boots is an inference from the pictures, where the flail hangs well above the ground. The test of issue 48 found 6 units for another player, from the client's own model (`test_region_import.py`). So a part of each boot is hidden, and no gap can show.
 - **What makes the contact hard to see, a guess.** With the flat and the lit materials, the Climbing boots are dark grey on a dark grey paving. A lighter boot or a lighter ground can show the contact better or worse. This was not checked with another outfit or another tile.
 - **The lit player, read.** `shots87lit.sh` took the same 5 cameras with `player-lit.glb` in place of the flat player. At `float-near` and `float-east` the lit boots are a dark grey close to the paving, and their lower edges meet the ground with no gap. The lit player does not look like it floats either.
+
+## Row 14: Clip that changes face alpha
+
+The clip is sequence 1994 (`IC_PIT_FALL`), the fade clip of the tests of issue 14 (`tests/fixtures/animation149/alpha-1994`). It has 4 alpha transforms (`alpha88.py`). `player88.py` bakes it as an action with the Bones method on the player of issue 87. The bake made one fade group, `rs_fade_0_0`, as a keyed custom property on the rig. It made the materials `Player fade 0` and `Player Weapon fade 0`, whose driver turns the property into the factor of a Mix Shader between a Transparent BSDF and the Emission of `rs_lit`. The property is 0 up to frame 17, then 96, 112, 176 and 216 from frames 18, 22, 26 and 30.
+
+| File | Settings | Materials | Channels on a material or a pointer |
+| --- | --- | --- | --- |
+| `fade88.glb` | default, `use_selection=True` | `Player fade 0` and `Player Weapon fade 0`: `baseColorFactor` (0, 0, 0, 1), no `alphaMode`, no extension | 0 |
+| `fade88-pointer.glb` | adds `export_animation_mode="NLA_TRACKS"` and `export_pointer_animation=True` | the same | 0. `extensionsUsed` is empty. |
+
+- **The fade does not export, evidence.** Neither file has an alpha on the fade materials or a channel for the fade. The 183 channels of each clip are the translation, rotation and scale of the bones. The rig property is not in either file.
+- **Cause, a guess.** The opacity comes from a driver on the material, and the keys are on a custom property of the rig. The exporter writes custom properties only as extras, which `export_extras` leaves off here. The animation pointer exports the animation of a material (`io_scene_gltf2/__init__.py` lines 772 to 777), and a driver is not that. Neither was traced in the exporter.
+- **The page, read.** The page draws the player opaque and plain white, at frame 1 and at frame 20 (alpha 96). The fade materials keep the Emission node, so they export as lit with a white emissive colour, as the player of row 1 does. At frame 40 the player has fallen out of the view, in the render and on the page. The renders at frame 20 show the player faded and dimmer. `sheet88-fade.png` holds the pairs.
+- **What this means.** A clip that changes face alpha cannot reach the page through the stock exporter as the bake makes it. The scratch step was not tried with keys on the material in place of the driver.
