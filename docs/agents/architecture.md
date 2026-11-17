@@ -22,6 +22,8 @@ Add new code without adding baseline entries.
 
 The bpy stubs do not support indexing or iterating array properties such as `polygon.vertices` and `material.diffuse_color`. Read arrays with `foreach_get`; read polygon corners through `mesh.loops[polygon.loop_start + i].vertex_index`.
 
+Do not narrow the result of `nodes.new(...)` with `isinstance` before using its sockets. The stubs type `inputs` and `outputs` of the ShaderNode classes as optional, so pyrefly then reports "`None` is not subscriptable". The plain `Node` that `nodes.new` returns has them non-optional, as in `region_terrain.py`.
+
 ## Saved-file compatibility
 
 Keep Blender layer names `RSPRI`, `RSTSKIN` and `VSKIN1:` to `VSKIN3:` stable. Saved `.blend` files and the exporter read them.
