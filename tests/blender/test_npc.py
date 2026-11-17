@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import types
 from pathlib import Path
 
 import bpy
@@ -52,7 +53,12 @@ MAN = 3078
 
 @pytest.fixture
 def registered(clean):
-    classes = (*appearance_props.classes, *appearance_collection.classes, *npc_collection.classes)
+    classes = (
+        *appearance_props.classes,
+        *appearance_collection.classes,
+        *npc_collection.classes,
+        *npc_panel.classes,
+    )
     for cls in classes:
         bpy.utils.register_class(cls)
     appearance_props.register_properties()
@@ -489,3 +495,190 @@ def test_a_player_is_refused_by_the_npc_bake():
     player = appearance_collection.build_collection(body, shading, preset, "Player", slots=slots)
     with pytest.raises(ValueError, match="Player is not an NPC"):
         appearance_clip.bake_npc_clip(player, NPC_CLIPS / "195")
+
+
+class Drawn:
+    """Stands in for a Blender layout and records the labels, fields and buttons that the NPC panel draws on it."""
+
+    def __init__(self, calls: list | None = None):
+        self.calls = [] if calls is None else calls
+
+    def row(self, **_):
+        return Drawn(self.calls)
+
+    split = box = column = grid_flow = row
+
+    def label(self, text="", **_):
+        self.calls.append(("label", text))
+
+    def prop(self, data, name, **_):
+        self.calls.append(("prop", name))
+
+    def operator(self, idname, text="", **_):
+        button = types.SimpleNamespace(idname=idname, text=text)
+        self.calls.append(("operator", button))
+        return button
+
+
+def drawn_panel() -> list:
+    drawn = Drawn()
+    npc_panel.VIEW3D_PT_rsps_npc.draw(types.SimpleNamespace(layout=drawn), bpy.context)  # pyrefly: ignore[bad-argument-type]
+    return drawn.calls
+
+
+def bake_buttons() -> list[types.SimpleNamespace]:
+    return [
+        item
+        for kind, item in drawn_panel()
+        if kind == "operator" and item.idname == npc_panel.RSPS_OT_bake_npc_clip.bl_idname
+    ]
+
+
+def press(button: types.SimpleNamespace):
+    return bpy.ops.rsps.bake_npc_clip(  # pyrefly: ignore[missing-attribute]
+        sequence=button.sequence, play_as=button.play_as, smooth=button.smooth, cache_folder=str(SNAPSHOT_430)
+    )
+
+
+def clip_strips(collection: bpy.types.Collection) -> list[bpy.types.NlaStrip]:
+    animation = appearance_collection.armature_of(collection).animation_data
+    assert animation is not None
+    return list(animation.nla_tracks[appearance_clip.CLIP_TRACK].strips)
+
+
+def strip_record(strip: bpy.types.NlaStrip) -> dict:
+    assert strip.action is not None
+    return json.loads(strip.action[appearance_collection.CLIP_KEY])
+
+
+@pytest.mark.parametrize("npc_id", TEST_NPCS)
+@pytest.mark.parametrize("clip", ["stand", "walk"])
+def test_each_test_npc_plays_its_stand_and_walk_clips_from_its_stance_buttons(npc_id, clip):
+    # tests/fixtures/npc/poses.json names the stand and walk sequence of each test NPC and holds the client's pose of
+    # every frame. A Stance button bakes as Pose (spec 13, Panel).
+    sequence = POSES["clips"][str(npc_id)][clip]
+    client = POSES["npcs"][str(npc_id)][str(sequence)]
+    collection = created(npc_id)
+    bpy.context.scene.frame_set(1)  # pyrefly: ignore[missing-attribute]
+    button = next(b for b in bake_buttons() if b.text == clip.capitalize())
+    assert (button.sequence, button.play_as) == (sequence, "POSE")
+    assert press(button) == {"FINISHED"}
+    for index, frame in first_frames(sequence):
+        expected = client[index]
+        for vertex, at in evaluated_vertices(collection, frame).items():
+            assert math.dist(at, (expected["e"][vertex], expected["l"][vertex], expected["s"][vertex])) <= (
+                CLIENT_BOUND[npc_id, clip] + RIG_ROUNDING
+            )
+
+
+def test_the_bake_rows_show_the_active_npcs_name_its_stance_buttons_the_fields_and_the_bake_button():
+    # Spec 13, Panel item 4. The gnome's definition names a stand and a walk sequence only
+    # (tests/fixtures/npc/npcs.json).
+    created(4233)
+    calls = drawn_panel()
+    assert ("label", "Gnome") in calls
+    assert [button.text for button in bake_buttons()] == ["Stand", "Walk", "Bake at the current frame"]
+    props = [name for kind, name in calls if kind == "prop"]
+    assert props[-2:] == ["rs_npc_sequence", "rs_npc_smooth"]
+
+
+def test_man_has_a_stance_button_for_each_sequence_that_his_definition_names():
+    # tests/fixtures/npc/npcs.json, RuneLite's decode of NPC 3078: stand 808, walk 819, and 820, 821 and 822 in the
+    # rotate180, rotateLeft and rotateRight fields, which are the walk back, walk left and walk right sequences
+    # (spec 13, NPC definition). It names no turn sequence.
+    created(MAN)
+    assert [(button.text, button.sequence, button.play_as) for button in bake_buttons()[:-1]] == [
+        ("Stand", 808, "POSE"),
+        ("Walk", 819, "POSE"),
+        ("Walk back", 820, "POSE"),
+        ("Walk left", 821, "POSE"),
+        ("Walk right", 822, "POSE"),
+    ]
+
+
+def test_smooth_applies_to_the_stance_buttons_and_to_the_typed_sequence():
+    # The owner's decision of 2026-11-16 (the decision comment of issue 94): Smooth applies to every bake of the panel.
+    collection = created(4233)
+    bpy.context.scene.frame_set(1)  # pyrefly: ignore[missing-attribute]
+    assert [button.smooth for button in bake_buttons()] == [False, False, False]
+    bpy.context.scene.rs_npc_smooth = True  # pyrefly: ignore[missing-attribute]
+    buttons = bake_buttons()
+    assert [button.smooth for button in buttons] == [True, True, True]
+    assert press(buttons[0]) == {"FINISHED"}
+    assert strip_record(clip_strips(collection)[0])["smooth"] is True
+
+
+def test_the_sequence_id_field_bakes_a_typed_sequence_as_an_action_at_the_current_frame():
+    # docs/research/13-npc-rigs.md: the gnome's walk sequence 189 is on its frame map 319. The sequence id field bakes
+    # as Action (spec 13, Panel).
+    collection = created(4233)
+    scene = bpy.context.scene
+    scene.rs_npc_sequence = 189  # pyrefly: ignore[missing-attribute]
+    scene.rs_npc_smooth = True  # pyrefly: ignore[missing-attribute]
+    scene.frame_set(10)  # pyrefly: ignore[missing-attribute]
+    button = bake_buttons()[-1]
+    assert (button.sequence, button.play_as, button.smooth) == (189, "ACTION", True)
+    assert press(button) == {"FINISHED"}
+    (strip,) = clip_strips(collection)
+    assert strip.frame_start == 10
+    record = strip_record(strip)
+    assert (record["sequence"], record["action"], record["smooth"]) == (189, True, True)
+
+
+def test_the_sequence_id_field_refuses_a_sequence_on_another_frame_map_with_no_change():
+    # docs/research/13-npc-rigs.md: the green dragon's stand sequence 90 uses frame map 1080, and the gnome is rigged
+    # for frame map 319.
+    created(4233)
+    bpy.context.scene.rs_npc_sequence = 90  # pyrefly: ignore[missing-attribute]
+    button = bake_buttons()[-1]
+    before = file_state()
+    with pytest.raises(RuntimeError, match="uses frame map 1080.*frame map 319"):
+        press(button)
+    assert file_state() == before
+
+
+def test_a_sequence_that_the_cache_lacks_is_refused_with_no_change():
+    created(4233)
+    before = file_state()
+    with pytest.raises(RuntimeError, match="no sequence 99999"):
+        bpy.ops.rsps.bake_npc_clip(sequence=99999, play_as="ACTION", cache_folder=str(SNAPSHOT_430))  # pyrefly: ignore[missing-attribute]
+    assert file_state() == before
+
+
+def test_a_player_a_plain_model_and_no_active_object_show_no_bake_rows():
+    case = APPEARANCE["cases"][0]
+    preset = AppearancePreset(149, 430, False, tuple(case["equipment"]), tuple(case["colours"]))
+    body, shading, slots = appearance_preview.assemble_parts(preset, SNAPSHOT_430)
+    player = appearance_collection.build_collection(body, shading, preset, "Player", slots=slots)
+    plain = bpy.data.objects.new("plain", bpy.data.meshes.new("plain"))
+    bpy.context.scene.collection.objects.link(plain)  # pyrefly: ignore[missing-attribute]
+    created(4233)
+    assert bake_buttons()
+    for obj in (appearance_collection.mesh_of(player), plain, None):
+        bpy.context.view_layer.objects.active = obj  # pyrefly: ignore[missing-attribute]
+        assert bake_buttons() == []
+        assert not bpy.ops.rsps.bake_npc_clip.poll()  # pyrefly: ignore[missing-attribute]
+
+
+def test_the_rig_of_an_npc_shows_the_bake_rows_too():
+    # The active NPC is the NPC of the active object (spec 13, Panel item 4), and the rig is in the NPC collection.
+    collection = created(4233)
+    bpy.context.view_layer.objects.active = appearance_collection.armature_of(collection)  # pyrefly: ignore[missing-attribute]
+    assert len(bake_buttons()) == 3
+
+
+def test_the_stance_buttons_cover_every_sequence_field_of_an_npc_in_order():
+    # A field that npc_collection stores and the panel has no text for would get no button.
+    assert tuple(npc_panel.STANCE_LABELS) == npc_collection.SEQUENCE_FIELDS
+
+
+def test_the_tooltip_of_a_bake_button_names_its_sequence_and_how_it_plays():
+    pose = types.SimpleNamespace(sequence=808, play_as="POSE")
+    action = types.SimpleNamespace(sequence=189, play_as="ACTION")
+    describe = npc_panel.RSPS_OT_bake_npc_clip.description
+    assert describe(bpy.context, pose) == (
+        "Bake sequence 808 onto the active NPC as a Pose, starting at the current frame"
+    )
+    assert describe(bpy.context, action) == (
+        "Bake sequence 189 onto the active NPC as an Action, starting at the current frame"
+    )
