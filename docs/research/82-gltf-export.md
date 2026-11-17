@@ -2,7 +2,7 @@
 
 This note belongs to [issue 82](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/82) and follows [spec 82](../../spec/82-gltf-export-findings.md). It records what survives when Blender's stock glTF exporter writes a region import and a player with a clip, and a three.js page draws the file. Terms follow [GLOSSARY.md](../../GLOSSARY.md). "Square", "stock export" and "joined export" are used as the spec uses them.
 
-The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). Rows 9, 10 and 11 and the size table were measured on 2026-11-16 for [issue 86](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/86). Rows 1, 12 and 13 and the game values of the player were measured on 2026-11-16 for [issue 87](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/87). Rows 5, 6 and 14 were measured on 2026-11-16 for [issue 88](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/88). [Issue 89](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/89) wrote the form of the exporter and opened the issues on 2026-11-17. It ran no new export. [Issue 131](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/131) measured the scenery with the loc light on 2026-11-17.
+The note grows task by task. Rows 2 and 3 were measured on 2026-11-15 for [issue 84](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/84). Rows 4, 7 and 8 were measured on 2026-11-16 for [issue 85](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/85). Rows 9, 10 and 11 and the size table were measured on 2026-11-16 for [issue 86](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/86). Rows 1, 12 and 13 and the game values of the player were measured on 2026-11-16 for [issue 87](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/87). Rows 5, 6 and 14 were measured on 2026-11-16 for [issue 88](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/88). [Issue 89](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/89) wrote the form of the exporter and opened the issues on 2026-11-17. It ran no new export. [Issue 131](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/131) measured the scenery with the loc light on 2026-11-17. [Issue 147](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/147) ran the page checks of issues 116 and 120 on a file from the add-on's RS Scene (.glb) export on 2026-11-17.
 
 Each cause is marked as evidence or as a guess. "Read" means that the file or the picture was opened and read in the session that wrote the row.
 
@@ -24,6 +24,7 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 - **The game values reach the page through a scratch step.** No exporter setting writes `rs_face_colour` and `rs_alpha` from the player as it is. A scratch step gives each face colour of the player its own material with the two values as custom properties. With `export_extras=True` the exporter writes them as material extras, and three.js puts them in `material.userData`. The rig and the clip do not change.
 - **The page draws the baked client light ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).** Page code first made flat materials from the extras. The owner rejected that look as too flat (RuneScape Classic, not Old School RuneScape). When each split material feeds `rs_lit` from a Color Attribute node straight into the Material Output, the stock exporter writes it as `KHR_materials_unlit` with one colour attribute as `COLOR_0`, which matches the render of `rs_lit` (an inference: the values were not compared one by one). The page then draws the player with the client light and no code of its own, within a mean of 1.0 to 1.3 of 255 of the unlit render. The extras stay on the materials.
 - **The page draws the scenery with the loc light.** The region import bakes the loc light into `rs_lit` ([ADR 0027](../adr/0027-the-region-import-bakes-the-loc-light.md)). A scratch step puts `rs_lit` into the joined 16 square in place of the face colour, and the page draws it as it draws the lit player, within a mean of 0.8 to 1.3 of 255 of the unlit render. See [The lit scenery](#the-lit-scenery).
+- **The RS Scene export passes the page checks of issues 116 and 120.** The add-on's File > Export > RS Scene (.glb) writes the player of issue 87 with 19 unlit materials that carry `rs_face_colour` and `rs_alpha`, and the page draws it within a mean of 1.32 to 1.45 of 255 of the unlit render. Between two keys of the clip, the page is equal to the earlier key in every pixel. The materials are double-sided, so from the side the page shows the inside of the skirt, which the render does not ([#156](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/156)). See [The RS Scene export on the page](#the-rs-scene-export-on-the-page).
 - **Row 12 survives.** On the lit page, the straps on the torso and the belt on the skirt look as in the unlit render, at 2 frames and 2 cameras. The pixels that differ by more than 32 lie on the outline of the player and on the edges of the straps and the arm bands, and none inside a strap, the belt or a band. The flat page gave the same result.
 - **Row 13 survives.** With no shadow, the lit player on the joined 16 square does not look like it floats. The lowest point of the player is 7.8 units under the flat tile, and the pictures put it on the boots.
 - **The Fire cape is left out.** Create Player refuses it, because 24 of its faces have a texture ([issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103)). So no textured face of a player was exported.
@@ -44,7 +45,7 @@ Each cause is marked as evidence or as a guess. "Read" means that the file or th
 | WebGL renderer string | `ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)`. This is the real GPU, not a software renderer. |
 | Region | `48_50` of snapshot 430, imported by `region_import.import_region` at the default brightness. The import reported 4096 tiles, 1874 placements as 1894 objects, 185 shared meshes and 1154 own meshes. |
 | Exporter settings of the player | `player-stock.glb` uses the settings above. `player-stock-extras.glb`, `player-extras.glb` and `player-lit.glb` add `export_extras=True`. All four export the animation with the defaults. |
-| Add-on code | Commit bd43fcd for rows 2 and 3, commit d8eb169 for rows 4, 7 and 8, commit 015a089 for rows 9, 10 and 11, commit 955f868 for rows 1, 12 and 13, commit 230d34b for rows 5, 6 and 14, and commit da4c057 for the lit scenery of issue 131. At commit da4c057 the import reported 344 shared meshes in place of 185, because the mesh key of ADR 0027 holds every input of the loc light. |
+| Add-on code | Commit bd43fcd for rows 2 and 3, commit d8eb169 for rows 4, 7 and 8, commit 015a089 for rows 9, 10 and 11, commit 955f868 for rows 1, 12 and 13, commit 230d34b for rows 5, 6 and 14, commit da4c057 for the lit scenery of issue 131, and commit 0755119 for the RS Scene export of issue 147. At commit da4c057 the import reported 344 shared meshes in place of 185, because the mesh key of ADR 0027 holds every input of the loc light. |
 
 The page reported 60.0 fps and 16.66 or 16.67 ms for each frame on every run of issues 84 and 85, with 1 to 446 draw calls.
 
@@ -83,6 +84,9 @@ Nothing in `<scratch folder>` is committed. It holds these files.
 | `shots88.sh`, `sheet88.py` | The page screenshots of issue 88, and the render and the page of each frame side by side. The page's reports are in `shots88.jsonl`. |
 | `loclit131.py` | The Blender script of issue 131. It imports `48_50`, renders the terrain of the 16 square and its placements as the import made them, joins the square with the corner colours of `rs_lit`, renders the joined form, writes `joinedlit16.glb`, and writes `loclit131.json` to `out/`. It uses the functions of `join.py`. See [The lit scenery](#the-lit-scenery). |
 | `shots131.sh` | The page screenshots of issue 131. The page's reports are in `shots131.jsonl`. |
+| `player147.py` | The Blender script of issue 147. It builds the player as `player87.py` does, bakes the idle clip of row 5 as a pose from frame 1, exports the player with the add-on's RS Scene (.glb) export at its defaults to `rsscene147.glb`, renders the player unlit as Create Player made it, and writes `player147.json` with the scene before and after the export. See [The RS Scene export on the page](#the-rs-scene-export-on-the-page). |
+| `shots147.sh` | The page screenshots of issue 147. The page's reports are in `shots147.jsonl`. |
+| `single147.py` | Writes a copy of a `.glb` file with `doubleSided` removed from every material. |
 | `page/index.html`, `page/main.js` | The scratch page. Issue 88 added the interpolation of each track of each clip to the report. |
 | `page/serve.mjs` | A static file server for `<scratch folder>` on 127.0.0.1. |
 | `page/shot.mjs` | Starts the server, opens the page in headless Chrome at 1920x1080, waits until the page has measured 3 seconds (or the number of seconds of its third argument), saves a screenshot to `out/` and prints the page's report as one JSON line. It exits with code 2 when the WebGL renderer string names a software renderer. The environment variable `CHROME_ARGS` adds more Chrome arguments. |
@@ -259,6 +263,25 @@ uv run python3 <scratch folder>/colours87.py <scratch folder>/out/joinedlit16.gl
 
 `compare.py` ran the same way for the `top` and `low` cameras, and `diffmap.py pixel` for the pixels that [The lit scenery](#the-lit-scenery) names.
 
+The commands of issue 147. `player147.py` needs the `views.json` of `export.py` and `player87.py`, and the compare with the issue 87 page needs the `player-lit-page-<view>-f1.png` screenshots of `shots87lit.sh`.
+
+```bash
+bash <scratch folder>/run-blender.sh <repo> <path to cache> player147
+uv run python3 <scratch folder>/glbjson87.py <scratch folder>/out/rsscene147.glb
+uv run python3 <scratch folder>/cliptimes87.py <scratch folder>/out/rsscene147.glb
+uv run python3 <scratch folder>/colours87.py <scratch folder>/out/rsscene147.glb
+uv run python3 <scratch folder>/changes88.py <scratch folder>/out/rsscene147.glb
+bash <scratch folder>/shots147.sh
+<scratch folder>/compare.py <scratch folder>/out/rsscene147-blender-player-f1.png <scratch folder>/out/rsscene147-page-player-f1.png
+<scratch folder>/diffmap.py map <scratch folder>/out/rsscene147-blender-player-side-f1.png <scratch folder>/out/rsscene147-page-player-side-f1.png <scratch folder>/out/diff147-player-side-f1.png 32
+<scratch folder>/compare.py <scratch folder>/out/rsscene147-page-player-t0.42.png <scratch folder>/out/rsscene147-page-player-t0.439.png
+uv run python3 <scratch folder>/single147.py <scratch folder>/out/rsscene147.glb <scratch folder>/out/rsscene147-single.glb
+node <scratch folder>/page/shot.mjs rsscene147-single-page-player-side-f1.png "file=rsscene147-single.glb&view=player-side&t=0"
+<scratch folder>/compare.py <scratch folder>/out/player-lit-page-player-side-f1.png <scratch folder>/out/rsscene147-single-page-player-side-f1.png
+```
+
+`compare.py` and `diffmap.py map` ran the same way for the other cameras, frames and times. Short inline scripts that are not kept read the materials, primitives and samplers of `rsscene147.glb`, the key times as 32-bit floats, and the extras in `shots147.jsonl`.
+
 To look at the page by hand, run `node <scratch folder>/page/serve.mjs` and open `http://127.0.0.1:8082/page/index.html?file=terrain16.glb&view=test`.
 
 ### What `export.py` exports
@@ -394,6 +417,8 @@ Row 13 survives, so the page gets no issue for a contact shadow.
 Issue 87 opened [issue 103](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/103): Create Player refuses an item with textured faces, such as the Fire cape. It also opened [issue 105](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/105): the scenery needs the client's loc light baked in, so that the page can draw it lit ([ADR 0026](../adr/0026-the-gltf-page-draws-the-baked-client-light.md)).
 
 Issue 131 opened [#138](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/138), a sub-issue of issue 82: The region import merges the normals of touching sharelight locs before it lights them. See [The lit scenery](#the-lit-scenery).
+
+Issue 147 opened [#156](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/156), a sub-issue of issue 140: The RS Scene export draws the player's gear from both sides, and the render draws it from the front only. See [The RS Scene export on the page](#the-rs-scene-export-on-the-page).
 
 ## The player
 
@@ -641,6 +666,72 @@ The flat scenery of issue 85 had a mean of 1.6, 1.1 and 1.3 at the same cameras.
 - **The lit player on the lit square, read.** `floatloclit-page-float-near-f1.png` shows the lit player of issue 87 next to the stalls, and both have the shade of the client light. This screenshot is for the owner's check by eye ([issue 132](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/132)). No pixel was compared.
 
 Not checked: the scenery next to the live client, which is the owner's check by eye (issue 132). How many sharelight locs the 16 square holds, and how much the normal merge of [#138](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/138) would change them, was not counted.
+
+## The RS Scene export on the page
+
+Issue 147 measured this on 2026-11-17, with the add-on at commit 0755119. It follows [spec 140](../../spec/140-campfire-glb-export.md) (part 4). The file comes from the add-on's File > Export > RS Scene (.glb), with no scratch step.
+
+### The file
+
+`player147.py` builds the player of issue 87 as `player87.py` does, and bakes the idle clip of row 5 (sequence 2061) with the Bones method as a pose, from frame 1. It selects the two meshes and the rig, and calls `bpy.ops.export_scene.rs_scene` with the defaults: "Colour attribute" `rs_lit` and no extra attributes. Then it renders the player unlit, with the material that Create Player made, at the `player` and `player-side` cameras at frames 1 and 26.
+
+- **The export, evidence.** The operator returned `FINISHED` and reported "Exported 2 meshes and 1 rig". `rsscene147.glb` is 540,716 bytes.
+- **The scene did not change, evidence.** The objects, the actions, the materials in use, the selection and the frame are equal before and after the export, and so are the face counts, the vertex counts, the materials and the attributes of both meshes (`player147.json`).
+- **The face values, evidence.** Create Player wrote the face attributes `rs_face_colour` and `rs_face_alpha` on both meshes. They hold 16 pairs of face colour and face alpha on the body and 3 on the weapon, and every face alpha is 0.
+- **The renders, evidence.** Each render is equal to the lit render of issue 87 at the same camera and frame within 1 of 255. 2 to 4 pixels differ by 1.
+
+| Part of the file | Value |
+| --- | --- |
+| Materials | 19, one for each pair. Each has `KHR_materials_unlit`, the extras `rs_face_colour` and `rs_alpha`, no `alphaMode` (opaque) and `doubleSided` true. |
+| Meshes | `Player_mesh` with 16 primitives and 1,023 triangles, and `Player Weapon_mesh` with 3 primitives and 120 triangles |
+| Attributes of each primitive | `POSITION`, `NORMAL`, `COLOR_0` (a float `VEC3` accessor), `JOINTS_0` and `WEIGHTS_0`. No `COLOR_1`. |
+| Skins | 1, with 61 joints |
+| Animations | 1, `Player BARROW_GUTHAN_READY (2061)`, with 183 channels, all `STEP`, and keys from 0 to 5.06 seconds. No extras. |
+| Extras of the nodes and the scene | As in `player-stock-extras.glb` |
+
+The operator starts each clip at 0 seconds (`export_anim_slide_to_zero`). So Blender frame f is the time (f - 1) / 50 on the page. Issues 87 and 88 used f / 50.
+
+### Issue 116: the colours and the extras
+
+The page drew the file with no query parameter of its own. In each of the 16 screenshots of `rsscene147.glb`, it reported 19 `MeshBasicMaterial` with `vertexColors` true, 19 draw calls and 1,143 triangles. Each material had the extras `rs_face_colour` and `rs_alpha` in `material.userData`, 304 of 304 reports. The first was `{"rs_face_colour": 11138, "rs_alpha": 0}`.
+
+| Pair, unlit render of the player against the page | Drawn pixels | More than 8 of 255 | More than 32 of 255 | Largest | Mean of the drawn pixels |
+| --- | --- | --- | --- | --- | --- |
+| `player`, frame 1 | 74,393 | 3,229 | 527 | 84 | 1.32 |
+| `player-side`, frame 1 | 65,747 | 2,969 | 835 | 81 | 1.45 |
+| `player`, frame 26 | 74,206 | 3,199 | 519 | 76 | 1.33 |
+| `player-side`, frame 26 | 65,639 | 2,987 | 843 | 81 | 1.45 |
+
+The lit page of issue 87 had a mean of 1.3, 1.0, 1.3 and 1.0 in the same pairs, and 529, 246, 521 and 250 pixels over 32.
+
+- **The check holds, evidence.** The page draws the player within a mean of 1.32 to 1.45 of 255 of the unlit render of `rs_lit`, and reports both extras of each material.
+- **The front, read.** The render and the page show the same player with the same shading. The map of the pixels over 32 at frame 1 shows them on the outline of the player and on the edges of the straps.
+- **The side, read.** The map at frame 1 has 530 of its 835 pixels in one cell of the 12 by 8 grid, at the front opening of the skirt. There the page shows the inside of the far side of the skirt as dark stripes, and the render and the issue 87 page do not.
+- **Cause, evidence.** Every material is `doubleSided`, and the page reported each with `side` 2 (`DoubleSide`), so the page draws the back of each face. Create Player's material has backface culling on, so the render draws the front only. `single147.py` writes a copy of the file with `doubleSided` removed. Its page screenshots at frame 1 are equal to the issue 87 page in every pixel at both cameras, and differ from the render by a mean of 1.29 and 0.96, with 529 and 246 pixels over 32. So `doubleSided` is the whole difference from issue 87. In the code, `_new_material` of `export_gltf.py` makes each material with `bpy.data.materials.new`, and the copy does not take the backface culling of its source material. That a new material has backface culling off is read from the file, where every material is `doubleSided`.
+- **The owner's look, read.** The owner looked at both files on the page. With `doubleSided` removed, gear vanishes when the player is seen from the side, and the owner does not want that. [#156](https://github.com/julian-perge/blender-addon-rs317-667mqo-makeup/issues/156) decides how the page draws the back of a player face.
+- **Not checked.** The outfit has no face alpha, so the page check covers no `BLEND` material. Rule 8 of spec 140 is checked by the Blender tests on the glTF JSON only.
+
+### Issue 120: stepped playback
+
+The channels of the clip change at keys 22, 43, 64 and on, every 21 keys (`changes88.py`), as in `idle88.glb`. As 32-bit floats, key 21 is at 0.41999999, key 22 at 0.43999999, key 42 at 0.83999997 and key 43 at 0.86000001 seconds. The page reported 183 tracks, all discrete (2300) with a `DiscreteInterpolant`.
+
+The screenshots are at the `player` camera.
+
+| Pair of times | Pixels that differ | More than 32 of 255 |
+| --- | --- | --- |
+| 0.42 (key 21) and 0.43 | 0 | 0 |
+| 0.42 and 0.439 | 0 | 0 |
+| 0.42 and 0.44 (key 22) | 32,662 | 3,675 |
+| 0.44 and 0.441, and 0.44 and 0.45 | 0 | 0 |
+| 0.84 (key 42) and 0.85, 0.859 or 0.86 | 0 | 0 |
+| 0.86 and 0.861 | 39,353 | 5,518 |
+| 0.86 and 0.87 | 39,353 | 5,518 |
+| 0.45 and 0.84 | 0 | 0 |
+
+- **The check holds, evidence.** A screenshot between two keys (0.43 and 0.439 after key 21, 0.85 and 0.859 after key 42) is equal to the screenshot of the earlier key in every pixel. The pose changes at once at the key where the client frame changes.
+- **The times at a key, evidence.** 0.44 is at or after key 22, so it shows the new pose. 0.86 is before key 43, so it still shows the old pose. The review of issue 147 read the key times of `idle88.glb` as 32-bit floats: key 22 is at 0.46000001 seconds. So the page at 0.46 shows the earlier key there too, and the guess of [Row 6](#row-6-stepped-playback) holds.
+- **The same change as row 6, evidence.** The first change has 3,675 pixels over 32, as the change of `idle88.glb` at 0.46 had.
+- **The pictures, read.** `sheet147-step.png` puts the screenshots at 0.42, 0.439, 0.441, 0.86 and 0.861 side by side. The eye finds no difference between 0.42 and 0.439. At 0.441 and at 0.861 the player has moved a little.
 
 ## Row 2: Nearest sampler
 
@@ -977,7 +1068,7 @@ The bake keys one constant value on each tick, and the exporter samples each Ble
 ### The page
 
 - **Three.js plays `STEP` as stepped, evidence.** The page reported the interpolation of each track. For `idle88.glb`: 173 tracks discrete (2300) with a `DiscreteInterpolant` and 10 linear (2301). For `wave88.glb`: 183 discrete.
-- **The pose changes at once, evidence.** In `idle88.glb`, client frame 1 starts at key 22, at 0.46 seconds. The page screenshots at `t=0.44`, `0.45`, `0.459` and `0.46` are equal in every pixel. The ones at `t=0.461` and `0.47` are equal to each other, and differ from the first 4 in 3,675 pixels by more than 32. `t=0.46` still shows frame 0. A guess is that the key time is the 32-bit float just over 0.46. In `wave88.glb`, client frame 1 starts at 0.12 seconds. The screenshots at `t=0.10`, `0.11` and `0.119` are equal in every pixel, and the one at `t=0.12` differs in 5,870 pixels by more than 32.
+- **The pose changes at once, evidence.** In `idle88.glb`, client frame 1 starts at key 22, at 0.46 seconds. The page screenshots at `t=0.44`, `0.45`, `0.459` and `0.46` are equal in every pixel. The ones at `t=0.461` and `0.47` are equal to each other, and differ from the first 4 in 3,675 pixels by more than 32. `t=0.46` still shows frame 0. The key time is the 32-bit float just over 0.46 (0.46000001), read in the review of issue 147. In `wave88.glb`, client frame 1 starts at 0.12 seconds. The screenshots at `t=0.10`, `0.11` and `0.119` are equal in every pixel, and the one at `t=0.12` differs in 5,870 pixels by more than 32.
 - **`NLA_TRACKS` blends on the page, evidence.** For `fade88-pointer.glb`, the screenshots at `t=0.10`, `0.11`, `0.119` and `0.12` all differ from each other. The same times of `fade88.glb` (mode `ACTIONS`) are equal from `0.10` to `0.119`.
 - **Not checked.** The page with the clip playing, not frozen, was not recorded. The three.js mixer loops a clip by default, and the client plays an action once. The page code has to set that.
 
