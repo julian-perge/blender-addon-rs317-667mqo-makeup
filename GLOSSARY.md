@@ -200,6 +200,10 @@ _Avoid_: render animations, base animation set, BAS
 A weapon's stance clips plus the attack clip for each of its combat style buttons and its block clip, as an open table gives them (`data/weapon_clips.json`).
 _Avoid_: stance set, which leaves out the attack and block clips
 
+**NPC clips**:
+The animation sequences of an NPC that its NPC definition does not name, such as its attack, flinch and death, as the models mod of the AnotherScape modpack gives them for that NPC id (`data/npc_clips.json`). The Combat row of the NPC panel has one button for each. The clips are unverified for July 2017, except those of the green dragon 260 and the giant spider 2477 ([ADR 0030](docs/adr/0030-npc-clips-come-from-the-anotherscape-models-mod.md)).
+_Avoid_: combat animations, extra clips
+
 **Play as**:
 How a bake advances a clip's frames. A Pose starts at frame 0 and ignores the loop offset. An Action plays once, or loops by its loop offset. Picking a clip by name sets Pose for a stance clip in the weapon clips table and Action for any other clip. The Stance and Attack buttons set it for their own clips, and the animator can change it after.
 _Avoid_: play mode, loop mode
