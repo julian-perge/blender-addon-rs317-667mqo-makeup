@@ -22,6 +22,8 @@ The two directions that the note tests come from the issue:
 - **The region file carries the look.** A scratch script joins the terrain and the scenery of a square into a few meshes before the export. The face colour goes in a colour attribute, and the meshes use one unlit material. The stock three.js loader draws it with no custom code.
 - **The player file carries the game values.** The rig and the clip stay as they are. The materials export `rs_face_colour` and `rs_alpha` as extras, and page code makes the flat materials.
 
+  [ADR 0026](../docs/adr/0026-the-gltf-page-draws-the-baked-client-light.md) changes how the page draws the player. The extras stay on the materials, but the page draws the client light baked in `rs_lit`, not flat materials.
+
 ## Method
 
 ### Scenes
