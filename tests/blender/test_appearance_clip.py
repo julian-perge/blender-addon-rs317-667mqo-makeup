@@ -1391,6 +1391,45 @@ def test_a_held_bake_that_fails_after_making_the_held_items_leaves_the_file_as_i
     assert state() == before
 
 
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (
+            lambda model: dataclasses.replace(
+                model, face_textures=[5, *model.face_textures[1:]], face_colours=[None, *model.face_colours[1:]]
+            ),
+            "Lighting of textured faces is not verified against the client",
+        ),
+        (
+            lambda model: dataclasses.replace(model, face_alphas=[254, *model.face_alphas[1:]]),
+            "Lighting of faces with alpha 254 or 255 is not verified against the client",
+        ),
+        (
+            lambda model: dataclasses.replace(model, face_alphas=[255, *model.face_alphas[1:]]),
+            "Lighting of faces with alpha 254 or 255 is not verified against the client",
+        ),
+    ],
+    ids=["textured face", "alpha 254", "alpha 255"],
+)
+def test_a_held_variant_with_a_face_it_cannot_draw_is_refused_and_leaves_the_file_as_it_was(
+    armed_cache, monkeypatch, change, message
+):
+    # The owner's decision of 2026-11-17 on issue 105: the held variant keeps refusing these faces until issue 103.
+    # No held item of the test cache has such a face, so the test gives the held variant one.
+    _, collection = armed_player(armed_cache)
+    assemble_slots = CacheProfile.assemble_slots
+
+    def changed(profile, preset, equipment=None):
+        model, slots = assemble_slots(profile, preset, equipment)
+        return (model if equipment is None else change(model)), slots
+
+    monkeypatch.setattr(CacheProfile, "assemble_slots", changed)
+    before = set(bpy.data.objects), set(bpy.data.meshes), bone_names(collection), set(bpy.data.actions)
+    with pytest.raises(ValueError, match=message):
+        appearance_clip.bake_clip(collection, CLIPS / "held-1365", action=True, cache_folder=str(armed_cache))
+    assert (set(bpy.data.objects), set(bpy.data.meshes), bone_names(collection), set(bpy.data.actions)) == before
+
+
 def test_a_clip_that_ends_where_the_next_strip_starts_bakes_beside_it(cache):
     # The user chose that a clip baked to end exactly where another strip on RS clips starts bakes fine (issue 13,
     # decision 3, 2026-11-10).

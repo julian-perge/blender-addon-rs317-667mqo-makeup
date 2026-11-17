@@ -9,7 +9,7 @@ from ..formats.appearance_preset import AppearancePreset
 from ..formats.cache_profile import shared_profile
 from ..formats.colour import face_colour_to_rgb
 from ..formats.face_order import visible_faces
-from ..formats.lighting import Shading, light
+from ..formats.lighting import Shading, light_hsl
 from ..formats.model import Model
 from . import preferences
 from .axes import game_to_blender
@@ -173,10 +173,10 @@ def cache_folder(setting: str) -> Path:
 def assemble_lit(preset: AppearancePreset, folder: Path) -> tuple[Model, Shading]:
     """Assemble and light the preset's body. Everything that can fail runs here, before any Blender data changes."""
     body = shared_profile(folder).assemble(preset)
-    return body, light(body)
+    return body, light_hsl(body)
 
 
 def assemble_parts(preset: AppearancePreset, folder: Path) -> tuple[Model, Shading, dict[int, range]]:
     """`assemble_lit`, with the faces each equipment slot supplied."""
     body, slots = shared_profile(folder).assemble_slots(preset)
-    return body, light(body), slots
+    return body, light_hsl(body), slots

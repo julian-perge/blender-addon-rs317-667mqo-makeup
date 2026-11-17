@@ -19,7 +19,7 @@ from ..animation.frames import decode_frame_map, decode_sequence
 from ..formats.appearance_rig import derive_rig, frame_map_joint_specs
 from ..formats.cache_profile import shared_profile
 from ..formats.js5 import Js5Store
-from ..formats.lighting import Shading, light
+from ..formats.lighting import Shading, light_hsl
 from ..formats.model import Model
 from ..formats.npc_definition import LIGHT_DIRECTION, NpcDefinition, npc_lighting, npc_model, npc_scale, read_npc
 from . import appearance_collection, appearance_preview, export_model, preferences, rs_layers
@@ -71,7 +71,7 @@ def create_npc(npc_id: int, folder: Path, brightness: float) -> bpy.types.Collec
     store = Js5Store(folder)
     npc = read_npc(store, npc_id)
     model = npc_model(npc, shared_profile(folder).load_model)
-    shading = light(model, npc_lighting(npc))
+    shading = light_hsl(model, npc_lighting(npc))
     map_id, frame_map = stand_frame_map(store, npc)
     sequences = {field: getattr(npc, field) for field in SEQUENCE_FIELDS if getattr(npc, field) != -1}
     record = {"npc": npc_id, "name": npc.name, "frame_map": map_id, "sequences": sequences}
@@ -101,7 +101,7 @@ def make_rig(obj: bpy.types.Object | None, sequence_id: int, folder: Path, brigh
     # The same errors that model export reports for one object (export_model.prepare_exports).
     except (ValueError, OverflowError, IndexError) as error:
         raise ValueError(f"{obj.name!r} cannot have a rig: {error}") from error
-    shading = light(model, MADE_RIG_LIGHTING)
+    shading = light_hsl(model, MADE_RIG_LIGHTING)
     record = {"npc": None, "name": obj.name, "frame_map": map_id, "sequences": {}, "sequence": sequence_id}
     return _build(model, shading, map_id, frame_map, (1.0, 1.0, 1.0), obj.name, record, brightness)
 

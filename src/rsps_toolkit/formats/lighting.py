@@ -1,12 +1,15 @@
-"""The revision 149 client's per-vertex model lighting for untextured faces. Nothing here imports bpy.
+"""The client's per-vertex model lighting. Nothing here imports bpy.
 
-This follows `ModelData.light` and `computeNormals` as read from RuneLite (revision 170), and it is checked against
-lit models that the unchanged revision 149 client produced (see `tests/fixtures/appearance/reference.json`). The
-branches the reference does not cover are refused instead of guessed. Flat-shaded faces are covered only by the
-male cases (8 faces), and 32-bit overflow of the face normal is not modelled.
+This follows `ModelData.light` and `computeNormals` in the May 2018 RuneLite tree (revision 170,
+`runescape-client/src/main/java/ModelData.java` lines 1408 to 1480 and 1538 to 1718). The player cases are checked
+against lit models that the unchanged revision 149 client produced (see `tests/fixtures/appearance/reference.json`).
+Textured faces, faces with alpha 254 or 255, and faces of render type 2 or 3 are checked on hand-made models against
+the arithmetic of those lines (`tests/unit/test_lighting.py`). Flat-shaded faces are covered only by the male player
+cases (8 faces) and the hand-made models, and 32-bit overflow of the face normal is not modelled.
 """
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .model import Model
@@ -19,11 +22,18 @@ _HIDDEN_ALPHAS = (254, 255)
 
 @dataclass(frozen=True)
 class Shading:
-    """One lit HSL colour per face corner, the way the client stores them."""
+    """One lit value per face corner, the way the client stores them.
+
+    For a face with `light_values` False, a corner holds a lit HSL colour. For a face with it True (a textured face),
+    a corner holds a light value from 2 to 126 that the client multiplies the texture by. A flat face holds its one
+    value in `corner_a`, 0 in `corner_b` and -1 in `corner_c`. An untextured face of render type 3 holds 128, 0 and
+    -1, and a hidden face holds 0, 0 and -2.
+    """
 
     corner_a: list[int]
     corner_b: list[int]
     corner_c: list[int]
+    light_values: list[bool]
 
 
 def _divide(numerator: int, denominator: int) -> int:
@@ -48,42 +58,90 @@ def _shade(colour: int, intensity: int) -> int:
     return (colour & 0xFF80) + min(max(intensity, 2), 126)
 
 
+def _lit(colour: int | None, intensity: int) -> int:
+    """`method2639` (ModelData.java lines 1818 to 1827) for a face colour, and `method2676` (lines 1830 to 1838) for
+    a textured face, which has no colour."""
+    return min(max(intensity, 2), 126) if colour is None else _shade(colour, intensity)
+
+
+def _stored_render_types(model: Model) -> list[int]:
+    """The render type of each face as the client stores it before lighting.
+
+    A model read from the new format keeps the byte it read (ModelData.java line 638). Any other model gives 1 for a
+    flat face and 0 for any other, as the client stores an old-format model (lines 932 to 938). A model joined by
+    `appearance.merge` or made by hand has no new-format data, so a stored render type 2 or 3 of a joined part is lost
+    and the face is lit from its flat shading alone.
+    """
+    if model.new_data is not None:
+        return list(model.new_data.face_render_types)
+    return [1 if flat else 0 for flat in model.flat_shaded]
+
+
 def light(model: Model, lighting: tuple[int, int, int, int, int] = PLAYER_LIGHTING) -> Shading:
-    """Light an assembled model. Textured faces and the two special alpha values are not supported."""
-    ambient, contrast, lx, ly, lz = lighting
+    """Light an assembled model as `ModelData.light` does, with the lighting (ambient, contrast, x, y, z)."""
+    return _light(model, lighting, _stored_render_types(model))
+
+
+def light_hsl(model: Model, lighting: tuple[int, int, int, int, int] = PLAYER_LIGHTING) -> Shading:
+    """Light a model for a caller whose `rs_lit` holds only HSL colours, such as Create Player.
+
+    It refuses a textured face and a face with alpha 254 or 255, and it lights a face of render type 2 or 3
+    from its flat shading alone, as `light` did before `light` read those faces. The owner decided this on 2026-11-17
+    (issues 105 and 127), and issue 103 changes it.
+    """
     if any(t is not None for t in model.face_textures):
         raise ValueError("Lighting of textured faces is not verified against the client")
     if any(a in _HIDDEN_ALPHAS for a in model.face_alphas):
         raise ValueError("Lighting of faces with alpha 254 or 255 is not verified against the client")
+    return _light(model, lighting, [1 if flat else 0 for flat in model.flat_shaded])
+
+
+def _light(model: Model, lighting: tuple[int, int, int, int, int], render_types: Sequence[int]) -> Shading:
+    ambient, contrast, lx, ly, lz = lighting
     divisor = (math.isqrt(lx * lx + ly * ly + lz * lz) * contrast) >> 8
     sums = [[0, 0, 0, 0] for _ in model.vertices]
     face_normals: dict[int, tuple[int, int, int]] = {}
+    # computeNormals (ModelData.java lines 1444 to 1476) reads the stored render type and not the alpha. A face of
+    # render type 0 adds its normal to its vertices, a face of render type 1 keeps its own, and any other adds nothing.
     for index, face in enumerate(model.faces):
         normal = _face_normal(model, face)
-        if model.flat_shaded[index]:
+        if render_types[index] == 1:
             face_normals[index] = normal
-            continue
-        for vertex in face:
-            total = sums[vertex]
-            total[0] += normal[0]
-            total[1] += normal[1]
-            total[2] += normal[2]
-            total[3] += 1
+        elif render_types[index] == 0:
+            for vertex in face:
+                total = sums[vertex]
+                total[0] += normal[0]
+                total[1] += normal[1]
+                total[2] += normal[2]
+                total[3] += 1
     corners: tuple[list[int], list[int], list[int]] = ([], [], [])
+    light_values: list[bool] = []
     for index, face in enumerate(model.faces):
-        colour = model.face_colours[index]
-        if colour is None:
+        textured = model.face_textures[index] is not None
+        colour = None if textured else model.face_colours[index]
+        if not textured and colour is None:
             raise ValueError(f"Face {index} has no colour to light")
-        if model.flat_shaded[index]:
-            x, y, z = face_normals[index]
-            value = _shade(colour, _divide(ly * y + lz * z + lx * x, divisor // 2 + divisor) + ambient)
-            corners[0].append(value)
-            # The client leaves the second corner at 0 and marks the third as -1 for a flat face.
-            corners[1].append(0)
-            corners[2].append(-1)
+        light_values.append(textured)
+        # ModelData.java lines 1614 to 1620: alpha -2 (254) makes the render type 3 and alpha -1 (255) makes it 2.
+        alpha = model.face_alphas[index]
+        kind = 3 if alpha == 254 else 2 if alpha == 255 else render_types[index]
+        if kind == 0:
+            # Lines 1639 to 1663 for an untextured face and lines 1674 to 1698 for a textured one.
+            for slot, vertex in enumerate(face):
+                x, y, z, magnitude = sums[vertex]
+                corners[slot].append(_lit(colour, _divide(ly * y + lz * z + lx * x, divisor * magnitude) + ambient))
             continue
-        for slot, vertex in enumerate(face):
-            x, y, z, magnitude = sums[vertex]
-            intensity = _divide(ly * y + lz * z + lx * x, divisor * magnitude) + ambient
-            corners[slot].append(_shade(colour, intensity))
-    return Shading(*corners)
+        if kind == 1:
+            # Lines 1627 to 1631 and 1666 to 1670. The client never writes the second corner, so it stays 0.
+            x, y, z = face_normals[index]
+            value = _lit(colour, _divide(ly * y + lz * z + lx * x, divisor // 2 + divisor) + ambient)
+            row = (value, 0, -1)
+        elif kind == 3 and not textured:
+            # Lines 1632 to 1634.
+            row = (128, 0, -1)
+        else:
+            # Lines 1635 and 1636 for an untextured face and 1671 and 1672 for a textured one hide the face.
+            row = (0, 0, -2)
+        for slot, value in enumerate(row):
+            corners[slot].append(value)
+    return Shading(*corners, light_values)

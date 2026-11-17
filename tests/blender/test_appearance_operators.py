@@ -134,6 +134,41 @@ def test_a_missing_model_cancels_and_creates_nothing(cache):
     assert not bpy.data.objects
 
 
+def textured_first_face(model):
+    return dataclasses.replace(
+        model, face_textures=[5, *model.face_textures[1:]], face_colours=[None, *model.face_colours[1:]]
+    )
+
+
+def alpha_on_first_face(alpha):
+    return lambda model: dataclasses.replace(model, face_alphas=[alpha, *model.face_alphas[1:]])
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (textured_first_face, "Lighting of textured faces is not verified against the client"),
+        (alpha_on_first_face(254), "Lighting of faces with alpha 254 or 255 is not verified against the client"),
+        (alpha_on_first_face(255), "Lighting of faces with alpha 254 or 255 is not verified against the client"),
+    ],
+    ids=["textured face", "alpha 254", "alpha 255"],
+)
+def test_create_player_refuses_a_face_it_cannot_draw_and_creates_nothing(cache, monkeypatch, change, message):
+    # The owner's decision of 2026-11-17 on issue 105: Create Player keeps refusing these faces until issue 103. No
+    # player item of the test cache has such a face, so the test gives the assembled body one.
+    assemble_slots = cache_profile.CacheProfile.assemble_slots
+
+    def changed(profile, preset, equipment=None):
+        body, slots = assemble_slots(profile, preset, equipment)
+        return change(body), slots
+
+    monkeypatch.setattr(cache_profile.CacheProfile, "assemble_slots", changed)
+    show(case(None, False, [0, 0, 0, 0, 0]))
+    with pytest.raises(RuntimeError, match=message):
+        create(cache_folder=str(cache))
+    assert not bpy.data.objects
+
+
 def test_no_cache_folder_is_an_error(cache):
     show(case(None, False, [0, 0, 0, 0, 0]))
     with pytest.raises(RuntimeError, match="Set the Cache folder"):

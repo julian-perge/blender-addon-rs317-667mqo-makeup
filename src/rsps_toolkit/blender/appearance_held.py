@@ -18,7 +18,7 @@ from ..formats.appearance import ITEM_OFFSET, held_equipment
 from ..formats.appearance_preset import loads_preset
 from ..formats.appearance_rig import Rig, derive_rig
 from ..formats.cache_profile import shared_profile
-from ..formats.lighting import Shading, light
+from ..formats.lighting import Shading, light_hsl
 from ..formats.model import Model, Vertex
 from . import appearance_collection, appearance_preview, preferences
 from .axes import game_to_blender
@@ -59,7 +59,7 @@ def variant(collection: bpy.types.Collection, held: tuple[int, int], cache_folde
     model, slots = profile.assemble_slots(preset, equipment)
     worn_model, worn_slots = profile.assemble_slots(preset)
     names = {value - ITEM_OFFSET: profile.items[value - ITEM_OFFSET].name for value in held if value >= ITEM_OFFSET}
-    return Variant(tuple(equipment), model, light(model), slots, worn_model, worn_slots, names)
+    return Variant(tuple(equipment), model, light_hsl(model), slots, worn_model, worn_slots, names)
 
 
 def changed_slots(collection: bpy.types.Collection, equipment: Sequence[int]) -> list[int]:
