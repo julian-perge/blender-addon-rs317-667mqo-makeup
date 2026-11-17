@@ -88,7 +88,7 @@ Create NPC by id and Make rig refuse, before they make any Blender data:
 - an NPC id that the cache lacks, or an NPC with no models;
 - a model without vertex skins, naming the model ids;
 - an NPC with no stand sequence;
-- for Make rig, an active object that is not a mesh with vertex skins, or a sequence id that the cache lacks.
+- for Make rig, an active object that is not a mesh with vertex skins, a mesh whose evaluated model (modifiers applied, faces split into triangles) model export refuses, or a sequence id that the cache lacks.
 
 ## Commands
 

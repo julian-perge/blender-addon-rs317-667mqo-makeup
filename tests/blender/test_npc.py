@@ -8,6 +8,7 @@ import re
 import types
 from pathlib import Path
 
+import bmesh
 import bpy
 import pytest
 from mathutils import Matrix, Vector
@@ -22,6 +23,7 @@ from rsps_toolkit.blender import (
     appearance_props,
     npc_collection,
     npc_panel,
+    rs_layers,
 )
 from rsps_toolkit.blender import mesh as blender_mesh
 from rsps_toolkit.blender.face_materials import DEFAULT_BRIGHTNESS, srgb_to_linear
@@ -726,6 +728,8 @@ def object_state(obj: bpy.types.Object) -> dict[str, object]:
         "materials": [m.name for m in data.materials if m is not None],
         "properties": sorted(obj.keys()),
         "mesh properties": sorted(data.keys()),
+        "corners": [loop.vertex_index for loop in data.loops],
+        "modifiers": [(m.name, m.type) for m in obj.modifiers],
     }
 
 
@@ -816,6 +820,42 @@ def unlabelled_gnome() -> bpy.types.Object:
     return obj
 
 
+def weight_stripped_gnome() -> bpy.types.Object:
+    # Every vertex of the mesh has a label, but Vertex Weight Edit modifiers take each vertex out of every vertex skin
+    # group, so no vertex of the evaluated model has one.
+    obj = imported_gnome()
+    for name in rs_layers.VERTEX_SKIN_GROUPS:
+        if name in obj.vertex_groups:
+            modifier = obj.modifiers.new(f"Strip {name}", "VERTEX_WEIGHT_EDIT")
+            assert isinstance(modifier, bpy.types.VertexWeightEditModifier)
+            modifier.vertex_group = name
+            modifier.use_remove = True
+            modifier.remove_threshold = 1.0
+    return obj
+
+
+def mirrored(obj: bpy.types.Object) -> bpy.types.Object:
+    # The Mirror modifier gives a second copy of every vertex, with the same vertex skin weights. The gnome is symmetric,
+    # so it mirrors across an empty far to the right, where the copy touches nothing of the original.
+    centre = bpy.data.objects.new("mirror centre", None)
+    bpy.context.scene.collection.objects.link(centre)  # pyrefly: ignore[missing-attribute]
+    centre.location = (10.0, 0.0, 0.0)
+    modifier = obj.modifiers.new("Mirror", "MIRROR")
+    assert isinstance(modifier, bpy.types.MirrorModifier)
+    modifier.use_mirror_merge = False
+    modifier.mirror_object = centre
+    return obj
+
+
+def mirrored_textured_gnome() -> bpy.types.Object:
+    # Model export refuses a modifier that changes the vertices a texture triangle names (export_model._evaluated).
+    obj = mirrored(imported_gnome())
+    data = obj.data
+    assert isinstance(data, bpy.types.Mesh)
+    data[rs_layers.TEXTURE_TRIANGLES] = [0, 1, 2]
+    return obj
+
+
 @pytest.mark.parametrize(
     ("make_active", "sequence", "message"),
     [
@@ -823,9 +863,19 @@ def unlabelled_gnome() -> bpy.types.Object:
         (armature_object, 195, "'rig' is not a mesh"),
         (unskinned_gnome, 195, "'Gnome model' has no vertex skins"),
         (unlabelled_gnome, 195, "'Gnome model' cannot have a rig: 2 vertices have no vertex skin label"),
+        (weight_stripped_gnome, 195, r"'Gnome model' cannot have a rig: \d+ vertices have no vertex skin label"),
+        (mirrored_textured_gnome, 195, "'Gnome model' cannot have a rig: its modifiers change the vertices"),
         (imported_gnome, 99999, "no sequence 99999"),
     ],
-    ids=["no active object", "not a mesh", "no vertex skins", "vertices with no label", "sequence the cache lacks"],
+    ids=[
+        "no active object",
+        "not a mesh",
+        "no vertex skins",
+        "vertices with no label",
+        "modifiers that remove the labels",
+        "modifiers that move texture triangles",
+        "sequence the cache lacks",
+    ],
 )
 def test_make_rig_refuses_and_changes_nothing(make_active, sequence, message):
     obj = make_active()
@@ -869,6 +919,61 @@ def test_make_rig_builds_from_the_mesh_as_the_user_edited_it():
     index = vertices_of(collection).index(0)
     x, y, z = to_rig @ mesh(collection).vertices[index].co
     assert (x, -z, y) == pytest.approx(moved, abs=1e-4)
+
+
+def test_make_rig_splits_a_face_with_four_corners_into_triangles():
+    # Make rig takes what model export takes (issue 113), and model export splits such a face into two triangles.
+    obj = imported_gnome()
+    data = obj.data
+    assert isinstance(data, bpy.types.Mesh)
+    faces = len(data.polygons)
+    bm = bmesh.new()
+    bm.from_mesh(data)
+    bm.edges.ensure_lookup_table()
+    shared = next(edge for edge in bm.edges if len(edge.link_faces) == 2)
+    bmesh.ops.dissolve_edges(bm, edges=[shared])
+    bm.to_mesh(data)
+    bm.free()
+    assert max(p.loop_total for p in data.polygons) == 4
+    before = object_state(obj)
+    assert make_rig(195) == {"FINISHED"}
+    assert object_state(obj) == before
+    collection = npc_collection.npc_of(active())
+    assert collection is not None
+    assert {p.loop_total for p in mesh(collection).polygons} == {3}
+    assert len(mesh(collection).polygons) == faces
+
+
+def test_make_rig_builds_the_model_with_the_modifiers_applied():
+    obj = mirrored(imported_gnome())
+    data = obj.data
+    assert isinstance(data, bpy.types.Mesh)
+    vertices, faces = len(data.vertices), len(data.polygons)
+    before = object_state(obj)
+    assert make_rig(195) == {"FINISHED"}
+    assert object_state(obj) == before
+    collection = npc_collection.npc_of(active())
+    assert collection is not None
+    assert max(vertices_of(collection)) + 1 == 2 * vertices
+    assert len(mesh(collection).polygons) == 2 * faces
+
+
+def test_make_rig_checks_the_labels_of_the_model_with_the_modifiers_applied():
+    # A Mask modifier that drops the two vertices with no label leaves a model in which every vertex has one.
+    obj = unlabelled_gnome()
+    keep = obj.vertex_groups.new(name="keep")
+    data = obj.data
+    assert isinstance(data, bpy.types.Mesh)
+    keep.add(list(range(2, len(data.vertices))), 1.0, "REPLACE")
+    modifier = obj.modifiers.new("Mask", "MASK")
+    assert isinstance(modifier, bpy.types.MaskModifier)
+    modifier.vertex_group = "keep"
+    before = object_state(obj)
+    assert make_rig(195) == {"FINISHED"}
+    assert object_state(obj) == before
+    collection = npc_collection.npc_of(active())
+    assert collection is not None
+    assert max(vertices_of(collection)) + 1 == len(data.vertices) - 2
 
 
 def test_make_rig_twice_on_one_object_builds_two_npcs():

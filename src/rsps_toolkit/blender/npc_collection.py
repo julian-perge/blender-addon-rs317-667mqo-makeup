@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 from ..animation.bundle import FrameMap
 from ..animation.clip import CacheClip, frame_map_id
@@ -22,7 +22,7 @@ from ..formats.js5 import Js5Store
 from ..formats.lighting import Shading, light
 from ..formats.model import Model
 from ..formats.npc_definition import LIGHT_DIRECTION, NpcDefinition, npc_lighting, npc_model, npc_scale, read_npc
-from . import appearance_collection, appearance_preview, mesh, preferences, rs_layers
+from . import appearance_collection, appearance_preview, export_model, preferences, rs_layers
 
 # On an NPC collection: the NPC id, its name, the frame map of its rig and the sequences its definition names, as JSON.
 # The NPC id is null for an NPC that Make rig built, which also stores the sequence that the user typed (the decision
@@ -82,25 +82,25 @@ def make_rig(obj: bpy.types.Object | None, sequence_id: int, folder: Path, brigh
     """Build an NPC collection from the model of a mesh object with vertex skins, rigged for the frame map of the first
     frame of the sequence, beside the players and NPCs of the file (spec 13, Make rig).
 
-    The new collection has its own mesh, so the object keeps its mesh, transform and collections. The model is the
-    one that model export would write: the mesh's own positions, with no object transform. The collection takes the
-    object's name and has a scale of 1 (the decision comment of issue 95). Everything that can fail runs before any
-    Blender data exists: an object that is not a mesh with vertex skins, a vertex with no label and a sequence that
-    the cache lacks are refused.
+    The new collection has its own mesh, so the object keeps its mesh, modifiers, transform and collections. The model
+    is the one that model export would write, with no object transform: the modifiers are applied and the faces split
+    into triangles (issue 113). The collection takes the object's name and has a scale of 1 (the decision comment of
+    issue 95). Everything that can fail runs before the new collection exists, and model export removes the temporary
+    mesh that it builds the model from. An object that is not a mesh with vertex skins, a sequence that the cache
+    lacks and a model that model export refuses, such as one with a vertex with no label, are refused.
     """
     if obj is None:
         raise ValueError("Make rig needs an active mesh object, and there is no active object")
     if obj.type != "MESH":
         raise ValueError(f"Make rig needs a mesh object, and {obj.name!r} is not a mesh")
-    labels = rs_layers.read_vertex_labels(obj)
-    if labels is None:
+    if rs_layers.read_vertex_labels(obj) is None:
         raise ValueError(f"{obj.name!r} has no vertex skins, so it cannot have a rig")
-    if None in labels:
-        raise ValueError(
-            f"{obj.name!r} cannot have a rig: {rs_layers.unlabelled(labels.count(None))}. {rs_layers.UNLABELLED_ADVICE}"
-        )
     map_id, frame_map = sequence_frame_map(Js5Store(folder), sequence_id, f"Sequence {sequence_id}")
-    model = mesh.object_to_model(obj)
+    try:
+        model = export_model.evaluated_model(obj, Matrix.Identity(4))
+    # The same errors that model export reports for one object (export_model.prepare_exports).
+    except (ValueError, OverflowError, IndexError) as error:
+        raise ValueError(f"{obj.name!r} cannot have a rig: {error}") from error
     shading = light(model, MADE_RIG_LIGHTING)
     record = {"npc": None, "name": obj.name, "frame_map": map_id, "sequences": {}, "sequence": sequence_id}
     return _build(model, shading, map_id, frame_map, (1.0, 1.0, 1.0), obj.name, record, brightness)
