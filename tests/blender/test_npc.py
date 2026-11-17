@@ -665,3 +665,20 @@ def test_the_rig_of_an_npc_shows_the_bake_rows_too():
     collection = created(4233)
     bpy.context.view_layer.objects.active = appearance_collection.armature_of(collection)  # pyrefly: ignore[missing-attribute]
     assert len(bake_buttons()) == 3
+
+
+def test_the_stance_buttons_cover_every_sequence_field_of_an_npc_in_order():
+    # A field that npc_collection stores and the panel has no text for would get no button.
+    assert tuple(npc_panel.STANCE_LABELS) == npc_collection.SEQUENCE_FIELDS
+
+
+def test_the_tooltip_of_a_bake_button_names_its_sequence_and_how_it_plays():
+    pose = types.SimpleNamespace(sequence=808, play_as="POSE")
+    action = types.SimpleNamespace(sequence=189, play_as="ACTION")
+    describe = npc_panel.RSPS_OT_bake_npc_clip.description
+    assert describe(bpy.context, pose) == (
+        "Bake sequence 808 onto the active NPC as a Pose, starting at the current frame"
+    )
+    assert describe(bpy.context, action) == (
+        "Bake sequence 189 onto the active NPC as an Action, starting at the current frame"
+    )

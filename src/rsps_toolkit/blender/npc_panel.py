@@ -48,6 +48,11 @@ class RSPS_OT_bake_npc_clip(bpy.types.Operator):
     def poll(cls, context):
         return npc_collection.npc_of(context.active_object) is not None
 
+    @classmethod
+    def description(cls, context, properties):
+        play_as = "a Pose" if properties.play_as == "POSE" else "an Action"
+        return f"Bake sequence {properties.sequence} onto the active NPC as {play_as}, starting at the current frame"
+
     def execute(self, context):
         npc = npc_collection.npc_of(context.active_object)
         assert npc is not None
@@ -95,12 +100,11 @@ def _draw_bake(layout, scene, npc: bpy.types.Collection) -> None:
     Action."""
     layout.label(text=npc.name)
     sequences = json.loads(npc[npc_collection.NPC_KEY])["sequences"]
-    if sequences:
-        layout.label(text="Stance:")
-        stance = layout.grid_flow(row_major=True, columns=3, align=True)
-        for field, text in STANCE_LABELS.items():
-            if field in sequences:
-                _bake_button(stance, scene, text, sequences[field], "POSE")
+    layout.label(text="Stance:")
+    stance = layout.grid_flow(row_major=True, columns=3, align=True)
+    for field, text in STANCE_LABELS.items():
+        if field in sequences:
+            _bake_button(stance, scene, text, sequences[field], "POSE")
     layout.prop(scene, "rs_npc_sequence")
     layout.prop(scene, "rs_npc_smooth")
     _bake_button(layout, scene, "Bake at the current frame", scene.rs_npc_sequence, "ACTION")
