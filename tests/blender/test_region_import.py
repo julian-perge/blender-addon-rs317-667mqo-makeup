@@ -1254,6 +1254,23 @@ def test_two_placements_of_one_model_that_differ_in_one_input_of_the_light_get_t
     assert first is not second
 
 
+def test_a_diagonal_wall_decoration_and_a_straight_one_of_one_model_get_two_meshes():
+    # A type 6 decoration at rotation 0 asks for getModel(4, 4), and a type 4 decoration asks for getModel(4, 0)
+    # (PacketBuffer.java lines 422 to 430). The loc of the first has the mirror flag, which ObjectComposition.java line
+    # 753 cancels for the rotation 4, so the two parts differ only by the diagonal turn. Lines 787 to 790 make that turn
+    # before the light.
+    locs = {1: hand_loc(loc_types=(4,), mirrored=True), 2: hand_loc(loc_types=(4,))}
+    placements = [Placement(1, 0, 5, 5, 6, 0), Placement(2, 0, 8, 5, 4, 0)]
+
+    collection, _ = hand_scenery(locs, placements)
+
+    diagonal, straight = (p.parts[0] for p in place_scenery(placements, locs, lambda x, y: -40))
+    assert (diagonal.model_rotation, straight.model_rotation) == (4, 0)
+    assert diagonal.model.mirrored is straight.model.mirrored is False
+    first, second = (mesh_of(obj) for obj in collection.objects)
+    assert first is not second
+
+
 def lit_corners(obj: bpy.types.Object) -> list[list[tuple[float, ...]]]:
     """The `rs_lit` colour of each corner of each polygon, in loop order."""
     mesh = mesh_of(obj)
