@@ -213,7 +213,7 @@ A bone of a rig that the user animates. It comes from a rotate transform of a fr
 _Avoid_: bone (the rig also has hidden label bones), control
 
 **NPC**:
-A character of the game that is not a player, such as a gnome or a cow. An NPC definition (config group 9) names its models, recolours, retextures and scale, and its stand, walk and turn sequences. In Blender an NPC is its own kind of collection, made by Create NPC by id and then only baked, not updated ([ADR 0025](docs/adr/0025-an-npc-is-created-and-baked-only.md)).
+A character of the game that is not a player, such as a gnome or a cow. An NPC definition (config group 9) names its models, recolours, retextures and scale, and its stand, walk and turn sequences. In Blender an NPC is its own kind of collection, made by Create NPC by id or by Make rig on a model with vertex skins, and then only baked, not updated ([ADR 0025](docs/adr/0025-an-npc-is-created-and-baked-only.md)).
 _Avoid_: monster, mob
 
 **Your motion**:

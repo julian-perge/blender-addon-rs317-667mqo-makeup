@@ -253,6 +253,9 @@ def test_model_with_repeated_vertex_faces_and_a_quad_exports(tmp_path: Path):
     bm.faces.new(corners)
     bm.to_mesh(mesh)
     bm.free()
+    # Export refuses a vertex with no label, so the quad's new vertices get label 0.
+    count = len(mesh.vertices)
+    obj.vertex_groups["VSKIN1:"].add(list(range(count - 4, count)), 0.0, "REPLACE")
 
     assert run_export(obj, "CUSTOM_PRIORITY") == {"FINISHED"}
 
@@ -645,3 +648,13 @@ def test_player_collection_objects_are_refused_with_the_rest_of_the_selection(tm
         export_model.model_files(player, "CUSTOM_PRIORITY", False)
     with pytest.raises(ValueError, match="player appearance"):
         animation.assert_static_exportable([source, player])
+
+
+def test_a_vertex_with_no_vertex_skin_label_is_refused():
+    # A vertex in no vertex skin group has no label, and export does not write label 0 for it (the decision comment
+    # of issue 95). Label 0 is a member of VSKIN1: with weight 0.
+    _, obj = imported(WORN[0])
+    for name in ("VSKIN1:", "VSKIN2:", "VSKIN3:"):
+        obj.vertex_groups[name].remove([0])
+    with pytest.raises(ValueError, match="1 vertex has no vertex skin label"):
+        export_model.model_files(obj, "CUSTOM_PRIORITY", False)

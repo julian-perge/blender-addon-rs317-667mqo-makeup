@@ -69,9 +69,10 @@ def test_assign_custom_uses_the_scene_label():
     assert bpy.ops.epic.assign_custom() == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
     bpy.ops.object.mode_set(mode="OBJECT")
 
-    labels = rs_layers.read_vertex_skins(obj)
+    # Model 5412 has no vertex skins, so the vertices that the weighter did not reach have no label.
+    labels = rs_layers.read_vertex_labels(obj)
     assert labels is not None
-    assert labels[:3] == [200, 200, 0]
+    assert labels[:3] == [200, 200, None]
 
 
 def test_mirroring_a_half_model_gives_the_left_side_its_labels():
@@ -299,3 +300,125 @@ def test_mirroring_a_mesh_without_texture_triangles_adds_no_texture_attributes()
 
     assert rs_layers.FACE_TEXTURE_TRIANGLE not in mesh.attributes
     assert rs_layers.UV_SIGNATURE not in mesh.attributes
+
+
+def half_model(labels: list[int]) -> bpy.types.Object:
+    mesh = bpy.data.meshes.new("half")
+    mesh.from_pydata([(0, 0, 0), (10, 0, 0), (10, 10, 0), (20, 0, 5)], [], [(0, 1, 2), (1, 3, 2)])
+    obj = bpy.data.objects.new("half", mesh)
+    collection = bpy.context.collection
+    assert collection is not None
+    collection.objects.link(obj)
+    rs_layers.write_vertex_skins(obj, labels)
+    return obj
+
+
+def unlabel(obj: bpy.types.Object, vertex: int) -> None:
+    for name in rs_layers.VERTEX_SKIN_GROUPS:
+        obj.vertex_groups[name].remove([vertex])
+
+
+def test_label_0_reads_back_as_0_and_a_vertex_in_no_vertex_skin_group_has_no_label():
+    # Label 0 is a member of VSKIN1: with weight 0, so a vertex that is in no vertex skin group is one that no one
+    # labelled (the decision comment of issue 95).
+    obj = half_model([0, 25, 0, 38])
+    assert rs_layers.read_vertex_skins(obj) == [0, 25, 0, 38]
+    unlabel(obj, 2)
+    assert rs_layers.read_vertex_labels(obj) == [0, 25, None, 38]
+    with pytest.raises(ValueError, match="1 vertex has no vertex skin label"):
+        rs_layers.read_vertex_skins(obj)
+
+
+def test_assigning_label_0_labels_a_vertex_that_had_no_label():
+    obj = half_model([5, 25, 25, 38])
+    unlabel(obj, 0)
+    activate(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    select_vertices(obj, {0})
+    assert bpy.ops.epic.assign_label(label=0) == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    bpy.ops.object.mode_set(mode="OBJECT")
+    assert rs_layers.read_vertex_skins(obj) == [0, 25, 25, 38]
+
+
+def test_assigning_label_0_over_another_label_keeps_the_vertex_labelled():
+    obj = half_model([5, 25, 25, 38])
+    activate(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    select_vertices(obj, {1})
+    assert bpy.ops.epic.assign_label(label=0) == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    bpy.ops.object.mode_set(mode="OBJECT")
+    assert rs_layers.read_vertex_skins(obj) == [5, 0, 25, 38]
+
+
+def test_mirroring_keeps_label_0_on_both_halves():
+    obj = half_model([0, 0, 25, 38])
+    activate(obj)
+    assert bpy.ops.epic.create_and_apply_mirror() == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    labels = rs_layers.read_vertex_labels(obj)
+    assert labels is not None
+    assert None not in labels
+    assert labels.count(0) == 3
+
+
+def test_mirroring_refuses_a_model_with_a_vertex_that_has_no_label():
+    obj = half_model([1, 25, 25, 38])
+    unlabel(obj, 3)
+    activate(obj)
+    assert bpy.ops.epic.create_and_apply_mirror() == {"CANCELLED"}  # pyrefly: ignore[missing-attribute]
+    assert len(obj.data.vertices) == 4  # pyrefly: ignore[missing-attribute]
+
+
+def test_mirroring_in_edit_mode_reads_the_labels_given_in_edit_mode():
+    obj = half_model([1, 25, 25, 38])
+    unlabel(obj, 3)
+    activate(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    select_vertices(obj, {3})
+    assert bpy.ops.epic.assign_label(label=38) == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    assert bpy.ops.epic.create_and_apply_mirror() == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+
+
+def selected_vertices(obj: bpy.types.Object) -> list[int]:
+    bm = bmesh.from_edit_mesh(obj.data)  # pyrefly: ignore[bad-argument-type]
+    return [v.index for v in bm.verts if v.select]
+
+
+def test_select_unlabelled_selects_only_the_vertices_with_no_label():
+    obj = half_model([0, 25, 25, 38])
+    unlabel(obj, 1)
+    unlabel(obj, 3)
+    activate(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    select_vertices(obj, {0, 2})
+    assert bpy.ops.epic.select_unlabelled() == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    assert selected_vertices(obj) == [1, 3]
+
+
+def test_select_unlabelled_sees_a_vertex_cut_in_edit_mode():
+    # In Blender 5.3 a cut between two vertices with label 0 gets no vertex skin group, so it has no label.
+    obj = half_model([0, 0, 25, 38])
+    activate(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bm = bmesh.from_edit_mesh(obj.data)  # pyrefly: ignore[bad-argument-type]
+    bm.edges.ensure_lookup_table()
+    (edge,) = [e for e in bm.edges if {v.index for v in e.verts} == {0, 1}]
+    bmesh.ops.subdivide_edges(bm, edges=[edge], cuts=1)
+    bmesh.update_edit_mesh(obj.data)  # pyrefly: ignore[bad-argument-type]
+    assert bpy.ops.epic.select_unlabelled() == {"FINISHED"}  # pyrefly: ignore[missing-attribute]
+    assert selected_vertices(obj) == [4]
+
+
+def test_select_unlabelled_reports_a_model_with_every_vertex_labelled():
+    obj = half_model([0, 25, 25, 38])
+    activate(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    select_vertices(obj, {0})
+    assert bpy.ops.epic.select_unlabelled() == {"CANCELLED"}  # pyrefly: ignore[missing-attribute]
+    assert selected_vertices(obj) == [0]
+
+
+def test_the_refusal_of_a_vertex_with_no_label_names_select_unlabelled():
+    obj = half_model([0, 25, 25, 38])
+    unlabel(obj, 1)
+    with pytest.raises(ValueError, match="Select Unlabelled"):
+        rs_layers.read_vertex_skins(obj)

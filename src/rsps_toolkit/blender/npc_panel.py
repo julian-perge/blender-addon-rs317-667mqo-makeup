@@ -89,6 +89,11 @@ class VIEW3D_PT_rsps_npc(bpy.types.Panel):
         row = layout.row()
         row.prop(context.scene, "rs_npc_id")
         row.operator(npc_collection.RSPS_OT_create_npc.bl_idname, icon="ADD").npc_id = context.scene.rs_npc_id
+        row = layout.row()
+        row.prop(context.scene, "rs_make_rig_sequence")
+        row.operator(
+            npc_collection.RSPS_OT_make_rig.bl_idname, icon="ARMATURE_DATA"
+        ).sequence = context.scene.rs_make_rig_sequence
         npc = npc_collection.npc_of(context.active_object)
         if npc is not None:
             _draw_bake(layout, context.scene, npc)
@@ -97,14 +102,17 @@ class VIEW3D_PT_rsps_npc(bpy.types.Panel):
 def _draw_bake(layout, scene, npc: bpy.types.Collection) -> None:
     """The bake rows of the active NPC: its name, a Stance button for each sequence that its definition names, the
     sequence id field, Smooth and the bake of the typed sequence. A Stance button bakes as Pose and the field as
-    Action."""
+    Action. An NPC that Make rig built has no definition, so its one Stance button bakes the sequence typed for it."""
     layout.label(text=npc.name)
-    sequences = json.loads(npc[npc_collection.NPC_KEY])["sequences"]
+    record = json.loads(npc[npc_collection.NPC_KEY])
+    sequences = record["sequences"]
     layout.label(text="Stance:")
     stance = layout.grid_flow(row_major=True, columns=3, align=True)
     for field, text in STANCE_LABELS.items():
         if field in sequences:
             _bake_button(stance, scene, text, sequences[field], "POSE")
+    if "sequence" in record:
+        _bake_button(stance, scene, f"Sequence {record['sequence']}", record["sequence"], "POSE")
     layout.prop(scene, "rs_npc_sequence")
     layout.prop(scene, "rs_npc_smooth")
     _bake_button(layout, scene, "Bake at the current frame", scene.rs_npc_sequence, "ACTION")

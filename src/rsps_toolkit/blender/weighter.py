@@ -32,7 +32,7 @@ def draw_labels_callback(self, context):
             labels = rs_layers.bmesh_vertex_skins(obj, bm)
             vertices = [(v.co, v.hide) for v in bm.verts]
         else:
-            labels = rs_layers.read_vertex_skins(obj)
+            labels = rs_layers.read_vertex_labels(obj)
             vertices = [(v.co, v.hide) for v in obj.data.vertices]
         for label, (position, hidden) in zip(labels or [], vertices, strict=False):
             if not label or hidden:
@@ -87,6 +87,35 @@ class EPIC_OT_assign_custom(bpy.types.Operator):
         return _assign(self, context, context.scene.custom_label)
 
 
+class EPIC_OT_select_unlabelled(bpy.types.Operator):
+    """Select only the vertices that have no body-part label, such as new or cut vertices"""
+
+    bl_idname = "epic.select_unlabelled"
+    bl_label = "Select Unlabelled"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None or obj.type != "MESH" or obj.mode != "EDIT":
+            self.report({"WARNING"}, "Select a mesh in Edit Mode.")
+            return {"CANCELLED"}
+        bm = bmesh.from_edit_mesh(obj.data)
+        labels = rs_layers.bmesh_vertex_skins(obj, bm)
+        if labels is None:
+            self.report({"WARNING"}, "The model has no vertex skin labels yet.")
+            return {"CANCELLED"}
+        unlabelled = [label is None for label in labels]
+        if not any(unlabelled):
+            self.report({"INFO"}, "Every vertex has a label.")
+            return {"CANCELLED"}
+        for vertex, select in zip(bm.verts, unlabelled, strict=True):
+            vertex.select_set(select)
+        bm.select_flush_mode()
+        bmesh.update_edit_mesh(obj.data)
+        self.report({"INFO"}, f"Selected {sum(unlabelled)} vertices with no label.")
+        return {"FINISHED"}
+
+
 class EPIC_OT_create_and_apply_mirror(bpy.types.Operator):
     """Delete the -X half, mirror the +X half onto it and give the new half its left-side labels"""
 
@@ -104,7 +133,15 @@ class EPIC_OT_create_and_apply_mirror(bpy.types.Operator):
                 {"WARNING"}, "Presentation copies cannot be mirrored. Recreate playback from the source bundle."
             )
             return {"CANCELLED"}
-        if rs_layers.read_vertex_skins(obj) is None:
+        # In Edit Mode the mesh's vertex weights are stale until the edit is written back.
+        if obj.mode == "EDIT":
+            obj.update_from_editmode()
+        try:
+            labelled = rs_layers.read_vertex_skins(obj)
+        except ValueError as error:
+            self.report({"WARNING"}, f"The model cannot be mirrored: {error}.")
+            return {"CANCELLED"}
+        if labelled is None:
             self.report({"WARNING"}, "The model has no vertex skin labels yet.")
             return {"CANCELLED"}
         if model_source.has_source(obj.data):
@@ -230,6 +267,7 @@ class VIEW3D_PT_epic_weighter(bpy.types.Panel):
             custom = layout.box()
             custom.prop(context.scene, "custom_label", text="Label")
             custom.operator("epic.assign_custom")
+            custom.operator("epic.select_unlabelled", icon="RESTRICT_SELECT_OFF")
             layout.label(text="Step 1: Label your half-model (+X side)")
             groups: dict[str, list] = {}
             for part in BODY_PARTS:
@@ -272,6 +310,7 @@ def unregister_properties() -> None:
 classes = (
     EPIC_OT_assign_label,
     EPIC_OT_assign_custom,
+    EPIC_OT_select_unlabelled,
     EPIC_OT_create_and_apply_mirror,
     EPIC_OT_clear_labels,
     EPIC_OT_refresh_display,

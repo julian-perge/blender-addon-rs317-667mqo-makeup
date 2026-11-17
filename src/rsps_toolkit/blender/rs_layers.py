@@ -5,7 +5,8 @@ painters and the weighter all rely on:
 
 - RSPRI and RSTSKIN are face-corner colour layers whose red channel holds the value divided by 255.
 - A vertex skin label is stored as weight label / 100 in vertex groups VSKIN1:, VSKIN2: and VSKIN3:, each
-  holding at most 1.0, so labels above 100 spill into the next group and 255 needs all three.
+  holding at most 1.0, so labels above 100 spill into the next group and 255 needs all three. Label 0 is a
+  member of VSKIN1: with weight 0, so a vertex in none of the groups has no label.
 """
 
 import json
@@ -37,6 +38,8 @@ FACE_SKIN_LAYER = "RSTSKIN"
 UV_SIGNATURE = "rs_uv_signature"
 # The UV map import and the texture tool write the preview of the texture triangles into.
 PREVIEW_UVS = "UVMap"
+# A vertex's label is the sum of its weights in these groups times 100. Every labelled vertex is a member of the first
+# group, with weight 0 for label 0, so a vertex in none of them has no label (the decision comment of issue 95).
 VERTEX_SKIN_GROUPS = ("VSKIN1:", "VSKIN2:", "VSKIN3:")
 # Faces that repeat a vertex stay out of the mesh (see formats/set_aside.py) and are kept as JSON in this mesh
 # custom property, naming vertices by index.
@@ -116,7 +119,7 @@ def write_vertex_skins(obj: bpy.types.Object, labels: list[int]) -> None:
         by_label.setdefault(label, []).append(vertex)
     for label, vertices in by_label.items():
         for group, weight in zip(groups, _spill(label), strict=True):
-            if weight > 0:
+            if weight > 0 or group == groups[0]:
                 group.add(vertices, weight, "REPLACE")
 
 
@@ -127,15 +130,19 @@ def remove_vertex_skins(obj: bpy.types.Object) -> None:
             obj.vertex_groups.remove(group)
 
 
-def bmesh_vertex_skins(obj: bpy.types.Object, bm: bmesh.types.BMesh) -> list[int] | None:
-    """The labels of an object being edited in Edit Mode, in its BMesh's vertex order."""
+def bmesh_vertex_skins(obj: bpy.types.Object, bm: bmesh.types.BMesh) -> list[int | None] | None:
+    """The labels of an object being edited in Edit Mode, in its BMesh's vertex order, with None for a vertex in no
+    vertex skin group."""
     indices = [obj.vertex_groups[name].index for name in VERTEX_SKIN_GROUPS if name in obj.vertex_groups]
     deform = bm.verts.layers.deform.active
     if not indices:
         return None
     if deform is None:
-        return [0] * len(bm.verts)
-    return [round(sum(v[deform].get(i, 0.0) for i in indices) * 100) for v in bm.verts]
+        return [None] * len(bm.verts)
+    return [
+        round(sum(v[deform].get(i, 0.0) for i in indices) * 100) if any(i in v[deform] for i in indices) else None
+        for v in bm.verts
+    ]
 
 
 def set_bmesh_vertex_skin(obj: bpy.types.Object, bm: bmesh.types.BMesh, vertices: list[int], label: int) -> None:
@@ -147,18 +154,44 @@ def set_bmesh_vertex_skin(obj: bpy.types.Object, bm: bmesh.types.BMesh, vertices
     for vertex in vertices:
         weights = bm.verts[vertex][deform]
         for index, weight in zip(indices, _spill(label), strict=True):
-            if weight > 0:
+            if weight > 0 or index == indices[0]:
                 weights[index] = weight
             elif index in weights:
                 del weights[index]
 
 
-def read_vertex_skins(obj: bpy.types.Object) -> list[int] | None:
+def read_vertex_labels(obj: bpy.types.Object) -> list[int | None] | None:
+    """Each vertex's label, with None for a vertex in no vertex skin group. None when the object has no vertex skin
+    group."""
     # Weights are 32-bit floats, so labels are rounded back rather than truncated.
     indices = {obj.vertex_groups[name].index for name in VERTEX_SKIN_GROUPS if name in obj.vertex_groups}
     if not indices:
         return None
-    return [round(sum(g.weight for g in vertex.groups if g.group in indices) * 100) for vertex in obj.data.vertices]
+    labels: list[int | None] = []
+    for vertex in obj.data.vertices:  # pyrefly: ignore[missing-attribute]
+        weights = [g.weight for g in vertex.groups if g.group in indices]
+        labels.append(round(sum(weights) * 100) if weights else None)
+    return labels
+
+
+UNLABELLED_ADVICE = "Give each new or cut vertex a label with the weighter, whose Select Unlabelled button finds them"
+
+
+def unlabelled(count: int) -> str:
+    """The refusal text for vertices with no label, without the object's name."""
+    return "1 vertex has no vertex skin label" if count == 1 else f"{count} vertices have no vertex skin label"
+
+
+def read_vertex_skins(obj: bpy.types.Object) -> list[int] | None:
+    """Each vertex's label, as a model stores them. Raises ValueError when a vertex has no label, because the client
+    would read it as label 0, which no one gave it."""
+    labels = read_vertex_labels(obj)
+    if labels is None:
+        return None
+    missing = labels.count(None)
+    if missing:
+        raise ValueError(f"{unlabelled(missing)}. {UNLABELLED_ADVICE}")
+    return [label for label in labels if label is not None]
 
 
 def write_texture_triangles(
