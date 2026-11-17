@@ -53,11 +53,23 @@ def loc_light(
     faces = [(c, b, a) for a, b, c in model.faces] if part.model.mirrored else model.faces
     # A non-flat-shading loc is lit after the contour, on the normals of the contoured model (ObjectComposition.java
     # lines 586 to 590 and 600 to 606, ModelData.method2625 from line 1141, Region.java lines 846 to 865). Any other loc
-    # is lit before the contour (line 585). An animated loc or a loc with impostors is a DynamicObject (PacketBuffer.java
-    # lines 214 to 218), which ObjectComposition.method5092 lights before the contour whatever the flag is (lines 662
-    # and 675 to 677).
-    dynamic = raw.animation != -1 or raw.impostors is not None
-    if shown.non_flat_shading and not dynamic and 4 <= placement.loc_type <= 8:
+    # is lit before the contour (line 585), and so is a DynamicObject (`_dynamic`).
+    refuse_undrawn_decoration(placement, raw, shown)
+    if shown.non_flat_shading and not _dynamic(raw) and shown.contoured_ground >= 0:
+        heights = contour_heights(placement, part, raw, shown, vertices, height)
+        if heights is not None:
+            vertices = [(x, y, z) for (x, _, z), y in zip(vertices, heights, strict=True)]
+    return light(replace(model, vertices=vertices, faces=faces), lighting, render_types)
+
+
+def refuse_undrawn_decoration(placement: Placement, raw: LocDefinition, shown: LocDefinition) -> None:
+    """Refuse a placement of a non-flat-shading wall decoration that is not a DynamicObject, because the client never
+    lights or draws it. `raw` is the loc of the placement and `shown` the loc that it shows.
+
+    `loc_light` calls this for its placement. A caller that gives a placement the light of an earlier one must call it
+    for each placement, because the mesh key holds neither the loc type nor whether the loc is a DynamicObject.
+    """
+    if shown.non_flat_shading and not _dynamic(raw) and 4 <= placement.loc_type <= 8:
         # Region.applyLighting (lines 831 to 865) skips the wall decorations, and Renderable.draw (lines 38 to 44) draws
         # nothing for a model that is not lit, so the client shows no such decoration. The owner chose on 2026-11-17
         # (issue 128) to refuse it.
@@ -65,8 +77,10 @@ def loc_light(
             f"The wall decoration at ({placement.x}, {placement.y}) is non-flat-shading, and the client never lights "
             "or draws it"
         )
-    if shown.non_flat_shading and not dynamic and shown.contoured_ground >= 0:
-        heights = contour_heights(placement, part, raw, shown, vertices, height)
-        if heights is not None:
-            vertices = [(x, y, z) for (x, _, z), y in zip(vertices, heights, strict=True)]
-    return light(replace(model, vertices=vertices, faces=faces), lighting, render_types)
+
+
+def _dynamic(raw: LocDefinition) -> bool:
+    """Whether a placement of the loc `raw` is a DynamicObject: an animated loc or a loc with impostors
+    (`PacketBuffer.java` lines 214 to 218). `ObjectComposition.method5092` lights such a loc before the contour, whatever
+    its `nonFlatShading` is (lines 662 and 675 to 677)."""
+    return raw.animation != -1 or raw.impostors is not None

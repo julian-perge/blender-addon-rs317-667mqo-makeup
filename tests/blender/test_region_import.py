@@ -1271,6 +1271,16 @@ def test_a_diagonal_wall_decoration_and_a_straight_one_of_one_model_get_two_mesh
     assert first is not second
 
 
+def test_a_non_flat_shading_wall_decoration_is_refused_after_a_placement_that_shares_its_mesh_key():
+    # The loc shows model 11 as an object of type 10 and as a wall decoration of type 4, with the same mesh key. The
+    # decoration reuses the shared mesh of the object, so it is not lit, but it is still refused
+    # (`region_loc_light.refuse_undrawn_decoration`).
+    locs = {1: hand_loc(models=(11, 11), loc_types=(10, 4), non_flat_shading=True)}
+
+    with pytest.raises(ValueError, match=r"The wall decoration at \(8, 5\) is non-flat-shading"):
+        hand_scenery(locs, [Placement(1, 0, 5, 5, 10, 0), Placement(1, 0, 8, 5, 4, 0)])
+
+
 def lit_corners(obj: bpy.types.Object) -> list[list[tuple[float, ...]]]:
     """The `rs_lit` colour of each corner of each polygon, in loop order."""
     mesh = mesh_of(obj)

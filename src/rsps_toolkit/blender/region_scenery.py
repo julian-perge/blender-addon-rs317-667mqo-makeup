@@ -26,7 +26,7 @@ from ..formats.lighting import Shading
 from ..formats.loc_definition import LocDefinition
 from ..formats.model import Model
 from ..formats.region_contour import own_vertices
-from ..formats.region_loc_light import loc_light
+from ..formats.region_loc_light import loc_light, refuse_undrawn_decoration
 from ..formats.region_placement import PlacedLoc, PlacedPart
 from .appearance_preview import LIT_ATTRIBUTE
 from .face_materials import srgb_to_linear
@@ -110,6 +110,9 @@ def scenery_objects(
             nothing += 1
             continue
         shown = locs[shown_id]
+        # A placement that reuses a shared mesh is not lit again, so `loc_light` cannot refuse it. The refusal runs here
+        # for every placement instead.
+        refuse_undrawn_decoration(placement, locs[placement.loc], shown)
         for index, part in enumerate(placed_loc.parts):
             key = mesh_key(part, shown)
             model = models[model_key(part, shown)]
