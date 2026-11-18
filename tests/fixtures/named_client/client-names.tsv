@@ -1,0 +1,16 @@
+kind	obf_class	obf_member	descriptor	name	evidence
+class	dv			ModelData	runelite-mapper
+field	dv	ae	[I	vertexSkins	runelite-mapper
+method	dv	ae	(IIIII)LModel;	light	runelite-mapper
+class	ej			Model	runelite-mapper
+field	ej	as	[I	modelViewportYs	runelite-mapper
+field	ej	ae	I	boundsType	runelite-mapper
+class	fe			Buffer	runelite-mapper
+method	fe	as	([I)V	decryptXtea	runelite-mapper
+method	fe	ab	([III)V	decryptXtea	runelite-mapper
+class	hu			PlayerComposition	runelite-mapper
+method	hu	l	(LSequence;ILSequence;I)LModel;	getModel	runelite-mapper
+class	ip			NPCComposition	runelite-mapper
+method	ip	v	(LSequence;ILSequence;I)LModel;	getModel	runelite-mapper
+method	ip	l	()LNPCComposition;	transform	runelite-mapper
+field	cd	r	LAttackOption;	AttackOption_hidden	runelite-mapper
