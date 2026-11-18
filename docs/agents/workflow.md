@@ -81,7 +81,7 @@ One task, one branch, one pull request. Branch: `<type>/<issue>-<slug>`. Commit 
 
 Implement with `test-driven-development`: one behavior at an approved public seam per red/green cycle. The seams that the spec names give that agreement.
 
-Run the verify command from `AGENTS.md` (`Every task`) with `agent-skills run --` before each commit. Do not run the whole Blender suite before a commit, because the pre-push hook runs it once when the push changes a file that it reads. During a red/green cycle and before a commit, run only the Blender test files of the changed area, with `scripts/test-blender.sh tests/blender/<file>`. When the push hook fails, fix the failure, commit and push again. Implementation stays with the primary agent unless the user chooses delegation. Open the pull request ready for review, print the review command and stop. The user merges. The review ticks the acceptance criteria boxes, not the build.
+Run the verify command from `AGENTS.md` (`Every task`) with `agent-skills run --` before each commit. Do not run the whole Blender suite before a commit, because the pre-push hook runs it once when the push changes a file that it reads. During a red/green cycle and before a commit, run only the Blender test files of the changed area, with `scripts/test-blender.sh tests/blender/<file>`. When the push hook fails, fix the failure, commit and push again. Implementation stays with the primary agent unless the user chooses delegation. Open the pull request ready for review. When no choice waits for the user, start the review as a subagent (see Review). Otherwise print the review command and stop. The user merges. The review ticks the acceptance criteria boxes, not the build.
 
 The review command is the session's last line, and `agent-skills next-cmd review <pr>` prints it:
 
@@ -100,9 +100,9 @@ Before each commit, run the review with fixed point `HEAD`. Give it the spec fil
 
 ## Review
 
-Run the review in a new session, not in the build session. The command starts no subagent, so the build session would review its own work. Check out the PR branch first (`gh pr checkout <pr>`), because the command reviews staged changes or recent commits. Git lets a branch be checked out in only one worktree, so `gh pr checkout` fails when the build session's worktree still holds the branch. Then review and fix in that worktree (`git worktree list` names it), and commit and push the fixes from there.
+The review runs in a context that did not write the code. When a build ends with no choice waiting for the user, the build session starts the review as one subagent and asks the user about the choices that the subagent returns. Otherwise run the review in a new session, not in the build session. Check out the PR branch first (`gh pr checkout <pr>`), because the command reviews staged changes or recent commits. Git lets a branch be checked out in only one worktree, so `gh pr checkout` fails when the build session's worktree still holds the branch. Then review and fix in that worktree (`git worktree list` names it), and commit and push the fixes from there.
 
-Run `/agent-skills:review` on the branch with the command that the Build section gives. It names the task issue, the PR, the spec and [CODING_STANDARDS.md](../../CODING_STANDARDS.md), because the review does not read the spec or the standard on its own. Start the review with `agent-skills pr <pr>`, which shows all four.
+In a new session, run `/agent-skills:review` on the branch with the command that the Build section gives. It names the task issue, the PR, the spec and [CODING_STANDARDS.md](../../CODING_STANDARDS.md), because the review does not read the spec or the standard on its own. Start the review with `agent-skills pr <pr>`, which shows all four.
 
 Fix small findings in the review session. Start a new build session for large ones.
 
