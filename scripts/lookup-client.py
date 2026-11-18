@@ -304,6 +304,13 @@ def main(argv: list[str]) -> int:
     classes = index_classes(sources)
     matches = find_rows(rows, args.name)
     if not matches:
+        # A class that the mapper left with a placeholder name has no row, but its file is named after the placeholder.
+        matches = [
+            Row("class", obf, "", "", file.name, "")
+            for obf, file in classes.items()
+            if file.name == args.name and "." not in args.name
+        ]
+    if not matches:
         print(f"no match for {args.name}")
         close = difflib.get_close_matches(args.name, sorted({row.name for row in rows}), n=CLOSE_NAMES, cutoff=0)
         print("closest names: " + ", ".join(close))

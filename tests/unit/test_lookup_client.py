@@ -215,6 +215,20 @@ def test_callers_stop_at_twenty_lines_and_say_how_many_more(tmp_path: Path) -> N
     assert len(callers) == 22
 
 
+def test_a_class_with_a_placeholder_name_is_found_by_its_file(tmp_path: Path) -> None:
+    # The mapper left class228 (obfuscated name hn) without a real name, so names.tsv has no row for it.
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "class228.java").write_text(
+        'import net.runelite.mapping.ObfuscatedName;\n\n@ObfuscatedName("hn")\npublic enum class228 {\n}\n'
+    )
+
+    result = run_lookup("class228", "--src", str(src))
+
+    assert result.stdout.splitlines()[0] == "class class228 (hn)"
+    assert spans(result.stdout) == [("class228.java", 3, 5)]
+
+
 def load_module():
     spec = importlib.util.spec_from_file_location("lookup_client", SCRIPT)
     assert spec and spec.loader
