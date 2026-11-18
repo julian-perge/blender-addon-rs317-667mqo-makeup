@@ -13,3 +13,4 @@ method	hu	l	(LSequence;ILSequence;I)LModel;	getModel	runelite-mapper
 class	ip			NPCComposition	runelite-mapper
 method	ip	v	(LSequence;ILSequence;I)LModel;	getModel	runelite-mapper
 method	ip	l	()LNPCComposition;	transform	runelite-mapper
+field	cd	r	LAttackOption;	AttackOption_hidden	runelite-mapper

@@ -229,6 +229,34 @@ def test_a_class_with_a_placeholder_name_is_found_by_its_file(tmp_path: Path) ->
     assert spans(result.stdout) == [("class228.java", 3, 5)]
 
 
+def test_an_enum_constant_is_a_field_with_its_own_lines() -> None:
+    # AttackOption_hidden(3), is declared like a call. The 4 AttackOption_* constants of the real tree were once not found.
+    result = run_lookup("AttackOption_hidden")
+
+    assert result.stdout.splitlines()[0] == "field AttackOption_hidden (cd.r) LAttackOption;"
+    assert spans(result.stdout) == [("AttackOption.java", 9, 12)]
+    assert "callers: none" in result.stdout
+
+
+def test_an_export_line_of_another_class_is_not_a_caller() -> None:
+    result = run_lookup("hu.l")
+
+    callers = section(result.stdout, "callers")
+    assert not any("@Export" in line for line in callers)
+    assert any(line.startswith("NPCComposition.java:") for line in callers)
+
+
+def test_a_names_file_with_another_header_exits_2_with_one_line(tmp_path: Path) -> None:
+    wrong = tmp_path / "names.tsv"
+    wrong.write_text("kind\tname\n")
+
+    result = run_lookup("light", "--names", str(wrong))
+
+    assert result.returncode == 2
+    assert result.stderr.count("\n") == 1
+    assert "Traceback" not in result.stderr
+
+
 def load_module():
     spec = importlib.util.spec_from_file_location("lookup_client", SCRIPT)
     assert spec and spec.loader

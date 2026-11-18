@@ -10,10 +10,10 @@
 `<name>` is a real name (`vertexSkins`), an obfuscated name pair (`dv.ae`) or a class and member pair
 (`ModelData.light`). A single word that is not a real name is also tried as an obfuscated class (`dv`). For each match
 the script prints the kind, the real name, the obfuscated name, the descriptor, and the file and line range in the
-source folder.
+source folder, then its callers, its callees (methods only) and the notes of docs/ and spec/ that cite it.
 
 The names come from `docs/research/client-names.tsv`. The source folder is `$NAMED_CLIENT_DIR/src`, and
-`NAMED_CLIENT_DIR` defaults to `~/git/osrs-149-named`. `--names` and `--src` replace both.
+`NAMED_CLIENT_DIR` defaults to `~/git/osrs-149-named`. `--names` and `--src` replace both, and `--repo` replaces the folder whose docs/ and spec/ hold the notes.
 """
 
 import argparse
@@ -181,13 +181,17 @@ def member_end(lines: list[str], declaration: int) -> int:
             if lines[index].rstrip() == METHOD_END:
                 return index
     for index in range(declaration, len(lines)):
-        if lines[index].rstrip().endswith(";"):
+        if lines[index].rstrip().endswith((";", ",")):
             return index
     return declaration
 
 
 def parse_declaration(text: str) -> tuple[bool, str, str]:
     """Returns whether the declaration is a method, its name, and its text between the parentheses."""
+    constant = re.match(r"^\s*(\w+)\s*(\(.*\))?\s*[;,]\s*$", text)
+    if constant:
+        # An enum constant is a field, and its argument list looks like the parameters of a method.
+        return False, constant.group(1), ""
     paren, equals = text.find("("), text.find("=")
     if paren != -1 and (equals == -1 or paren < equals):
         name = re.findall(r"(\w+)\s*\(", text[: paren + 1])[-1]
@@ -233,12 +237,15 @@ def callers(row: Row, span: Span | None, sources: dict[Path, list[str]]) -> list
     """Lines of other files that contain the real name. This is a text search, so another class that has a member
     with the same name is listed too."""
     pattern = word(row.name)
+    export = re.compile(r"^\s*@Export\(")
     hits = []
     for path, lines in sources.items():
         if span is not None and path == span.path:
             continue
         hits.extend(
-            Hit(path, number, line.strip()) for number, line in enumerate(lines, start=1) if pattern.search(line)
+            Hit(path, number, line.strip())
+            for number, line in enumerate(lines, start=1)
+            if pattern.search(line) and not export.match(line)
         )
     return hits
 
@@ -299,7 +306,11 @@ def main(argv: list[str]) -> int:
         print(f"no source folder at {src}. Build it with: {BUILD_COMMAND}", file=sys.stderr)
         return 2
 
-    rows = read_names(args.names)
+    try:
+        rows = read_names(args.names)
+    except (ValueError, TypeError) as error:
+        print(f"cannot read {args.names}: {error}", file=sys.stderr)
+        return 2
     sources = load_sources(src)
     classes = index_classes(sources)
     matches = find_rows(rows, args.name)
