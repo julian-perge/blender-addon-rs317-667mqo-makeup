@@ -2,7 +2,7 @@ Source: [issue 160](https://github.com/julian-perge/blender-addon-rs317-667mqo-m
 
 # Spec delta: NPC clips and the Combat row of the NPC panel
 
-Status: approved. The owner approved this delta on 2026-11-17, with the choices of "Guesses and choices to confirm".
+Status: implemented. The owner approved this delta on 2026-11-17, with the choices of "Guesses and choices to confirm". Issue 161 implemented it, and spec 13 has the Combat row in its Panel section.
 
 This is a delta to [spec 13](13-npc-rigs.md). It follows the Design comment on issue 160 and [ADR 0030](../docs/adr/0030-npc-clips-come-from-the-anotherscape-models-mod.md). [ADR 0025](../docs/adr/0025-an-npc-is-created-and-baked-only.md) stays as it is. Terms follow [GLOSSARY.md](../GLOSSARY.md). Commands, structure and code style are in [AGENTS.md](../AGENTS.md) and spec 13. The evidence is in [docs/research/160-npc-clips.md](../docs/research/160-npc-clips.md).
 

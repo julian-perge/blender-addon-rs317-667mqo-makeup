@@ -584,7 +584,11 @@ def bake_buttons() -> list[types.SimpleNamespace]:
 
 def press(button: types.SimpleNamespace):
     return bpy.ops.rsps.bake_npc_clip(  # pyrefly: ignore[missing-attribute]
-        sequence=button.sequence, play_as=button.play_as, smooth=button.smooth, cache_folder=str(SNAPSHOT_430)
+        sequence=button.sequence,
+        play_as=button.play_as,
+        smooth=button.smooth,
+        runelite_name=getattr(button, "runelite_name", ""),
+        cache_folder=str(SNAPSHOT_430),
     )
 
 
@@ -721,8 +725,8 @@ def test_the_stance_buttons_cover_every_sequence_field_of_an_npc_in_order():
 
 
 def test_the_tooltip_of_a_bake_button_names_its_sequence_and_how_it_plays():
-    pose = types.SimpleNamespace(sequence=808, play_as="POSE")
-    action = types.SimpleNamespace(sequence=189, play_as="ACTION")
+    pose = types.SimpleNamespace(sequence=808, play_as="POSE", runelite_name="")
+    action = types.SimpleNamespace(sequence=189, play_as="ACTION", runelite_name="")
     describe = npc_panel.RSPS_OT_bake_npc_clip.description
     assert describe(bpy.context, pose) == (
         "Bake sequence 808 onto the active NPC as a Pose, starting at the current frame"
@@ -1040,3 +1044,89 @@ def test_make_rig_twice_on_one_object_builds_two_npcs():
     second = npc_collection.npc_of(active())
     assert first is not None and second is not None and first != second
     assert [json.loads(c[npc_collection.NPC_KEY])["sequence"] for c in (first, second)] == [195, 189]
+
+
+# Spec 160, the Combat row. The clips of the green dragon and the giant spider are in "Sample NPCs" of
+# docs/research/160-npc-clips.md, read by hand from the source.json files of the AnotherScape models mod.
+DRAGON_COMBAT = [("Attack", 91), ("Flinch", 89), ("Death", 92)]
+SPIDER_COMBAT = [("Attack", 5319), ("Mage", 5322), ("Flinch", 5320), ("Death", 5321)]
+BAKE_TEXT = "Bake at the current frame"
+
+
+def combat_buttons() -> list[types.SimpleNamespace]:
+    buttons = bake_buttons()
+    stance_texts = {*npc_panel.STANCE_LABELS.values(), BAKE_TEXT}
+    return [button for button in buttons if button.text not in stance_texts]
+
+
+def test_the_green_dragon_draws_a_combat_row_between_its_stance_buttons_and_the_sequence_id_field():
+    # Design decisions 2, 5 and 6 of issue 160: the row "Combat:" under Stance, the mod's key as the button text, an
+    # Action bake, and the button order.
+    created(260)
+    bpy.context.scene.rs_npc_smooth = True  # pyrefly: ignore[missing-attribute]
+    calls = drawn_panel()
+    combat = calls.index(("label", "Combat:"))
+    texts = [item.text if kind == "operator" else item for kind, item in calls]
+    assert calls.index(("label", "Stance:")) < combat < calls.index(("prop", "rs_npc_sequence"))
+    assert texts[combat + 1 : combat + 4] == [text for text, _ in DRAGON_COMBAT]
+    assert [(b.text, b.sequence, b.play_as, b.smooth) for b in combat_buttons()] == [
+        (text, sequence, "ACTION", True) for text, sequence in DRAGON_COMBAT
+    ]
+
+
+@pytest.mark.parametrize(("npc_id", "expected"), [(260, DRAGON_COMBAT), (2477, SPIDER_COMBAT)])
+def test_each_combat_button_bakes_its_sequence_as_an_action(npc_id, expected):
+    # The AC of issue 160: each button bakes with no refusal. Each bake starts at a later frame, so no strip overlaps.
+    collection = created(npc_id)
+    buttons = combat_buttons()
+    assert [(button.text, button.sequence) for button in buttons] == expected
+    for index, button in enumerate(buttons):
+        bpy.context.scene.frame_set(1 + 1000 * index)  # pyrefly: ignore[missing-attribute]
+        assert press(button) == {"FINISHED"}
+    records = [strip_record(strip) for strip in clip_strips(collection)]
+    assert [(record["sequence"], record["action"]) for record in records] == [(seq, True) for _, seq in expected]
+
+
+def test_the_cow_has_no_combat_row_and_the_bake_buttons_of_today():
+    # No source.json of the mod has NPC 2805 (docs/research/160-npc-clips.md).
+    collection = created(2805)
+    sequences = json.loads(collection[npc_collection.NPC_KEY])["sequences"]
+    calls = drawn_panel()
+    assert ("label", "Combat:") not in calls
+    assert [button.text for button in bake_buttons()] == [
+        *(text for field, text in npc_panel.STANCE_LABELS.items() if field in sequences),
+        BAKE_TEXT,
+    ]
+
+
+def test_an_npc_that_make_rig_built_has_no_combat_row():
+    # Design decision 8 of issue 160: an NPC that Make rig built has no NPC id.
+    imported_gnome()
+    assert make_rig(195) == {"FINISHED"}
+    assert ("label", "Combat:") not in drawn_panel()
+    assert [button.text for button in bake_buttons()] == ["Sequence 195", BAKE_TEXT]
+
+
+def tooltip(button: types.SimpleNamespace) -> str:
+    properties = types.SimpleNamespace(
+        sequence=button.sequence, play_as=button.play_as, runelite_name=getattr(button, "runelite_name", "")
+    )
+    return npc_panel.RSPS_OT_bake_npc_clip.description(bpy.context, properties)  # pyrefly: ignore[bad-argument-type]
+
+
+def test_the_tooltip_of_a_combat_button_names_the_runelite_name_when_the_mod_gives_one():
+    # Answer 5 of spec 160: the spider's attack label is SPIDER_UPDATE_ATTACK_LARGE, and the dragon's is the plain word
+    # melee, which the table does not store. The green dragon's stand sequence 90 is in docs/research/13-npc-rigs.md.
+    created(2477)
+    assert tooltip(combat_buttons()[0]) == (
+        "Bake sequence 5319 (SPIDER_UPDATE_ATTACK_LARGE) onto the active NPC as an Action, starting at the current frame"
+    )
+    bpy.context.scene.rs_npc_sequence = 5319  # pyrefly: ignore[missing-attribute]
+    assert tooltip(bake_buttons()[-1]) == (
+        "Bake sequence 5319 onto the active NPC as an Action, starting at the current frame"
+    )
+    created(260)
+    assert tooltip(combat_buttons()[0]) == (
+        "Bake sequence 91 onto the active NPC as an Action, starting at the current frame"
+    )
+    assert tooltip(bake_buttons()[0]) == "Bake sequence 90 onto the active NPC as a Pose, starting at the current frame"

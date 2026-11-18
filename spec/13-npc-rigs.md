@@ -77,9 +77,11 @@ The NPC panel shows, from top to bottom:
 1. The cache folder preference, as Player Appearance shows it.
 2. An NPC id field and Create NPC.
 3. A sequence id field and Make rig, for the active mesh object.
-4. For the active NPC (the NPC of the active object): its name, one Stance button for each sequence that its definition names, the sequence id field, Smooth, and Bake at the current frame.
+4. For the active NPC (the NPC of the active object): its name, one Stance button for each sequence that its definition names, the Combat row, the sequence id field, Smooth, and Bake at the current frame.
 
-A Stance button bakes as Pose, and the sequence id field bakes as Action, following the Play as entry of the glossary.
+A Stance button bakes as Pose, and a Combat button and the sequence id field bake as Action, following the Play as entry of the glossary.
+
+The Combat row ([spec 160](160-npc-clips.md), [ADR 0030](../docs/adr/0030-npc-clips-come-from-the-anotherscape-models-mod.md)) is the label "Combat:" and one button for each NPC clip that `data/npc_clips.json` gives the NPC id of the active NPC, in a grid of three columns. The text of a button is the clip's key with a capital first letter, in the order attack, melee, range, mage, flinch, death, then any other key by name. The tooltip names the clip's RuneLite name when the file gives one. An NPC with no entry, and an NPC that Make rig built, have no Combat row.
 
 ### Refusals
 

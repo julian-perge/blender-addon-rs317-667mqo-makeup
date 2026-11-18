@@ -2,6 +2,7 @@
 Panel). The operator is here and not in `npc_collection`, because `appearance_clip` holds the NPC bake and imports
 `npc_collection`."""
 
+import functools
 import json
 import struct
 import zlib
@@ -10,6 +11,7 @@ import bpy
 
 from ..animation.clip import CacheClip
 from ..formats.js5 import Js5Store
+from ..formats.npc_clips import NpcClipTable, load_npc_clips
 from . import appearance_clip, appearance_collection, appearance_preview, npc_collection, preferences
 from .appearance_props import PLAY_AS_ITEMS
 
@@ -42,6 +44,8 @@ class RSPS_OT_bake_npc_clip(bpy.types.Operator):
         options={"HIDDEN"},
     )
     smooth: bpy.props.BoolProperty(name="Smooth", options={"HIDDEN"})  # pyrefly: ignore[bad-assignment]
+    # Only a Combat button sets this, so that its tooltip names the clip. `description` gets only these properties.
+    runelite_name: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})  # pyrefly: ignore[bad-assignment]
     cache_folder: appearance_collection._cache_folder_property()  # pyrefly: ignore[bad-assignment]
 
     @classmethod
@@ -51,7 +55,10 @@ class RSPS_OT_bake_npc_clip(bpy.types.Operator):
     @classmethod
     def description(cls, context, properties):
         play_as = "a Pose" if properties.play_as == "POSE" else "an Action"
-        return f"Bake sequence {properties.sequence} onto the active NPC as {play_as}, starting at the current frame"
+        name = f" ({properties.runelite_name})" if properties.runelite_name else ""
+        return (
+            f"Bake sequence {properties.sequence}{name} onto the active NPC as {play_as}, starting at the current frame"
+        )
 
     def execute(self, context):
         npc = npc_collection.npc_of(context.active_object)
@@ -99,10 +106,16 @@ class VIEW3D_PT_rsps_npc(bpy.types.Panel):
             _draw_bake(layout, context.scene, npc)
 
 
+@functools.cache
+def npc_clips() -> NpcClipTable:
+    return load_npc_clips()
+
+
 def _draw_bake(layout, scene, npc: bpy.types.Collection) -> None:
-    """The bake rows of the active NPC: its name, a Stance button for each sequence that its definition names, the
-    sequence id field, Smooth and the bake of the typed sequence. A Stance button bakes as Pose and the field as
-    Action. An NPC that Make rig built has no definition, so its one Stance button bakes the sequence typed for it."""
+    """The bake rows of the active NPC: its name, a Stance button for each sequence that its definition names, a
+    Combat button for each NPC clip of its NPC id, the sequence id field, Smooth and the bake of the typed sequence. A
+    Stance button bakes as Pose, and a Combat button and the field as Action. An NPC that Make rig built has no
+    definition and no NPC id, so its one Stance button bakes the sequence typed for it, and it has no Combat row."""
     layout.label(text=npc.name)
     record = json.loads(npc[npc_collection.NPC_KEY])
     sequences = record["sequences"]
@@ -113,16 +126,24 @@ def _draw_bake(layout, scene, npc: bpy.types.Collection) -> None:
             _bake_button(stance, scene, text, sequences[field], "POSE")
     if "sequence" in record:
         _bake_button(stance, scene, f"Sequence {record['sequence']}", record["sequence"], "POSE")
+    clips = npc_clips().clips(record["npc"]) if record["npc"] is not None else ()
+    if clips:
+        layout.label(text="Combat:")
+        combat = layout.grid_flow(row_major=True, columns=3, align=True)
+        for clip in clips:
+            button = _bake_button(combat, scene, clip.key.capitalize(), clip.sequence, "ACTION")
+            button.runelite_name = clip.runelite_name or ""
     layout.prop(scene, "rs_npc_sequence")
     layout.prop(scene, "rs_npc_smooth")
     _bake_button(layout, scene, "Bake at the current frame", scene.rs_npc_sequence, "ACTION")
 
 
-def _bake_button(layout, scene, text: str, sequence: int, play_as: str) -> None:
+def _bake_button(layout, scene, text: str, sequence: int, play_as: str):
     button = layout.operator(RSPS_OT_bake_npc_clip.bl_idname, text=text)
     button.sequence = sequence
     button.play_as = play_as
     button.smooth = scene.rs_npc_smooth
+    return button
 
 
 classes = (RSPS_OT_bake_npc_clip, VIEW3D_PT_rsps_npc)
