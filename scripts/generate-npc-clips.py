@@ -69,12 +69,14 @@ def read_mod(jar: Path) -> tuple[dict, list[tuple[str, dict]]]:
             for name in archive.namelist()
             if (match := MESHSETS.fullmatch(name))
         )
+    with jar.open("rb") as stream:
+        sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
     described = {
         "display_name": mod["displayName"],
         "mod_id": mod["modId"],
         "version": mod["version"],
         "file": jar.name,
-        "sha256": hashlib.sha256(jar.read_bytes()).hexdigest(),
+        "sha256": sha256,
     }
     return described, files
 

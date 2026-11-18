@@ -584,7 +584,11 @@ def bake_buttons() -> list[types.SimpleNamespace]:
 
 def press(button: types.SimpleNamespace):
     return bpy.ops.rsps.bake_npc_clip(  # pyrefly: ignore[missing-attribute]
-        sequence=button.sequence, play_as=button.play_as, smooth=button.smooth, cache_folder=str(SNAPSHOT_430)
+        sequence=button.sequence,
+        play_as=button.play_as,
+        smooth=button.smooth,
+        runelite_name=getattr(button, "runelite_name", ""),
+        cache_folder=str(SNAPSHOT_430),
     )
 
 
@@ -1112,7 +1116,7 @@ def tooltip(button: types.SimpleNamespace) -> str:
 
 def test_the_tooltip_of_a_combat_button_names_the_runelite_name_when_the_mod_gives_one():
     # Answer 5 of spec 160: the spider's attack label is SPIDER_UPDATE_ATTACK_LARGE, and the dragon's is the plain word
-    # melee, which the table does not store.
+    # melee, which the table does not store. The green dragon's stand sequence 90 is in docs/research/13-npc-rigs.md.
     created(2477)
     assert tooltip(combat_buttons()[0]) == (
         "Bake sequence 5319 (SPIDER_UPDATE_ATTACK_LARGE) onto the active NPC as an Action, starting at the current frame"

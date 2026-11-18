@@ -79,11 +79,14 @@ def test_an_npc_that_the_mod_does_not_list_has_no_clips(npc_id):
 
 
 def test_the_header_names_the_mod_version_the_snapshot_the_generator_and_the_unverified_note():
-    # The version is in META-INF/neoforge.mods.toml of the jar, and the unverified mark is ADR 0030.
+    # The version is in META-INF/neoforge.mods.toml of the jar, and the unverified mark is ADR 0030. The SHA-256 of the
+    # jar is in "Source" of docs/research/160-npc-clips.md.
     header = TABLE.header
     assert (header["mod"]["mod_id"], header["mod"]["version"]) == ("anotherscape_models", "1.0.0")
+    assert header["mod"]["sha256"] == "ce0f9535c74a3f2910a3981d999093d5e64b6dfa016e66f5d95c76229df8df7c"
     assert header["snapshot"] == 430
     assert header["generator"] == "scripts/generate-npc-clips.py"
+    assert header["research"] == "docs/research/160-npc-clips.md"
     assert "unverified" in header["note"]
     # This compares the file with itself on purpose: no test asserts the count of the file (answer 7).
     assert header["counts"] == {"npcs": len(TABLE.rows), "clips": sum(len(row) for row in TABLE.rows.values())}
