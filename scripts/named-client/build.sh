@@ -67,6 +67,8 @@ mkdir -p "$out/work"
 # The build runs in a copy, so the reference tree stays unpatched. On APFS, cp -c makes a clone.
 if [ ! -d "$rl" ]; then
     if ! cp -c -R "$tree" "$rl" 2>/dev/null; then
+        # A failed clone can leave a partial folder, and cp -R would then copy the tree into a subfolder of it.
+        rm -rf "$rl"
         cp -R "$tree" "$rl"
     fi
 
