@@ -8,3 +8,8 @@ field	ej	ae	I	boundsType	runelite-mapper
 class	fe			Buffer	runelite-mapper
 method	fe	as	([I)V	decryptXtea	runelite-mapper
 method	fe	ab	([III)V	decryptXtea	runelite-mapper
+class	hu			PlayerComposition	runelite-mapper
+method	hu	l	(LSequence;ILSequence;I)LModel;	getModel	runelite-mapper
+class	ip			NPCComposition	runelite-mapper
+method	ip	v	(LSequence;ILSequence;I)LModel;	getModel	runelite-mapper
+method	ip	l	()LNPCComposition;	transform	runelite-mapper
