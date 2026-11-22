@@ -1,0 +1,94 @@
+[
+ {
+  "rotaton": 0,
+  "id": 9,
+  "resizeY": 128,
+  "animationId": -1,
+  "recolorToFind": [
+   57,
+   61
+  ],
+  "recolorToReplace": [
+   33,
+   33
+  ],
+  "fullRecolor": -1,
+  "resizeX": 128,
+  "modelId": 3136,
+  "ambient": 0,
+  "contrast": 0,
+  "clickable": true
+ },
+ {
+  "rotaton": 270,
+  "id": 79,
+  "resizeY": 128,
+  "animationId": 650,
+  "fullRecolor": -1,
+  "resizeX": 128,
+  "modelId": 3069,
+  "ambient": 0,
+  "contrast": 0,
+  "clickable": true
+ },
+ {
+  "rotaton": 0,
+  "id": 86,
+  "resizeY": 128,
+  "animationId": 654,
+  "fullRecolor": -1,
+  "resizeX": 128,
+  "modelId": 3076,
+  "ambient": 0,
+  "contrast": 0,
+  "clickable": true
+ },
+ {
+  "rotaton": 0,
+  "id": 188,
+  "resizeY": 128,
+  "animationId": 654,
+  "fullRecolor": -1,
+  "resizeX": 256,
+  "modelId": 3076,
+  "ambient": 0,
+  "contrast": 0,
+  "clickable": true
+ },
+ {
+  "rotaton": 0,
+  "id": 314,
+  "resizeY": 128,
+  "animationId": 1685,
+  "fullRecolor": -1,
+  "resizeX": 128,
+  "modelId": 11060,
+  "ambient": 192,
+  "contrast": 0,
+  "clickable": true
+ },
+ {
+  "rotaton": 0,
+  "id": 469,
+  "resizeY": 128,
+  "animationId": 2834,
+  "fullRecolor": -1,
+  "resizeX": 128,
+  "modelId": 9915,
+  "ambient": 0,
+  "contrast": 0,
+  "clickable": true
+ },
+ {
+  "rotaton": 0,
+  "id": 931,
+  "resizeY": 96,
+  "animationId": 5205,
+  "fullRecolor": -1,
+  "resizeX": 96,
+  "modelId": 9598,
+  "ambient": 60,
+  "contrast": 60,
+  "clickable": true
+ }
+]
