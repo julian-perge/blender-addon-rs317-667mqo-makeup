@@ -245,6 +245,8 @@ def test_reopened_file_plays_without_extension(bundle_root, tmp_path):
                 bpy.app.binary_path,
                 "--background",
                 "--factory-startup",
+                # The run inherits PYTHONDONTWRITEBYTECODE from scripts/test-blender.sh only with this flag.
+                "--python-use-system-env",
                 "--disable-autoexec",
                 str(saved),
                 "--python-exit-code",

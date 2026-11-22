@@ -98,6 +98,8 @@ def test_custom_colour_export_writes_the_model_as_imported(name: str, tmp_path: 
 def test_output_folder_starting_with_a_tilde_means_the_home_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # A leading ~ names the home folder in the shell and in Python's os.path.expanduser, and users type paths that way.
     monkeypatch.setenv("HOME", str(tmp_path))
+    # On Windows, os.path.expanduser reads USERPROFILE and not HOME.
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     bpy.context.scene.exporter_output_dir = "~/exports"  # pyrefly: ignore[missing-attribute]
     model, obj = imported(MODELS / "osrs" / "147.dat")
 

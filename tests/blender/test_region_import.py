@@ -496,6 +496,10 @@ def linked(obj: bpy.types.Object) -> None:
     scene.collection.objects.link(obj)
 
 
+# A ray cast in Blender for Windows gave 280.001 for a face at 280. A hundredth of a game unit is far below one unit.
+RAY_TOLERANCE = 0.01
+
+
 def hit_below(obj: bpy.types.Object, x: float, y: float) -> float:
     """The z where a ray straight down from far above (x, y) first hits the object, which stands at the origin."""
     hit, location, _, _ = obj.ray_cast((x, y, 10_000.0), (0.0, 0.0, -1.0))
@@ -532,7 +536,7 @@ def test_a_player_placed_at_the_tile_to_position_point_of_a_flat_tile_stands_on_
     rig.location = region_terrain.tile_position(terrain, *FLAT_TILE)
 
     assert (rig.location.x, rig.location.y, rig.location.z) == FLAT_TILE_POINT
-    assert hit_below(obj, rig.location.x, rig.location.y) == pytest.approx(rig.location.z)
+    assert hit_below(obj, rig.location.x, rig.location.y) == pytest.approx(rig.location.z, abs=RAY_TOLERANCE)
     # The client's model of this player has its lowest vertex at game height 6 (`before_lighting` in the appearance
     # reference file), so its feet are 6 units below the ground point, and the Blender player's lowest vertex is too.
     feet = max(y for _, y, _ in PLAYER_REFERENCE["before_lighting"]["vertices"])
@@ -549,7 +553,9 @@ def test_after_the_terrain_mesh_is_edited_the_tile_to_position_point_is_the_same
         vertex.co.z += 500
     mesh.update()
 
-    assert hit_below(obj, FLAT_TILE_POINT[0], FLAT_TILE_POINT[1]) == pytest.approx(FLAT_TILE_POINT[2] + 500)
+    assert hit_below(obj, FLAT_TILE_POINT[0], FLAT_TILE_POINT[1]) == pytest.approx(
+        FLAT_TILE_POINT[2] + 500, abs=RAY_TOLERANCE
+    )
     assert region_terrain.tile_position(terrain, *FLAT_TILE) == FLAT_TILE_POINT
 
 

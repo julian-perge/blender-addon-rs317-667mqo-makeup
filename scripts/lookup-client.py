@@ -341,7 +341,7 @@ def main(argv: list[str]) -> int:
         notes = citing_notes(row, args.repo)
         print("  notes:" if notes else "  notes: none cite this name")
         for note, numbers in notes.items():
-            print(f"    {note}:" + ",".join(str(n) for n in numbers))
+            print(f"    {note.as_posix()}:" + ",".join(str(n) for n in numbers))
     return 0
 
 
