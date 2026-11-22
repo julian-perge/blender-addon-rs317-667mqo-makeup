@@ -63,7 +63,7 @@ The byte per face that the client lights a model by. 0 is a smooth face, 1 is a 
 _Avoid_: face type, draw type
 
 **Face alpha**:
-A byte of transparency per face, where 0 is opaque and 255 is fully transparent.
+A byte of transparency per face, where 0 is opaque and 255 is fully transparent. A plain face covers (256 - alpha) / 256 of its pixels. A textured face ignores it, except that alpha 254 and 255 hide it ([ADR 0036](docs/adr/0036-textured-faces-and-face-alpha-show-as-the-client-draws-them.md)).
 _Avoid_: opacity, transparency
 
 **Fade group**:
@@ -197,8 +197,24 @@ _Avoid_: props, decorations
 ## Animation labels
 
 **Spot effect**:
-A game effect definition that selects a model, an optional animation sequence and display settings, such as scale and recoloring.
-_Avoid_: animation file, keyframes, item animation
+A game effect definition (config group 13) that selects a model, an optional animation sequence and display settings, such as scale and recoloring, such as the smoke puff 86. The client lights it with its own ambient and contrast, plays its sequence once on an actor and then removes it ([ADR 0037](docs/adr/0037-a-spot-effect-is-an-npc-collection-that-plays-its-sequence-once.md)). The client calls it a spotanim or a graphic.
+_Avoid_: animation file, keyframes, item animation, spotanim (except for client names)
+
+**Chathead**:
+The head that the client shows in a dialogue box: the chathead models of the kits and the head models of the worn items of a player, or the chathead models of an NPC, lit with the widget light ([ADR 0038](docs/adr/0038-a-chathead-is-an-npc-collection-lit-with-the-widget-light.md)).
+_Avoid_: dialogue head, face model, head model (an item's head model is one part of a chathead)
+
+**Widget light**:
+The light `(64, 768, -50, -10, -50)` that the client gives a chathead, whatever the ambient and contrast of the NPC (`hy.u` of gamepack 149, [docs/research/chatheads.md](docs/research/chatheads.md)).
+_Avoid_: chathead lighting
+
+**Chat clip**:
+An animation sequence that a chathead plays, such as chathap1 (567) or chatneu1 (588). For each step the client applies its frame and then its chat frame to the head (`jg.p`). The names come from `seq.sym` of the osrs-dumps repo.
+_Avoid_: emote (a player body plays an emote), face animation
+
+**Chat frames**:
+The second frame list of a sequence (opcode 12), which the client applies after the frame of the same step, only to a chathead.
+_Avoid_: chat frame ids (the client's name), face frames
 
 **Animation sequence**:
 An ordered set of game animation frames and their durations, with playback settings.

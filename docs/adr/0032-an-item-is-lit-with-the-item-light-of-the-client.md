@@ -8,7 +8,7 @@ A script shows items as props: a waterskin in a hand, a bucket on the ground. Mo
 - **`ambient` and `contrast` come from the item definition.** Opcode 113 stores a signed byte as the ambient. Opcode 114 stores a signed byte times 5 as the contrast (offsets 1576 to 1587 of `iz.v`). RuneLite's JSON of snapshot 430 holds the byte without the factor, so the add-on's value is 5 times RuneLite's.
 - **The model is the inventory model, as the client builds it before the light:** scaled by the item's resize over 128 when one of the three is not 128, then recoloured, then retextured (`iz.p` offsets 185 to 436).
 - **A lit item uses the mesh and the material of a player** (`appearance_preview.build_mesh`): corner colours in `rs_lit` and one shared emission material.
-- **A model with a textured face, or a face alpha of 254 or 255, is refused**, as for a player (`lighting.light_hsl`). #103 changes both together.
+- **A model with a textured face, or a face alpha of 254 or 255, is refused**, as for a player (`lighting.light_hsl`). #103 changes both together. [ADR 0036](0036-textured-faces-and-face-alpha-show-as-the-client-draws-them.md) replaces this point: such a model builds, as the client draws it.
 - **An item that the client shows as a stack of another item (`countObj`) is out of scope.** The function shows the item of the id that it gets.
 
 The light values are evidence from the client. The refusal and the stack rule are guesses of the Spec stage.
