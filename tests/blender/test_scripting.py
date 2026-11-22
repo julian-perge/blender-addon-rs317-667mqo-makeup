@@ -6,8 +6,9 @@ from pathlib import Path
 import bpy
 import pytest
 from js5_builder import item_definition, rewrite_cache
+from mathutils import Vector
 
-from rsps_toolkit.blender import appearance_collection, appearance_preview, scripting
+from rsps_toolkit.blender import appearance_clip, appearance_collection, appearance_preview, scripting
 from rsps_toolkit.blender.face_materials import srgb_to_linear
 from rsps_toolkit.formats import decode, face_colour_to_rgb
 from rsps_toolkit.formats.appearance_look import Look
@@ -20,6 +21,7 @@ TEXTURED_MODEL = FIXTURES / "models" / "osrs" / "135.dat"
 # iz.p offsets 511 to 542 of gamepack 149 for an item with ambient 0 and contrast 0 (docs/research/item-light.md).
 BASE_ITEM_LIGHT = (64, 768, -50, -10, -50)
 BRIGHTNESS = 0.6
+WALK_CLIP = FIXTURES / "animation149" / "walk"
 
 
 @pytest.fixture(autouse=True)
@@ -170,3 +172,85 @@ def test_a_look_that_cannot_be_built_is_refused_and_nothing_is_left(cache):
         scripting.create_player(cache, Look(items=(229,)), brightness=BRIGHTNESS)
 
     assert (len(bpy.data.objects), len(bpy.data.collections)) == (0, 0)
+
+
+def xyz(vector: Vector) -> tuple[float, float, float]:
+    return vector.x, vector.y, vector.z
+
+
+def origin(obj: bpy.types.Object) -> tuple[float, float, float]:
+    """The world place of the object's origin, after the constraints."""
+    view_layer = bpy.context.view_layer
+    assert view_layer is not None
+    view_layer.update()
+    return xyz(obj.matrix_world.to_translation())
+
+
+def joint_point(rig: bpy.types.Object, joint: str, offset: tuple[float, float, float]) -> tuple[float, float, float]:
+    """The world place of a point given in the axes of the posed joint, from the head of the joint."""
+    assert rig.pose is not None
+    return xyz(rig.matrix_world @ rig.pose.bones[joint].matrix @ Vector(offset))
+
+
+# Issue 170, gap e: on a rig with a small scale, a new Child Of constraint of Blender 5.3 cancelled the scale of the rig
+# and the held item came out far too large. The item has to take the scale of the rig.
+def test_an_item_on_a_joint_of_a_scaled_rig_takes_the_scale_of_the_rig(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS, location=(100.0, 200.0, 0.0))
+    player.rig.scale = (0.01, 0.01, 0.01)
+    item = scripting.import_item(cache, 1823, brightness=BRIGHTNESS)
+
+    constraint = scripting.attach_to_joint(item, player.rig, "hand.R")
+
+    assert (constraint.type, item.constraints[0]) == ("CHILD_OF", constraint)
+    assert origin(item) == pytest.approx(joint_point(player.rig, "hand.R", (0.0, 0.0, 0.0)), abs=1e-4)
+    scale = item.matrix_world.to_scale()
+    assert (scale.x, scale.y, scale.z) == pytest.approx((0.01, 0.01, 0.01))
+
+
+def test_the_offset_of_an_attached_object_is_in_the_axes_of_the_joint_in_game_units(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+    player.rig.scale = (0.5, 0.5, 0.5)
+    item = scripting.import_item(cache, 1823, brightness=BRIGHTNESS)
+
+    scripting.attach_to_joint(item, player.rig, "spine", offset=(3.0, -4.0, 12.0), rotation=(0.0, 0.0, 1.5))
+
+    assert origin(item) == pytest.approx(joint_point(player.rig, "spine", (3.0, -4.0, 12.0)), abs=1e-4)
+    assert (item.rotation_euler.x, item.rotation_euler.y, item.rotation_euler.z) == pytest.approx((0.0, 0.0, 1.5))
+
+
+def test_an_attached_object_follows_its_joint_through_a_baked_clip(cache):
+    scene = bpy.context.scene
+    assert scene is not None
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+    item = scripting.import_item(cache, 1823, brightness=BRIGHTNESS)
+    scripting.attach_to_joint(item, player.rig, "hand.R")
+    appearance_clip.bake_clip_to_rig(player.collection, WALK_CLIP, start=0)
+
+    places = []
+    for frame in (0, 20):
+        scene.frame_set(frame)
+        assert origin(item) == pytest.approx(joint_point(player.rig, "hand.R", (0.0, 0.0, 0.0)), abs=1e-4)
+        places.append(Vector(origin(item)))
+    # The hand swings during a walk, so the two frames give two places.
+    assert (places[0] - places[1]).length > 1.0
+
+
+def test_a_joint_that_the_rig_does_not_have_is_refused_with_the_joints_it_has(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+    item = scripting.import_item(cache, 1823, brightness=BRIGHTNESS)
+
+    with pytest.raises(ValueError, match=r"Player_rig has no joint 'wing'\. Its joints are .*spine.*hand\.R"):
+        scripting.attach_to_joint(item, player.rig, "wing")
+
+    assert len(item.constraints) == 0
+
+
+def test_a_label_bone_is_not_a_joint(cache):
+    # The rig also has hidden label bones, which the user and a script do not animate (GLOSSARY.md, Joint).
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+    item = scripting.import_item(cache, 1823, brightness=BRIGHTNESS)
+    assert player.rig.pose is not None
+    label = next(bone.name for bone in player.rig.pose.bones if bone.name.startswith("label_"))
+
+    with pytest.raises(ValueError, match="has no joint"):
+        scripting.attach_to_joint(item, player.rig, label)

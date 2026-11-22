@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import bpy
+from mathutils import Matrix
 
 from ..formats.appearance_look import Look, look_preset
 from ..formats.cache_profile import shared_profile
@@ -49,6 +50,40 @@ def create_player(
     return Player(
         collection, appearance_collection.armature_of(collection), tuple(appearance_collection.parts(collection))
     )
+
+
+def attach_to_joint(
+    obj: bpy.types.Object,
+    rig: bpy.types.Object,
+    joint: str,
+    *,
+    offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> bpy.types.Constraint:
+    """Put `obj` on a joint of a rig with a new Child Of constraint, so that it follows the joint through every clip
+    and takes the scale of the rig. `offset` is the place of the object's origin from the head of the joint, in game
+    units in the axes of the joint. `rotation` is an XYZ Euler in radians in those axes. It refuses a joint that the
+    rig does not have, before any change.
+
+    Blender 5.3 gives a new Child Of constraint a pending inverse, which it sets at the next evaluation to cancel the
+    target's transform at that moment. On a rig with a scale of 0.01, that made a held item 100 times too large
+    (issue 170, gap e). So the inverse is the identity here, and nothing is pending."""
+    joints = [] if rig.pose is None else [b.name for b in rig.pose.bones if not _is_label_bone(b.name)]
+    if joint not in joints:
+        raise ValueError(f"{rig.name} has no joint {joint!r}. Its joints are {', '.join(joints)}")
+    constraint = obj.constraints.new("CHILD_OF")
+    assert isinstance(constraint, bpy.types.ChildOfConstraint)
+    constraint.target = rig
+    constraint.subtarget = joint
+    constraint.set_inverse_pending = False
+    constraint.inverse_matrix = Matrix.Identity(4)
+    obj.location = offset
+    obj.rotation_euler = rotation
+    return constraint
+
+
+def _is_label_bone(name: str) -> bool:
+    return name.startswith(appearance_collection.BONE_PREFIX)
 
 
 @functools.cache
