@@ -205,7 +205,8 @@ def bake_npc_clip(
     Bake).
 
     The NPC's model is posed with the clip alone (`appearance_pose.pose_model`): an NPC has no held items, no body
-    palette and no weapon clips. Refuses, before any change, Edit
+    palette and no weapon clips. A chathead, an NPC collection whose record says `chathead`, is posed with the chat
+    frames of the clip too, as the client poses a head in a dialogue box (ADR 0038). Refuses, before any change, Edit
     Mode, a clip with a frame on another frame map than the NPC's, an edited NPC, a repeat with `action` or not after
     `start`, and a strip that would overlap another on the track. Returns the number of frames.
     """
@@ -228,11 +229,7 @@ def bake_npc_clip(
             )
     if appearance_collection.is_edited(collection):
         raise ValueError(f"{collection.name} has edits, so a clip cannot be baked onto it")
-    posed = appearance_pose.pose_model(
-        collection,
-        source,
-        action=action,
-    )
+    posed = appearance_pose.pose_model(collection, source, action=action, chat=bool(record.get("chathead")))
     return _bake_strip(
         collection,
         source,

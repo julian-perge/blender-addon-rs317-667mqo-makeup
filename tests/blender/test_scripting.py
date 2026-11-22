@@ -10,7 +10,7 @@ import pytest
 from js5_builder import build_region_cache, item_definition, region_textures, rewrite_cache
 from mathutils import Vector
 
-from rsps_toolkit.animation.clip import CacheClip, read_sequence
+from rsps_toolkit.animation.clip import CacheClip, pose_vertices, read_sequence
 from rsps_toolkit.blender import (
     appearance_clip,
     appearance_collection,
@@ -20,11 +20,14 @@ from rsps_toolkit.blender import (
     region_import,
     scripting,
 )
+from rsps_toolkit.blender.axes import game_to_blender
 from rsps_toolkit.blender.face_materials import srgb_to_linear
 from rsps_toolkit.formats import decode, face_colour_to_rgb
-from rsps_toolkit.formats.appearance_look import Look
+from rsps_toolkit.formats.appearance_look import Look, look_preset
 from rsps_toolkit.formats.appearance_preset import loads_preset
 from rsps_toolkit.formats.cache_profile import shared_profile
+from rsps_toolkit.formats.chathead import player_head_model
+from rsps_toolkit.formats.item_wear import load_item_wear
 from rsps_toolkit.formats.js5 import Js5Store
 from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, light
 from rsps_toolkit.formats.region import ground_height, load_terrain
@@ -808,3 +811,61 @@ def test_a_spot_effect_on_a_joint_with_a_height_is_refused_before_any_change():
     with pytest.raises(LookupError, match="no spot effect 99999"):
         scripting.create_spot_effect(snapshot(), 99999, brightness=BRIGHTNESS)
     assert (len(bpy.data.objects), len(bpy.data.collections)) == before
+
+
+def posed_positions(obj: bpy.types.Object, frame: int) -> dict[int, Vector]:
+    """The evaluated place of each model vertex of the mesh at a frame, in game units in the space of its rig."""
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.frame_set(frame)
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    indices = appearance_preview.vertex_indices(mesh_of(obj))
+    positions = {index: vertex.co.copy() for index, vertex in zip(indices, mesh.vertices, strict=True)}
+    evaluated.to_mesh_clear()
+    return positions
+
+
+@SNAPSHOT
+def test_a_player_chathead_plays_chathap1_with_its_chat_frames():
+    # jg.p applies the frame and then the chat frame of each step to a chathead (docs/research/chatheads.md). The bake
+    # fits joints to those posed vertices, so the mesh follows them to within the rounding of the fit.
+    head = scripting.create_player_chathead(snapshot(), Look(), brightness=BRIGHTNESS)
+    chathap1 = scripting.chat_clip("chathap1")
+    scripting.bake_clip(head, snapshot(), chathap1, start=0)
+
+    profile = shared_profile(snapshot())
+    preset = look_preset(Look(), profile.kits, load_item_wear())
+    model = player_head_model(
+        preset.equipment, profile.kits, profile.items, profile.load_model, preset.colours, profile.palette
+    )
+    assert model.vertex_skins is not None
+    clip = CacheClip(Js5Store(snapshot()), chathap1)
+    chat = pose_vertices(tuple(model.vertices), tuple(model.vertex_skins), clip, chat=True)
+    plain = pose_vertices(tuple(model.vertices), tuple(model.vertex_skins), clip)
+    step = next(i for i, (a, b) in enumerate(zip(chat, plain, strict=True)) if a.vertices != b.vertices)
+    frame = sum(f.ticks for f in chat[:step]) + 1
+    shown = posed_positions(head.mesh, frame)
+    expected = {i: Vector(game_to_blender(chat[step].vertices[i])) for i in shown}
+    assert max((shown[i] - expected[i]).length for i in shown) < 1.0
+
+
+@SNAPSHOT
+def test_the_chathead_of_man_bakes_chatneu1():
+    head = scripting.create_npc_chathead(snapshot(), 3078, brightness=BRIGHTNESS)
+
+    scripting.bake_clip(head, snapshot(), scripting.chat_clip("chatneu1"), start=0, repeat_until=100)
+
+    assert head.collection.name == "Man chathead"
+    strips = head.rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips  # pyrefly: ignore
+    assert [(round(s.frame_start), round(s.frame_end)) for s in strips] == [(0, 100)]
+
+
+@SNAPSHOT
+def test_an_npc_with_no_chathead_models_and_an_unknown_chat_clip_are_refused():
+    # The cow 2805 has no chathead models (RuneLite's row in fixtures/npc/chathead-models.json).
+    with pytest.raises(ValueError, match="no chathead models"):
+        scripting.create_npc_chathead(snapshot(), 2805, brightness=BRIGHTNESS)
+    with pytest.raises(ValueError, match="not a chat clip"):
+        scripting.chat_clip("chathap9")
+    assert not bpy.data.objects

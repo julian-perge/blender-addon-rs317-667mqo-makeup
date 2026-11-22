@@ -16,14 +16,17 @@ from pathlib import Path
 import bpy
 from mathutils import Matrix, Vector
 
-from ..animation.clip import CacheClip, read_sequence
+from ..animation.clip import CacheClip, load_chat_clip_names, read_sequence
 from ..animation.frames import frame_schedule
 from ..formats.appearance_look import Look, look_preset
 from ..formats.cache_profile import shared_profile
+from ..formats.chathead import WIDGET_LIGHTING, npc_head_model, player_head_model
 from ..formats.item_model import inventory_model, item_lighting
 from ..formats.item_wear import ItemWear, load_item_wear
 from ..formats.js5 import Js5Store
 from ..formats.lighting import light
+from ..formats.model import Model
+from ..formats.npc_definition import read_npc
 from ..formats.region import REGION_SIZE, Terrain, load_terrain
 from ..formats.spot_effect import read_spot_effect, spot_effect_lighting, spot_effect_model, spot_effect_scale
 from ..formats.travel import RUN_FRAMES_PER_TILE, WALK_FRAMES_PER_TILE, travel_frames
@@ -104,7 +107,7 @@ def attach_to_joint(
 
 
 def bake_clip(
-    player: "Player | SpotEffect | bpy.types.Collection",
+    player: "Player | Chathead | SpotEffect | bpy.types.Collection",
     folder: Path,
     sequence: int,
     *,
@@ -122,7 +125,8 @@ def bake_clip(
     sets them as the Bake Clip button does. One Blender frame of a clip is one client tick of 20 ms, so a clip plays
     at its game speed only at 50 frames in a second.
 
-    A spot effect or another NPC collection is baked with `appearance_clip.bake_npc_clip`."""
+    A chathead, a spot effect or another NPC collection is baked with `appearance_clip.bake_npc_clip`, which poses a
+    chathead with the chat frames of the clip (ADR 0038)."""
     collection = player if isinstance(player, bpy.types.Collection) else player.collection
     clip = CacheClip(Js5Store(folder), sequence)
     if npc_collection.NPC_KEY in collection:
@@ -454,3 +458,95 @@ def _key_shown(obj: bpy.types.Object, start: int, end: int | None) -> None:
         obj.keyframe_insert("hide_viewport", frame=frame)
         obj.keyframe_insert("hide_render", frame=frame)
     obj.hide_viewport = obj.hide_render = False
+
+
+@dataclass(frozen=True)
+class Chathead:
+    """A chathead of `create_player_chathead` or `create_npc_chathead` (ADR 0038)."""
+
+    collection: bpy.types.Collection
+    rig: bpy.types.Object
+    mesh: bpy.types.Object
+
+
+CHATNEU1 = 588
+"""chatneu1, whose frame map 82 the human chat clips share (docs/research/chatheads.md)."""
+
+
+def create_player_chathead(
+    folder: Path,
+    look: Look,
+    *,
+    brightness: float,
+    location: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    name: str = "Chathead",
+    rig_sequence: int = CHATNEU1,
+) -> Chathead:
+    """A new chathead of the look: the chathead models of its kits and the head models of its worn items, recoloured
+    with its colour choices, lit with the widget light and rigged for the frame map of `rig_sequence`, with its rig at
+    `location` (ADR 0038). It refuses what `look_preset` refuses, a look with no chathead model and a sequence that
+    the cache lacks, before any Blender data exists."""
+    profile = shared_profile(folder)
+    preset = look_preset(look, profile.kits, _item_wear())
+    model = player_head_model(
+        preset.equipment,
+        profile.kits,
+        profile.items,
+        profile.load_model,
+        preset.colours,
+        profile.palette,
+        female=preset.female,
+    )
+    return _chathead(folder, model, name, brightness, location, rig_sequence, {"look": True})
+
+
+def create_npc_chathead(
+    folder: Path,
+    npc_id: int,
+    *,
+    brightness: float,
+    location: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    name: str | None = None,
+    rig_sequence: int = CHATNEU1,
+) -> Chathead:
+    """A new chathead of the NPC: its chathead models, recoloured and retextured as the NPC says, lit with the widget
+    light and rigged for the frame map of `rig_sequence`, with its rig at `location` (ADR 0038). `name` defaults to
+    the NPC's name and `chathead`, such as `Man chathead`. It refuses an NPC that the cache lacks, an NPC with no
+    chathead models and a sequence that the cache lacks, before any Blender data exists."""
+    npc = read_npc(Js5Store(folder), npc_id)
+    model = npc_head_model(npc, shared_profile(folder).load_model)
+    name = f"{npc.name} chathead" if name is None else name
+    return _chathead(folder, model, name, brightness, location, rig_sequence, {"npc": npc_id})
+
+
+def _chathead(
+    folder: Path,
+    model: Model,
+    name: str,
+    brightness: float,
+    location: tuple[float, float, float],
+    rig_sequence: int,
+    source: dict[str, object],
+) -> Chathead:
+    if model.vertex_skins is None:
+        raise ValueError(f"The chathead {name} has no vertex skins, so it cannot have a rig")
+    shading = light(model, WIDGET_LIGHTING)
+    textures = appearance_preview.texture_pixels(folder, model, brightness)
+    map_id, frame_map = npc_collection.sequence_frame_map(Js5Store(folder), rig_sequence, f"Sequence {rig_sequence}")
+    # The NPC id stays null, so the NPC panel gives a chathead no Combat row (ADR 0038).
+    record = {"npc": None, "name": name, "frame_map": map_id, "sequences": {}, "chathead": source}
+    collection = npc_collection.build(
+        model, shading, map_id, frame_map, (1.0, 1.0, 1.0), name, record, brightness, textures
+    )
+    rig = appearance_collection.armature_of(collection)
+    rig.location = location
+    return Chathead(collection, rig, appearance_collection.mesh_of(collection))
+
+
+def chat_clip(name: str) -> int:
+    """The sequence id of a chat clip by its name, such as `chathap1` (567), from `data/animation_names.json`. It refuses
+    a name that is not a chat clip."""
+    ids = {clip_name: sequence_id for sequence_id, clip_name in load_chat_clip_names().items()}
+    if name not in ids:
+        raise ValueError(f"{name!r} is not a chat clip. The chat clips include chathap1, chatneu1 and chatang1")
+    return ids[name]
