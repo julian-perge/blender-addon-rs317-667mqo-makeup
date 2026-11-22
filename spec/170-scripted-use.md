@@ -17,7 +17,7 @@ Each item is a guess until the owner confirms it. The decision comment of the bu
 5. Travel keys the location of the rig object in a straight line between the given points, with one tile in 30 frames at 50 fps for a walk. The run speed of 2 tiles in 30 frames is general knowledge of the game and is not checked in the client.
 6. The wall decoration clearance moves the object, not the vertices, so the stored model data stays as the cache has it.
 7. A saved region holds the region as the import made it, before the region origin and the turn. One file serves every origin.
-8. The key of a saved region holds the add-on version, a hash of the add-on's Python files, the size and the modified time of the cache data file and of the key file of the region, the region numbers, the brightness and the wall decoration clearance.
+8. The key of a saved region holds a hash of the files of the add-on (the code, the manifest with the version and the data tables), the size and the modified time of the cache data file and of the key file of the region, the region numbers, the brightness and the wall decoration clearance.
 9. `.gitattributes` gives every text file LF line ends on every system.
 
 ## Objective
