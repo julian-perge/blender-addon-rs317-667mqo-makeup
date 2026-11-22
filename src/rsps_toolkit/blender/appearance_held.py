@@ -9,6 +9,7 @@ worn weapon and shield on the frames the clip covers. A clip played as a pose ne
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 import bpy
 
@@ -18,7 +19,7 @@ from ..formats.appearance import ITEM_OFFSET, held_equipment
 from ..formats.appearance_preset import loads_preset
 from ..formats.appearance_rig import Rig, derive_rig
 from ..formats.cache_profile import shared_profile
-from ..formats.lighting import Shading, light_hsl
+from ..formats.lighting import PLAYER_LIGHTING, Shading, light
 from ..formats.model import Model, Vertex
 from . import appearance_collection, appearance_preview, preferences
 from .axes import game_to_blender
@@ -47,6 +48,8 @@ class Variant:
     worn_slots: dict[int, range]
     # The name of every item the variant holds, for its object's name.
     names: dict[int, str]
+    # The cache folder, which the textures of the held items come from.
+    folder: Path
 
 
 def variant(collection: bpy.types.Collection, held: tuple[int, int], cache_folder: str) -> Variant | None:
@@ -55,11 +58,12 @@ def variant(collection: bpy.types.Collection, held: tuple[int, int], cache_folde
     equipment = held_equipment(preset.equipment, *held)
     if equipment == list(preset.equipment):
         return None
-    profile = shared_profile(appearance_preview.cache_folder(cache_folder))
+    folder = appearance_preview.cache_folder(cache_folder)
+    profile = shared_profile(folder)
     model, slots = profile.assemble_slots(preset, equipment)
     worn_model, worn_slots = profile.assemble_slots(preset)
     names = {value - ITEM_OFFSET: profile.items[value - ITEM_OFFSET].name for value in held if value >= ITEM_OFFSET}
-    return Variant(tuple(equipment), model, light_hsl(model), slots, worn_model, worn_slots, names)
+    return Variant(tuple(equipment), model, light(model, PLAYER_LIGHTING), slots, worn_model, worn_slots, names, folder)
 
 
 def changed_slots(collection: bpy.types.Collection, equipment: Sequence[int]) -> list[int]:
@@ -181,6 +185,7 @@ def _ensure_held_objects(collection: bpy.types.Collection, found: Variant) -> No
             appearance_collection.HELD,
             found.slots[slot],
             False,
+            appearance_preview.texture_pixels(found.folder, found.model, brightness),
         )
         obj[appearance_collection.HELD_SLOT_KEY] = slot
         obj[appearance_collection.HELD_ITEM_KEY] = item

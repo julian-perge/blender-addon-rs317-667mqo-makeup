@@ -7,7 +7,7 @@ from runelite_json import load_items, load_kits
 
 from rsps_toolkit.formats import Model, decode
 from rsps_toolkit.formats.appearance import assemble_body, load_palette, merge
-from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, _divide, joined_render_types, light, light_hsl
+from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, _divide, joined_render_types, light
 from rsps_toolkit.formats.model import ModelEncoding, NewFormatData
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/appearance"
@@ -46,24 +46,26 @@ def test_division_rounds_toward_zero_like_java():
     assert [_divide(-7, 2), _divide(7, -2), _divide(-7, -2), _divide(7, 2)] == [-3, -3, 3, 3]
 
 
-def test_the_player_and_npc_light_refuses_textured_faces_and_alpha_254_and_255():
-    # The owner's decision of 2026-11-17 on issue 105: Create Player, the held variant and NPC import keep refusing
-    # these faces with the same error until issue 103.
+def test_a_joined_player_lights_a_textured_face_and_alpha_254_and_255_instead_of_refusing_them():
+    # Issue 103: dv.ae of gamepack 149 lights a textured face with light values and hides a face of alpha 255
+    # (docs/research/textured-light.md, section 1). The face keeps the light value that the colour formula scales: a
+    # light value is the clamped intensity, and the untextured shade is (colour & 0xFF80) + (lightness * intensity >> 7).
     body = assemble_body(REFERENCE["equipment"], KITS, load_model, [0] * 5, PALETTE)
     textured = replace(body, face_textures=[5, *body.face_textures[1:]], face_colours=[None, *body.face_colours[1:]])
-    with pytest.raises(ValueError, match="Lighting of textured faces is not verified against the client"):
-        light_hsl(textured)
-    for alpha in (254, 255):
-        with pytest.raises(
-            ValueError, match="Lighting of faces with alpha 254 or 255 is not verified against the client"
-        ):
-            light_hsl(replace(body, face_alphas=[alpha, *body.face_alphas[1:]]))
+    hidden = replace(body, face_alphas=[255, *body.face_alphas[1:]])
+
+    lit = light(textured, PLAYER_LIGHTING)
+    gone = light(hidden, PLAYER_LIGHTING)
+
+    assert lit.light_values[0] and not any(lit.light_values[1:])
+    assert all(2 <= value <= 126 for value in (lit.corner_a[0], lit.corner_b[0], lit.corner_c[0]))
+    assert (gone.corner_a[0], gone.corner_b[0], gone.corner_c[0]) == (0, 0, -2)
 
 
 @pytest.mark.parametrize("case", REFERENCE["cases"][:2], ids=lambda c: f"{c.get('outfit')}-{c['female']}")
 def test_the_player_and_npc_light_gives_the_client_shades_of_a_player(case):
     body = assemble_body(case["equipment"], KITS, load_model, case["colours"], PALETTE, ITEMS, female=case["female"])
-    shading = light_hsl(body)
+    shading = light(body, PLAYER_LIGHTING)
     assert (shading.corner_a, shading.corner_b, shading.corner_c) == (
         case["lit"]["shade_a"],
         case["lit"]["shade_b"],
@@ -203,27 +205,11 @@ def test_a_new_format_face_of_render_type_4_is_hidden_and_adds_no_normal():
     assert (shading.corner_a, shading.corner_b, shading.corner_c) == ([0, 10713], [0, 10713], [-2, 10713])
 
 
-def test_the_player_and_npc_light_lights_a_face_of_render_type_2_as_a_smooth_face():
-    # The owner's decision of 2026-11-17 on issue 127: these callers keep today's light of such a face until issue 103.
-    # The two faces then share vertices 0 and 1, as in the alpha 255 test above, and the level face gets 10704 at
-    # vertices 0 and 1 and, at vertex 2, (-10 * -256) / 226 + 80 = 91 and (100 * 91) >> 7 = 71: 10624 + 71.
-    shading = light_hsl(new_model([2, 0]), LOC_LIGHTING)
-    assert (shading.corner_a, shading.corner_b, shading.corner_c) == ([10704, 10704], [10704, 10704], [10695, 10713])
-
-
 def test_a_new_format_face_of_render_type_3_gives_colour_128_and_adds_no_normal():
     # computeNormals (ModelData.java lines 1444 to 1476) adds no normal for render type 3, and light gives an untextured
     # face of render type 3 the colour 128 and the third corner -1 (lines 1632 to 1634). The tilted face keeps 10713.
     shading = light(new_model([3, 0]), LOC_LIGHTING)
     assert (shading.corner_a, shading.corner_b, shading.corner_c) == ([128, 10713], [0, 10713], [-1, 10713])
-
-
-def test_the_player_and_npc_light_lights_a_face_of_render_type_3_as_a_flat_face():
-    # The owner's decision of 2026-11-17 on issue 127, as for render type 2. The level face is flat, so by lines 1627
-    # to 1631 it gets (-10 * -256) / (226 / 2 + 226) + 80 = 2560 / 339 + 80 = 87 and (100 * 87) >> 7 = 67: 10624 + 67.
-    # It adds no normal to vertices 0 and 1, so the tilted face keeps 10713.
-    shading = light_hsl(new_model([3, 0]), LOC_LIGHTING)
-    assert (shading.corner_a, shading.corner_b, shading.corner_c) == ([10691, 10713], [0, 10713], [-1, 10713])
 
 
 def test_a_joined_model_keeps_the_stored_render_type_of_each_part():

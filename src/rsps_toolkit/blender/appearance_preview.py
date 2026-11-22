@@ -1,19 +1,27 @@
 """Builds the lit player mesh from an appearance preset. The operators that use it are in appearance_collection."""
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from pathlib import Path
 
 import bpy
 
+from ..formats import texture_uvs
 from ..formats.appearance_preset import AppearancePreset
-from ..formats.cache_profile import shared_profile
+from ..formats.cache_profile import MissingResourceError, shared_profile
 from ..formats.colour import face_colour_to_rgb
 from ..formats.face_order import visible_faces
-from ..formats.lighting import Shading, light_hsl
+from ..formats.js5 import Js5Store
+from ..formats.lighting import PLAYER_LIGHTING, Shading, light
 from ..formats.model import Model
-from . import preferences
+from ..formats.texture import read_textures
+from ..formats.texture import texture_pixels as decoded_pixels
+from . import preferences, rs_layers
 from .axes import game_to_blender
-from .face_materials import DEFAULT_BRIGHTNESS, srgb_to_linear
+from .face_materials import DEFAULT_BRIGHTNESS, MISSING_TEXTURE, srgb_to_linear, texture_image
+
+type TexturePixels = tuple[tuple[int, ...], bool]
+"""The pixels of one texture at one brightness, as `formats.texture.texture_pixels` gives them, and whether it is
+opaque."""
 
 PRESET_KEY = "rs_appearance_preset"
 LIT_ATTRIBUTE = "rs_lit"
@@ -28,6 +36,12 @@ VERTEX_ATTRIBUTE = "rs_vertex"
 # A face attribute: each polygon's face index in the merged model.
 FACE_ATTRIBUTE = "rs_face"
 MATERIAL_NAME = "RS Appearance Preview"
+# A face attribute: the material slot that `build_mesh` gave each polygon. A fade puts a polygon back on it.
+LIT_SLOT_ATTRIBUTE = "rs_lit_slot"
+# On a texture material of `build_mesh`: the texture id that it shows.
+TEXTURE_KEY = "rs_preview_texture"
+# The third lit value of a face that the client never draws (`ej.ae`, docs/research/textured-light.md, section 2).
+_NOT_DRAWN = -2
 
 
 def collection_of(obj: bpy.types.Object | None) -> bpy.types.Collection | None:
@@ -44,24 +58,35 @@ def build_mesh(
     brightness: float = DEFAULT_BRIGHTNESS,
     faces: Collection[int] | None = None,
     loose: bool = True,
+    textures: Mapping[int, TexturePixels] | None = None,
 ) -> bpy.types.Mesh:
     """Create a mesh whose face corners show the client's lit colours, from the model's faces or only `faces`.
 
     Game y points down, so a game vertex (x, y, z) becomes Blender (x, z, -y). Faces that repeat a vertex are not
-    drawn. A flat-shaded face uses its one lit colour at all three corners. The mesh holds the vertices its faces use
-    and, when `loose` is set, the vertices no drawn face of the model uses, in model order. Each vertex's index in the
-    model is stored in the VERTEX_ATTRIBUTE point attribute and each polygon's in the FACE_ATTRIBUTE face attribute,
-    with its face colour in FACE_COLOUR_ATTRIBUTE and its face alpha in FACE_ALPHA_ATTRIBUTE.
+    drawn, and neither is a face that the client never draws, whose third lit value is -2 (`ej.ae`, ADR 0036). A face
+    whose third lit value is -1, a flat face or an untextured face of render type 3, uses its first lit value at all
+    three corners. The mesh holds the vertices its faces use and, when `loose` is set, the vertices no drawn face of
+    the model uses, in model order. Each vertex's index in the model is stored in the VERTEX_ATTRIBUTE point attribute
+    and each polygon's in the FACE_ATTRIBUTE face attribute, with its face colour in FACE_COLOUR_ATTRIBUTE (-1 for a
+    textured face with no colour), its face alpha in FACE_ALPHA_ATTRIBUTE and its material slot in LIT_SLOT_ATTRIBUTE.
+
+    A textured face shows the image of its texture from `textures` times its light value, through a material of
+    `_texture_material`, and magenta times its light value when `textures` lacks it. Every other face uses the one
+    shared material of players in slot 0.
     """
     visible = set(visible_faces(model))
-    drawn = [i for i, face in enumerate(model.faces) if len(set(face)) == 3 and i in visible]
+    drawn = [
+        i
+        for i, face in enumerate(model.faces)
+        if len(set(face)) == 3 and i in visible and shading.corner_c[i] != _NOT_DRAWN
+    ]
     kept = drawn if faces is None else [i for i in drawn if i in faces]
     used = {v for i in kept for v in model.faces[i]}
     if loose:
         used |= set(range(len(model.vertices))) - {v for i in drawn for v in model.faces[i]}
     mesh = bpy.data.meshes.new(f"{name}_mesh")
     try:
-        _fill_mesh(mesh, model, shading, kept, sorted(used), brightness)
+        _fill_mesh(mesh, model, shading, kept, sorted(used), brightness, textures or {})
     except Exception:
         bpy.data.meshes.remove(mesh)
         raise
@@ -90,7 +115,13 @@ def face_indices(mesh: bpy.types.Mesh) -> list[int] | None:
 
 
 def _fill_mesh(
-    mesh: bpy.types.Mesh, model: Model, shading: Shading, kept: list[int], vertices: list[int], brightness: float
+    mesh: bpy.types.Mesh,
+    model: Model,
+    shading: Shading,
+    kept: list[int],
+    vertices: list[int],
+    brightness: float,
+    textures: Mapping[int, TexturePixels],
 ) -> None:
     index = {v: i for i, v in enumerate(vertices)}
     mesh.from_pydata(
@@ -104,14 +135,17 @@ def _fill_mesh(
     colours = mesh.color_attributes.new(LIT_ATTRIBUTE, "FLOAT_COLOR", "CORNER")
     values: list[float] = []
     for i in kept:
-        corners = (
-            (shading.corner_a[i],) * 3
-            if model.flat_shaded[i]
-            else (shading.corner_a[i], shading.corner_b[i], shading.corner_c[i])
-        )
+        third = shading.corner_c[i]
+        corners = (shading.corner_a[i],) * 3 if third == -1 else (shading.corner_a[i], shading.corner_b[i], third)
         for shade in corners:
-            r, g, b = face_colour_to_rgb(shade, brightness)
-            values += [srgb_to_linear(r / 255), srgb_to_linear(g / 255), srgb_to_linear(b / 255), 1.0]
+            if shading.light_values[i]:
+                # The client multiplies each texel by the light value over 128 (`ep.c`, textured-light.md section 2),
+                # and the texture image already has the brightness, as for the scenery (`region_scenery._write_lit`).
+                grey = srgb_to_linear(shade / 128)
+                values += [grey, grey, grey, 1.0]
+            else:
+                r, g, b = face_colour_to_rgb(shade, brightness)
+                values += [srgb_to_linear(r / 255), srgb_to_linear(g / 255), srgb_to_linear(b / 255), 1.0]
     colours.data.foreach_set("color", values)
     mesh.color_attributes.active_color = colours
     mesh.color_attributes.render_color_index = mesh.color_attributes.find(LIT_ATTRIBUTE)
@@ -121,11 +155,84 @@ def _fill_mesh(
         )
     alphas = model.face_alphas or [0] * len(model.faces)
     mesh.attributes.new(FACE_ALPHA_ATTRIBUTE, "INT", "FACE").data.foreach_set("value", [alphas[i] for i in kept])
-    # Every caller lights the model with light_hsl, which refuses textured faces, so every face has a face colour.
+    face_colours = [model.face_colours[i] for i in kept]
     mesh.attributes.new(FACE_COLOUR_ATTRIBUTE, "INT", "FACE").data.foreach_set(
-        "value", [model.face_colours[i] for i in kept]
+        "value", [-1 if colour is None else colour for colour in face_colours]
     )
     mesh.materials.append(_material())
+    slots: list[int] = []
+    shown: dict[int, int] = {}
+    for i in kept:
+        texture = model.face_textures[i]
+        if texture is None:
+            slots.append(0)
+            continue
+        if texture not in shown:
+            shown[texture] = len(mesh.materials)
+            mesh.materials.append(_texture_material(texture, textures.get(texture), brightness))
+        slots.append(shown[texture])
+    mesh.polygons.foreach_set("material_index", slots)
+    mesh.attributes.new(LIT_SLOT_ATTRIBUTE, "INT", "FACE").data.foreach_set("value", slots)
+    if shown:
+        _write_uvs(mesh, model, kept)
+
+
+def _write_uvs(mesh: bpy.types.Mesh, model: Model, kept: list[int]) -> None:
+    """The texture coordinates of each textured polygon, as model import writes them (`mesh._write_uvs`), and (0, 0)
+    for every other polygon."""
+    uvs: list[float] = []
+    for i in kept:
+        corners = (texture_uvs(model, i) if model.face_textures[i] is not None else None) or ((0.0, 0.0),) * 3
+        uvs += [c for u, v in corners for c in (u, 1 - v)]
+    mesh.uv_layers.new(name=rs_layers.PREVIEW_UVS).data.foreach_set("uv", uvs)
+
+
+def _texture_material(texture: int, pixels: TexturePixels | None, brightness: float) -> bpy.types.Material:
+    """The material that shows a texture at a brightness on every player mesh of the file: it emits the image times
+    the grey light value in `rs_lit`, read one texel per pixel, and the texel alpha is its cover (ADR 0036). A face
+    alpha does not count, because `ep.k` does not read it (docs/research/textured-light.md, section 2). With no
+    pixels it emits magenta times the light value, as the scenery does (issue 130). Back faces are culled, as for the
+    plain material."""
+    name = f"{MATERIAL_NAME} texture {texture} at {brightness:g}"
+    material = bpy.data.materials.get(name)
+    if material is not None:
+        return material
+    material = bpy.data.materials.new(name)
+    material[TEXTURE_KEY] = texture
+    material.use_nodes = True
+    material.use_backface_culling = True
+    nodes, links = material.node_tree.nodes, material.node_tree.links  # pyrefly: ignore[missing-attribute]
+    nodes.remove(nodes["Principled BSDF"])
+    light_node = nodes.new("ShaderNodeVertexColor")
+    light_node.layer_name = LIT_ATTRIBUTE
+    multiply = nodes.new("ShaderNodeMix")
+    multiply.data_type = "RGBA"
+    multiply.blend_type = "MULTIPLY"
+    multiply.inputs["Factor"].default_value = 1.0
+    links.new(light_node.outputs["Color"], multiply.inputs["B"])
+    emission = nodes.new("ShaderNodeEmission")
+    links.new(multiply.outputs["Result"], emission.inputs["Color"])
+    output = nodes["Material Output"]
+    if pixels is None:
+        multiply.inputs["A"].default_value = MISSING_TEXTURE
+        links.new(emission.outputs["Emission"], output.inputs["Surface"])
+        return material
+    image_name = f"RS Appearance Texture {texture} at {brightness:g}"
+    image = bpy.data.images.get(image_name)
+    if image is None:
+        image = texture_image(texture, *pixels)
+        image.name = image_name
+    texels = nodes.new("ShaderNodeTexImage")
+    texels.image = image
+    texels.interpolation = "Closest"
+    links.new(texels.outputs["Color"], multiply.inputs["A"])
+    transparent = nodes.new("ShaderNodeBsdfTransparent")
+    mix = nodes.new("ShaderNodeMixShader")
+    links.new(texels.outputs["Alpha"], mix.inputs["Fac"])
+    links.new(transparent.outputs["BSDF"], mix.inputs[1])
+    links.new(emission.outputs["Emission"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], output.inputs["Surface"])
+    return material
 
 
 def _material() -> bpy.types.Material:
@@ -181,10 +288,30 @@ def cache_folder(setting: str) -> Path:
 def assemble_lit(preset: AppearancePreset, folder: Path) -> tuple[Model, Shading]:
     """Assemble and light the preset's body. Everything that can fail runs here, before any Blender data changes."""
     body = shared_profile(folder).assemble(preset)
-    return body, light_hsl(body)
+    return body, light(body, PLAYER_LIGHTING)
 
 
 def assemble_parts(preset: AppearancePreset, folder: Path) -> tuple[Model, Shading, dict[int, range]]:
     """`assemble_lit`, with the faces each equipment slot supplied."""
     body, slots = shared_profile(folder).assemble_slots(preset)
-    return body, light_hsl(body), slots
+    return body, light(body, PLAYER_LIGHTING), slots
+
+
+def texture_pixels(folder: Path, model: Model, brightness: float) -> dict[int, TexturePixels]:
+    """The pixels of each texture that a face of the model shows, at the brightness, read before any Blender data
+    exists. A texture that the cache lacks is refused with a MissingResourceError, an OSError that the operators report,
+    as the region import refuses it (issue 47)."""
+    used = sorted({texture for texture in model.face_textures if texture is not None})
+    if not used:
+        return {}
+    try:
+        textures = read_textures(Js5Store(folder), used)
+    except (LookupError, FileNotFoundError) as error:
+        listed = ", ".join(map(str, used))
+        raise MissingResourceError(
+            f"The model shows texture {listed}, and the cache at {folder} lacks it: {error}"
+        ) from error
+    return {
+        texture_id: (decoded_pixels(texture, sprites, brightness), texture.opaque)
+        for texture_id, (texture, sprites) in textures.items()
+    }

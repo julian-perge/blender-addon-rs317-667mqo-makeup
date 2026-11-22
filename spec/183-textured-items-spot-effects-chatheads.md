@@ -74,7 +74,7 @@ tests/unit/, tests/blender/                   Tests.
 
 ### 1. Textured faces on a player (task #103)
 
-- `lighting.light_hsl` is removed. Its callers call `lighting.light` with the render types that the old function used for a joined model: 1 for a flat face and 0 for any other (Assumption 1). `light` already follows `dv.ae` of gamepack 149 for textured faces and for alpha 254 and 255 ([textured-light.md](../docs/research/textured-light.md), section 1).
+- `lighting.light_hsl` is removed. Its callers call `lighting.light` with the stored render types of their model. A joined model, such as every player body, has no stored render types, so it gets 1 for a flat face and 0 for any other, as `light_hsl` gave (Assumption 1). `light` already follows `dv.ae` of gamepack 149 for textured faces and for alpha 254 and 255 ([textured-light.md](../docs/research/textured-light.md), section 1).
 - The `Shading` of a textured face holds light values from 2 to 126. `build_mesh` writes such a corner to `rs_lit` as the grey `value / 128`, as `region_scenery._write_lit` does. A face whose third lit value is -1 shows its first value at each corner, whether it is flat or of render type 3.
 - A face whose third lit value is -2 is not in the mesh (`ej.ae` skips it, textured-light.md section 2).
 - `build_mesh` gets `textures: Mapping[int, TexturePixels] | None`. A textured face gets a material that emits the texture image times `rs_lit`, read one texel per pixel, with the texel alpha as its cover, and back faces culled. The face alpha does not count for a textured face (`ep.k` does not read `ep.v`). The mesh gets the UV layer of model import (`texture_uvs`) for its textured faces.

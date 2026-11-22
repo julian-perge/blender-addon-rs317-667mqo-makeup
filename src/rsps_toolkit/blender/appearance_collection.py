@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+from collections.abc import Mapping
 
 import bpy
 from bpy.app.handlers import persistent
@@ -56,12 +57,13 @@ def build_collection(
     brightness: float = DEFAULT_BRIGHTNESS,
     location: tuple[float, float, float] = (0.0, 0.0, 0.0),
     slots: dict[int, range] | None = None,
+    textures: Mapping[int, appearance_preview.TexturePixels] | None = None,
 ) -> bpy.types.Collection:
     """Create the collection, with the rig at `location`, and link it to the scene.
 
     With `slots`, the faces each equipment slot supplied, a worn weapon and shield each get their own mesh object
-    beside the body's; all of them are bound to the one rig. Everything that can fail runs before any Blender data
-    exists.
+    beside the body's; all of them are bound to the one rig. `textures` holds the pixels of the textures of the body
+    (`appearance_preview.texture_pixels`). Everything that can fail runs before any Blender data exists.
     """
     rig = derive_rig(body)
     hands = {part: slots[slot] for slot, part in HAND_PARTS if slots is not None and slot in slots}
@@ -70,9 +72,11 @@ def build_collection(
     try:
         bpy.context.scene.collection.children.link(collection)
         body_faces = None if not held else [face for face in range(len(body.faces)) if face not in held]
-        objects = [mesh_object(body, shading, name, brightness, collection, BODY, body_faces)]
+        objects = [mesh_object(body, shading, name, brightness, collection, BODY, body_faces, textures=textures)]
         for part, faces in hands.items():
-            objects.append(mesh_object(body, shading, f"{name} {part}", brightness, collection, part, faces, False))
+            objects.append(
+                mesh_object(body, shading, f"{name} {part}", brightness, collection, part, faces, False, textures)
+            )
         armature_obj = _armature_object(rig, name, collection)
         for obj in objects:
             bind(obj, armature_obj, rig)
@@ -412,8 +416,10 @@ def mesh_object(
     part: str,
     faces: list[int] | range | None = None,
     loose: bool = True,
+    textures: Mapping[int, appearance_preview.TexturePixels] | None = None,
 ) -> bpy.types.Object:
-    obj = bpy.data.objects.new(name, appearance_preview.build_mesh(body, shading, name, brightness, faces, loose))
+    mesh = appearance_preview.build_mesh(body, shading, name, brightness, faces, loose, textures)
+    obj = bpy.data.objects.new(name, mesh)
     obj[PART_KEY] = part
     collection.objects.link(obj)
     return obj
@@ -583,8 +589,10 @@ class RSPS_OT_create_appearance_preview(bpy.types.Operator):
             preset = appearance_props.to_preset(context.scene.rs_appearance)
             folder = appearance_preview.cache_folder(self.cache_folder)
             body, shading, slots = appearance_preview.assemble_parts(preset, folder)
+            brightness = preferences.brightness()
+            textures = appearance_preview.texture_pixels(folder, body, brightness)
             collection = build_collection(
-                body, shading, preset, "Player", preferences.brightness(), beside_players(body), slots
+                body, shading, preset, "Player", brightness, beside_players(body), slots, textures
             )
         except (OSError, ValueError, RuntimeError) as error:
             appearance_preview.fail(self, context, error)
@@ -630,7 +638,9 @@ class RSPS_OT_update_appearance_preview(bpy.types.Operator):
             name = old.name
             # An unedited player's rebuilt rig takes the old rig's placement in `_replace`, so it is built at the origin.
             location = beside_players(body) if edited else (0.0, 0.0, 0.0)
-            new = build_collection(body, shading, preset, name, preferences.brightness(), location, slots)
+            brightness = preferences.brightness()
+            textures = appearance_preview.texture_pixels(folder, body, brightness)
+            new = build_collection(body, shading, preset, name, brightness, location, slots, textures)
         except (OSError, ValueError, RuntimeError) as error:
             appearance_preview.fail(self, context, error)
             return {"CANCELLED"}
@@ -802,8 +812,11 @@ def duplicate_player(old: bpy.types.Collection, cache_folder: str = "") -> bpy.t
             "settings"
         )
     preset = loads_preset(old[appearance_preview.PRESET_KEY])
-    body, shading, slots = appearance_preview.assemble_parts(preset, appearance_preview.cache_folder(cache_folder))
-    new = build_collection(body, shading, preset, old.name, preferences.brightness(), beside_players(body), slots)
+    folder = appearance_preview.cache_folder(cache_folder)
+    body, shading, slots = appearance_preview.assemble_parts(preset, folder)
+    brightness = preferences.brightness()
+    textures = appearance_preview.texture_pixels(folder, body, brightness)
+    new = build_collection(body, shading, preset, old.name, brightness, beside_players(body), slots, textures)
     # The collection took the next free name, so the objects are named after it rather than after the original.
     _rename(new, new.name)
     try:

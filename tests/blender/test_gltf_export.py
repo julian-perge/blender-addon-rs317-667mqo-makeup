@@ -24,7 +24,7 @@ from rsps_toolkit.blender import (
 )
 from rsps_toolkit.blender.face_materials import DEFAULT_BRIGHTNESS
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
-from rsps_toolkit.formats.lighting import light_hsl
+from rsps_toolkit.formats.lighting import light
 from rsps_toolkit.formats.model import Model
 from rsps_toolkit.formats.texture import SIZE as TEXTURE_SIZE
 
@@ -597,7 +597,7 @@ def model_mesh(name: str, alphas: list[int]) -> bpy.types.Object:
         face_texture_triangles=[None, None],
         flat_shaded=[True, True],
     )
-    obj = bpy.data.objects.new(name, appearance_preview.build_mesh(model, light_hsl(model), name))
+    obj = bpy.data.objects.new(name, appearance_preview.build_mesh(model, light(model), name))
     scene = bpy.context.scene
     assert scene is not None
     scene.collection.objects.link(obj)
@@ -712,7 +712,7 @@ def test_each_primitive_of_a_split_mesh_has_its_faces_in_mesh_order(tmp_path: Pa
         face_texture_triangles=[None] * 4,
         flat_shaded=[True] * 4,
     )
-    obj = bpy.data.objects.new("Fire", appearance_preview.build_mesh(model, light_hsl(model), "Fire"))
+    obj = bpy.data.objects.new("Fire", appearance_preview.build_mesh(model, light(model), "Fire"))
     scene = bpy.context.scene
     assert scene is not None
     scene.collection.objects.link(obj)

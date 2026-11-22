@@ -22,7 +22,7 @@ from ..formats.cache_profile import shared_profile
 from ..formats.item_model import inventory_model, item_lighting
 from ..formats.item_wear import ItemWear, load_item_wear
 from ..formats.js5 import Js5Store
-from ..formats.lighting import light_hsl
+from ..formats.lighting import light
 from ..formats.region import REGION_SIZE, Terrain, load_terrain
 from ..formats.travel import RUN_FRAMES_PER_TILE, WALK_FRAMES_PER_TILE, travel_frames
 from . import appearance_clip, appearance_collection, appearance_preview, region_files, region_import
@@ -55,7 +55,10 @@ def create_player(
     appearance_collection.check_no_edit_mode("creating a player")
     preset = look_preset(look, shared_profile(folder).kits, _item_wear())
     body, shading, slots = appearance_preview.assemble_parts(preset, folder)
-    collection = appearance_collection.build_collection(body, shading, preset, name, brightness, location, slots)
+    textures = appearance_preview.texture_pixels(folder, body, brightness)
+    collection = appearance_collection.build_collection(
+        body, shading, preset, name, brightness, location, slots, textures
+    )
     collection[appearance_collection.BRIGHTNESS_KEY] = brightness
     return Player(
         collection, appearance_collection.armature_of(collection), tuple(appearance_collection.parts(collection))
@@ -312,16 +315,19 @@ def import_item(
     object is in game units with the origin of the model, so it has its true size beside a player. `name` defaults to
     the name and id of the item, such as `Waterskin(4) 1823`.
 
-    It refuses an item that the cache lacks, an item with no inventory model, and a model with a textured face or a
-    face alpha of 254 or 255 (`lighting.light_hsl`). Everything that can fail runs before any Blender data exists."""
+    A textured face shows its texture times its light value, and a face that the client never draws is left out (ADR
+    0036). It refuses an item that the cache lacks, an item with no inventory model, and a texture that the cache
+    lacks. Everything that can fail runs before any Blender data exists."""
     profile = shared_profile(folder)
     definition = profile.item_definitions.get(item_id)
     if definition is None:
         raise ValueError(f"The cache at {folder} has no item {item_id}")
     model = inventory_model(definition, profile.load_model)
-    shading = light_hsl(model, item_lighting(definition))
+    shading = light(model, item_lighting(definition))
+    textures = appearance_preview.texture_pixels(folder, model, brightness)
     name = f"{definition.worn.name} {item_id}" if name is None else name
-    obj = bpy.data.objects.new(name, appearance_preview.build_mesh(model, shading, name, brightness, loose=False))
+    mesh = appearance_preview.build_mesh(model, shading, name, brightness, loose=False, textures=textures)
+    obj = bpy.data.objects.new(name, mesh)
     (_scene_collection() if collection is None else collection).objects.link(obj)
     return obj
 

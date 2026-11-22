@@ -7,7 +7,7 @@ from pathlib import Path
 
 import bpy
 import pytest
-from js5_builder import build_region_cache, item_definition, rewrite_cache
+from js5_builder import build_region_cache, item_definition, region_textures, rewrite_cache
 from mathutils import Vector
 
 from rsps_toolkit.blender import (
@@ -23,8 +23,9 @@ from rsps_toolkit.blender.face_materials import srgb_to_linear
 from rsps_toolkit.formats import decode, face_colour_to_rgb
 from rsps_toolkit.formats.appearance_look import Look
 from rsps_toolkit.formats.appearance_preset import loads_preset
+from rsps_toolkit.formats.cache_profile import shared_profile
 from rsps_toolkit.formats.js5 import Js5Store
-from rsps_toolkit.formats.lighting import light_hsl
+from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, light
 from rsps_toolkit.formats.region import ground_height, load_terrain
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -52,10 +53,13 @@ def raw_files(folder: Path) -> dict[int, bytes]:
 
 @pytest.fixture
 def cache(cache) -> Path:
-    """The appearance cache with the items and inventory models of fixtures/inventory, and item 9000, whose inventory
-    model 135 has textured faces."""
+    """The appearance cache with the items and inventory models of fixtures/inventory, item 9000, whose inventory
+    model 135 has textured faces, a stand-in for the Fire cape 6570 that wears model 135 (texture 16), and the textures
+    and sprites of fixtures/region."""
 
     def add(parts: dict[str, dict[int, bytes]]) -> None:
+        parts |= region_textures()
+        parts["items"][6570] = item_definition("Textured cape", male=(135, -1, -1), female=(135, -1, -1))
         parts["items"] |= raw_files(INVENTORY / "items")
         parts["items"][9000] = bytes([1]) + struct.pack(">H", 135) + item_definition("Textured thing")
         parts["models"] |= raw_files(INVENTORY / "models")
@@ -93,7 +97,7 @@ def test_import_item_makes_the_inventory_model_with_the_item_light_in_rs_lit(cac
     assert [material.name for material in mesh.materials if material] == [appearance_preview.MATERIAL_NAME]
     # The Waterskin(4) 1823 shows model 2699 with no recolour (RuneLite's row in fixtures/inventory).
     model = decode((INVENTORY / "models" / "2699.dat").read_bytes(), profile="osrs-149")
-    shading = light_hsl(model, BASE_ITEM_LIGHT)
+    shading = light(model, BASE_ITEM_LIGHT)
     expected: list[float] = []
     for face, corners in enumerate(model.faces):
         if len(set(corners)) < 3:  # A face that repeats a vertex stays out of the mesh (ADR 0005).
@@ -123,16 +127,88 @@ def test_import_item_takes_a_name(cache):
     assert scripting.import_item(cache, 1823, brightness=BRIGHTNESS, name="Flask").name == "Flask"
 
 
-def test_an_item_with_a_textured_inventory_model_is_refused_and_nothing_is_left(cache):
-    with pytest.raises(ValueError, match="textured"):
+def test_an_item_with_a_textured_inventory_model_shows_its_texture(cache):
+    # Issue 103: the inventory model 135 of item 9000 names texture 16 (fixtures/models/osrs), and dv.ae lights it
+    # (docs/research/textured-light.md).
+    mesh = mesh_of(scripting.import_item(cache, 9000, brightness=BRIGHTNESS))
+
+    shown = {material.get(appearance_preview.TEXTURE_KEY) for material in mesh.materials}  # pyrefly: ignore
+    assert 16 in shown
+
+
+def test_an_item_whose_texture_the_cache_lacks_is_refused_and_nothing_is_left(cache):
+    rewrite_cache(cache, lambda parts: parts["textures"].pop(16))
+
+    with pytest.raises(OSError, match="texture 16"):
         scripting.import_item(cache, 9000, brightness=BRIGHTNESS)
 
-    assert (len(bpy.data.objects), len(bpy.data.meshes)) == (0, 0)
+    assert (len(bpy.data.objects), len(bpy.data.meshes), len(bpy.data.images)) == (0, 0, 0)
 
 
 def test_an_item_that_the_cache_lacks_is_refused(cache):
     with pytest.raises(ValueError, match="no item 4"):
         scripting.import_item(cache, 4, brightness=BRIGHTNESS)
+
+
+def polygon_values(mesh: bpy.types.Mesh, name: str) -> list[int]:
+    values = [0] * len(mesh.polygons)
+    mesh.attributes[name].data.foreach_get("value", values)  # pyrefly: ignore[missing-attribute]
+    return values
+
+
+def test_a_player_who_wears_an_item_with_textured_faces_shows_its_texture(cache):
+    # Issue 103. The stand-in cape wears model 135, whose textured faces name texture 16 (fixtures/models/osrs).
+    player = scripting.create_player(cache, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    mesh = mesh_of(player.parts[0])
+    body = shared_profile(cache).assemble(loads_preset(player.collection[appearance_preview.PRESET_KEY]))
+    faces = appearance_preview.face_indices(mesh)
+    assert faces is not None
+    slots = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", slots)
+    shown = [mesh.materials[slot].get(appearance_preview.TEXTURE_KEY) for slot in slots]  # pyrefly: ignore
+    assert 16 in shown
+    assert shown == [body.face_textures[face] for face in faces]
+    image = next(m for m in mesh.materials if m.get(appearance_preview.TEXTURE_KEY) == 16)  # pyrefly: ignore
+    assert any(node.type == "TEX_IMAGE" and node.image is not None for node in image.node_tree.nodes)  # pyrefly: ignore
+    assert polygon_values(mesh, appearance_preview.LIT_SLOT_ATTRIBUTE) == slots
+
+
+def test_a_textured_corner_holds_its_light_value_over_128_as_a_grey(cache):
+    # The client multiplies each texel by the light value over 128 (docs/research/textured-light.md, section 2).
+    player = scripting.create_player(cache, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    mesh = mesh_of(player.parts[0])
+    body = shared_profile(cache).assemble(loads_preset(player.collection[appearance_preview.PRESET_KEY]))
+    shading = light(body, PLAYER_LIGHTING)
+    faces = appearance_preview.face_indices(mesh)
+    assert faces is not None
+    colours = lit_colours(mesh)
+    polygon = next(p for p, face in enumerate(faces) if body.face_textures[face] is not None)
+    face = faces[polygon]
+    third = shading.corner_c[face]
+    values = (shading.corner_a[face],) * 3 if third == -1 else (shading.corner_a[face], shading.corner_b[face], third)
+    start = mesh.polygons[polygon].loop_start
+    for corner, value in enumerate(values):
+        grey = srgb_to_linear(value / 128)
+        assert colours[4 * (start + corner) : 4 * (start + corner) + 4] == pytest.approx([grey, grey, grey, 1.0])
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("RSPS_SNAPSHOT_430_CACHE") and Path(os.environ["RSPS_SNAPSHOT_430_CACHE"]).is_dir()),
+    reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
+)
+def test_a_male_player_who_wears_the_fire_cape_shows_its_24_faces_of_texture_40():
+    # Issue 103: the male worn model 9638 of the Fire cape 6570 has texture 40 on 24 of its 63 faces (RuneLite's model
+    # export of snapshot 430, docs/research/textured-light.md, section 4).
+    snapshot = Path(os.environ["RSPS_SNAPSHOT_430_CACHE"])
+    player = scripting.create_player(snapshot, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    mesh = mesh_of(player.parts[0])
+    slots = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", slots)
+    shown = [mesh.materials[slot].get(appearance_preview.TEXTURE_KEY) for slot in slots]  # pyrefly: ignore
+    assert shown.count(40) == 24
 
 
 # The Steel med helm 1149, the Rune platebody (g) 2653 and the Rune platelegs (t) 4087 are items of the appearance
