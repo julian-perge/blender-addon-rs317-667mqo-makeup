@@ -198,6 +198,24 @@ def test_a_textured_corner_holds_its_light_value_over_128_as_a_grey(cache):
     not (os.environ.get("RSPS_SNAPSHOT_430_CACHE") and Path(os.environ["RSPS_SNAPSHOT_430_CACHE"]).is_dir()),
     reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
 )
+def test_vial_of_water_shows_its_faces_of_alpha_254_with_a_cover_of_2_in_256():
+    # Model 2789 of Vial of water 227 has two faces of alpha 254 and faces of alpha 128 and 32 (RuneLite's model export
+    # of snapshot 430, docs/research/textured-light.md, section 4). dv.ae gives an untextured face of alpha 254 the
+    # colour 128, and ep.g draws it with that alpha.
+    snapshot = Path(os.environ["RSPS_SNAPSHOT_430_CACHE"])
+    mesh = mesh_of(scripting.import_item(snapshot, 227, brightness=BRIGHTNESS))
+
+    slots = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", slots)
+    alphas = [mesh.materials[slot].get(appearance_preview.ALPHA_KEY) for slot in slots]  # pyrefly: ignore
+    assert alphas.count(254) == 2
+    assert {128, 32} <= set(alphas)
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("RSPS_SNAPSHOT_430_CACHE") and Path(os.environ["RSPS_SNAPSHOT_430_CACHE"]).is_dir()),
+    reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
+)
 def test_a_male_player_who_wears_the_fire_cape_shows_its_24_faces_of_texture_40():
     # Issue 103: the male worn model 9638 of the Fire cape 6570 has texture 40 on 24 of its 63 faces (RuneLite's model
     # export of snapshot 430, docs/research/textured-light.md, section 4).

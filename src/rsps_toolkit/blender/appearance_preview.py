@@ -40,6 +40,8 @@ MATERIAL_NAME = "RS Appearance Preview"
 LIT_SLOT_ATTRIBUTE = "rs_lit_slot"
 # On a texture material of `build_mesh`: the texture id that it shows.
 TEXTURE_KEY = "rs_preview_texture"
+# On an alpha material of `build_mesh`: the face alpha of its faces.
+ALPHA_KEY = "rs_preview_alpha"
 # The third lit value of a face that the client never draws (`ej.ae`, docs/research/textured-light.md, section 2).
 _NOT_DRAWN = -2
 
@@ -71,7 +73,8 @@ def build_mesh(
     textured face with no colour), its face alpha in FACE_ALPHA_ATTRIBUTE and its material slot in LIT_SLOT_ATTRIBUTE.
 
     A textured face shows the image of its texture from `textures` times its light value, through a material of
-    `_texture_material`, and magenta times its light value when `textures` lacks it. Every other face uses the one
+    `_texture_material`, and magenta times its light value when `textures` lacks it. A plain face with a face alpha
+    covers (256 - alpha) / 256 of its pixels, through a material of `_alpha_material`. Every other face uses the one
     shared material of players in slot 0.
     """
     visible = set(visible_faces(model))
@@ -161,20 +164,53 @@ def _fill_mesh(
     )
     mesh.materials.append(_material())
     slots: list[int] = []
-    shown: dict[int, int] = {}
+    shown: dict[tuple[str, int], int] = {}
     for i in kept:
         texture = model.face_textures[i]
-        if texture is None:
+        key = ("alpha", alphas[i]) if texture is None else ("texture", texture)
+        if key == ("alpha", 0):
             slots.append(0)
             continue
-        if texture not in shown:
-            shown[texture] = len(mesh.materials)
-            mesh.materials.append(_texture_material(texture, textures.get(texture), brightness))
-        slots.append(shown[texture])
+        if key not in shown:
+            shown[key] = len(mesh.materials)
+            mesh.materials.append(
+                _alpha_material(alphas[i])
+                if texture is None
+                else _texture_material(texture, textures.get(texture), brightness)
+            )
+        slots.append(shown[key])
     mesh.polygons.foreach_set("material_index", slots)
     mesh.attributes.new(LIT_SLOT_ATTRIBUTE, "INT", "FACE").data.foreach_set("value", slots)
-    if shown:
+    if any(kind == "texture" for kind, _ in shown):
         _write_uvs(mesh, model, kept)
+
+
+def _alpha_material(alpha: int) -> bpy.types.Material:
+    """The material of every player mesh of the file for a plain face of this alpha: it emits the lit corner colours
+    and covers (256 - alpha) / 256 of each pixel, as `ep.g` and `ep.m` blend such a face (ADR 0036,
+    docs/research/textured-light.md, section 2). It draws blended, and culls back faces as the plain material does."""
+    name = f"{MATERIAL_NAME} alpha {alpha}"
+    material = bpy.data.materials.get(name)
+    if material is not None:
+        return material
+    material = bpy.data.materials.new(name)
+    material[ALPHA_KEY] = alpha
+    material.use_nodes = True
+    material.use_backface_culling = True
+    material.surface_render_method = "BLENDED"
+    nodes, links = material.node_tree.nodes, material.node_tree.links  # pyrefly: ignore[missing-attribute]
+    nodes.remove(nodes["Principled BSDF"])
+    light_node = nodes.new("ShaderNodeVertexColor")
+    light_node.layer_name = LIT_ATTRIBUTE
+    emission = nodes.new("ShaderNodeEmission")
+    links.new(light_node.outputs["Color"], emission.inputs["Color"])
+    transparent = nodes.new("ShaderNodeBsdfTransparent")
+    mix = nodes.new("ShaderNodeMixShader")
+    mix.inputs["Fac"].default_value = (256 - alpha) / 256
+    links.new(transparent.outputs["BSDF"], mix.inputs[1])
+    links.new(emission.outputs["Emission"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], nodes["Material Output"].inputs["Surface"])
+    return material
 
 
 def _write_uvs(mesh: bpy.types.Mesh, model: Model, kept: list[int]) -> None:

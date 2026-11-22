@@ -546,3 +546,44 @@ def test_a_textured_polygon_goes_back_to_its_texture_material_when_its_fade_ends
     appearance_fades.clear_fades(obj)
     mesh.polygons.foreach_get("material_index", after)
     assert after == built
+
+
+def test_a_plain_face_with_alpha_covers_its_share_of_the_pixels_as_the_client_blends_it():
+    # ep.g and ep.m blend a plain face by (256 - alpha) / 256 (docs/research/textured-light.md, section 2, ADR 0036).
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, 960],
+        face_textures=[None, None],
+        render_priorities=[0, 0],
+        face_alphas=[0, 128],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    mesh = appearance_preview.build_mesh(model, light(model), "Glass")
+
+    slots = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", slots)
+    plain, glass = (mesh.materials[slot] for slot in slots)
+    assert plain is not None and plain.name == appearance_preview.MATERIAL_NAME
+    assert glass is not None and glass.get(appearance_preview.ALPHA_KEY) == 128
+    covers = [node.inputs["Fac"].default_value for node in glass.node_tree.nodes if node.type == "MIX_SHADER"]  # pyrefly: ignore
+    assert covers == [pytest.approx(128 / 256)]
+
+
+def test_faces_of_one_alpha_share_one_material_on_every_mesh():
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, 960],
+        face_textures=[None, None],
+        render_priorities=[0, 0],
+        face_alphas=[32, 32],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    first = appearance_preview.build_mesh(model, light(model), "One")
+    second = appearance_preview.build_mesh(model, light(model), "Two")
+
+    assert first.materials[1] == second.materials[1]
+    assert [m.get(appearance_preview.ALPHA_KEY) for m in first.materials] == [None, 32]  # pyrefly: ignore
