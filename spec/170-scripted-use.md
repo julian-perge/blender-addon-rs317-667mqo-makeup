@@ -2,7 +2,7 @@ Source: [issue 170](https://github.com/julian-perge/blender-addon-rs317-667mqo-m
 
 # Spec: Scripted use of the add-on, V1
 
-Status: proposed
+Status: implemented
 
 Commands, structure and code style are in [AGENTS.md](../AGENTS.md) and [CODING_STANDARDS.md](../CODING_STANDARDS.md). Terms follow [GLOSSARY.md](../GLOSSARY.md). The decisions are in [ADR 0031](../docs/adr/0031-scripts-call-one-module-that-reads-no-preference.md) to [ADR 0035](../docs/adr/0035-travel-keys-one-tile-in-30-frames.md). The client evidence for the item light is in [docs/research/item-light.md](../docs/research/item-light.md).
 

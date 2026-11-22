@@ -28,6 +28,7 @@ $B --command extension build --source-dir src/rsps_toolkit --output-dir dist
 - [Model format references](docs/research/model-formats.md): before deciding how a model field behaves.
 - [Tests and reference data](docs/agents/testing.md): before writing or running tests, or working with fixtures.
 - [Blender execution and packaging](docs/agents/blender.md): before running Blender or packaging, or working with the manifest or how tests reach Blender.
+- [Scripted use](docs/scripted-use.md): before a script of another repo builds a region, a player, a clip or an item, or before changing `blender/scripting.py`.
 - [Hand-made motion runbook](docs/hand-made-motion.md): before keying a motion on the joints of a player through the Blender MCP.
 - [Named client source](scripts/named-client/README.md): before you read `gamepack-149.jar` with `javap`. Run `uv run scripts/lookup-client.py <name>` first. For each placeholder that a session names, add a row with a link to its evidence in [client-names.tsv](docs/research/client-names.tsv). The source folder comes from `scripts/named-client/build.sh`.
 
