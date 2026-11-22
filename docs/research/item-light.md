@@ -15,7 +15,12 @@ The two fields are read with their multipliers (`-385793045` for `bp` and `18801
 
 `iz.at(I)Lej;` and `iz.al(I)Lej;` hold copies of the same call. `iz.al` has changed constants in place of 768 and the first -50. They are the duplicate methods that [reference-source-findings.md](osrs-focus/reference-source-findings.md) warns about, so this note uses `iz.p` only.
 
+The row `iz.p` (`getModel`) of [client-names.tsv](client-names.tsv) links to this note for the item light: the mapper gave the name, and the offsets above confirm what the method does. The rows `dv.h` (`resize`) and `dv.o` (`retexture`) are new and link here too.
+
 ## `dv.h(III)V` is the resize
+
+The decoder stores opcodes 110, 111 and 112 in `iz.ao`, `iz.ac` and `iz.af` (`resizeX`, `resizeY` and `resizeZ` of the mapper). The control flow of `iz.v` is scrambled, so this pairing is read from the order of the fields and from the mapper's names, and it is not proven from the jumps.
+
 
 Offsets 7 to 72: for each vertex, `x = x * a / 128`, `y = y * b / 128` and `z = z * c / 128`, with Java's integer division, which rounds toward zero. `dv.j`, `dv.n` and `dv.r` are the x, y and z arrays.
 

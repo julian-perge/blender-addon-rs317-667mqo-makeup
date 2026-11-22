@@ -86,6 +86,13 @@ def test_missing_model_bytes_name_the_model_and_the_preference(tmp_path):
         CacheProfile(cache).model_bytes(230)
 
 
+def test_item_definitions_come_from_the_cache_with_their_inventory_model(tmp_path):
+    # RuneLite's row of the Waterskin(4) 1823 in fixtures/inventory/ItemDefinitions.json has inventoryModel 2699.
+    inventory = FIXTURES.parent / "inventory"
+    write_cache(tmp_path, items=raw_files(inventory / "items"))
+    assert CacheProfile(tmp_path).item_definitions[1823].inventory_model == 2699
+
+
 def test_items_come_from_the_cache(cache):
     # The item 35 row of ItemDefinitions.json has femaleOffset 6.
     assert CacheProfile(cache).items[35].female_offset == 6

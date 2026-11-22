@@ -14,7 +14,9 @@ ITEM_FOLDERS = [
     FIXTURES / "animation149/held-1365",
     FIXTURES / "animation149/held-717",
     FIXTURES / "animation149/held-909",
+    FIXTURES / "inventory",
 ]
+INVENTORY = FIXTURES / "inventory"
 
 
 def decode_folder(folder: Path):
@@ -42,6 +44,39 @@ def test_wear_positions_match_the_runelite_definition(folder):
         for row in json.loads((folder / "ItemDefinitions.json").read_text())
     }
     assert {item_id: item.wear_positions for item_id, item in decoded.items()} == expected
+
+
+def test_the_inventory_fields_match_the_runelite_definition():
+    # RuneLite's ItemLoader reads opcode 1 as inventoryModel, 110 to 112 as resizeX to resizeZ and 113 as ambient.
+    decoded = decode_folder(INVENTORY)
+    rows = {row["id"]: row for row in json.loads((INVENTORY / "ItemDefinitions.json").read_text())}
+    assert {item_id: (item.inventory_model, item.resize, item.ambient) for item_id, item in decoded.items()} == {
+        item_id: (row["inventoryModel"], (row["resizeX"], row["resizeY"], row["resizeZ"]), row["ambient"])
+        for item_id, row in rows.items()
+    }
+    # The Waterskin(4) 1823 has inventory model 2699, and the Silverlight key 2399 is the one with a resize.
+    assert decoded[1823].inventory_model == 2699
+    assert decoded[2399].resize == (85, 85, 85)
+
+
+def test_the_contrast_is_five_times_the_byte_that_runelite_keeps():
+    # The client stores the byte of opcode 114 times 5 (iz.v offsets 1576 to 1587 of gamepack 149: the stored
+    # multiplier 1024003749 times the getter's 1880149473 is 5 modulo 2^32, docs/research/item-light.md). RuneLite's
+    # row of the Broken glass 1469 holds the byte, 20.
+    decoded = decode_folder(INVENTORY)
+    rows = {row["id"]: row for row in json.loads((INVENTORY / "ItemDefinitions.json").read_text())}
+    assert rows[1469]["contrast"] == 20
+    assert {item_id: item.contrast for item_id, item in decoded.items()} == {
+        item_id: row["contrast"] * 5 for item_id, row in rows.items()
+    }
+
+
+def test_an_item_with_no_opcode_for_them_has_the_defaults_of_runelite():
+    # ItemDefinition.java: inventoryModel has no initialiser in RuneLite and the client leaves it 0, but an item with
+    # no opcode 1 is not in snapshot 430, so -1 marks "none" here as for the worn models. resizeX to resizeZ are 128,
+    # and ambient and contrast are 0.
+    item = decode_item(0, bytes([0]))
+    assert (item.inventory_model, item.resize, item.ambient, item.contrast) == (-1, (128, 128, 128), 0, 0)
 
 
 def test_the_female_offset_of_excalibur_is_read():

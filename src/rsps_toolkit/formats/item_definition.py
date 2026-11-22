@@ -5,9 +5,10 @@ loaders/ at commit bb0fa42b3; both files are unchanged since commit 8f2aca1, whi
 names). RuneLite's ConfigType gives ITEM as config group 10, which holds these definitions.
 RuneLite skips an opcode that it does not know. This decoder refuses it, and it also refuses bytes after the closing
 opcode 0, so a wrong parse cannot pass without notice. The decoder reads every opcode that RuneLite reads, so that
-it can also decode the items of recent caches, such as cache 2757. It keeps only the worn-model fields
-and the wear positions. Fields that no opcode sets keep RuneLite's defaults from ItemDefinition.java: the name "null",
--1 for models and wear positions, and 0 for offsets.
+it can also decode the items of recent caches, such as cache 2757. It keeps the worn-model fields, the wear positions
+and what the client needs to show the inventory model. Fields that no opcode sets keep RuneLite's defaults from
+ItemDefinition.java: the name "null", -1 for models and wear positions, 0 for offsets, the ambient and the contrast, and
+128 for each resize.
 """
 
 from dataclasses import dataclass
@@ -24,6 +25,16 @@ class ItemDefinition:
 
     worn: WornItem
     wear_positions: tuple[int, int, int]
+    inventory_model: int = -1
+    """The model that the client shows for the item on the ground and in its icon, or -1 for none. Its recolours and
+    retextures are those of `worn`, because opcodes 40 and 41 serve both."""
+    resize: tuple[int, int, int] = (128, 128, 128)
+    """The scale of the inventory model in game x, y and z. 128 is a scale of 1."""
+    ambient: int = 0
+    """A signed byte that the item light adds to 64."""
+    contrast: int = 0
+    """What the item light adds to 768: the signed byte of opcode 114 times 5, as the client stores it (`iz.v` offsets
+    1576 to 1587 of gamepack 149, docs/research/item-light.md). RuneLite's JSON holds the byte."""
 
 
 def decode_item(item_id: int, data: bytes) -> ItemDefinition:
@@ -35,8 +46,19 @@ def decode_item(item_id: int, data: bytes) -> ItemDefinition:
     wear = [-1] * 3
     recolours: tuple[tuple[int, int], ...] = ()
     retextures: tuple[tuple[int, int], ...] = ()
+    inventory_model = -1
+    resize = [128, 128, 128]
+    ambient = contrast = 0
     while (opcode := reader.u8()) != 0:
-        if opcode in (1, 4, 5, 6, 7, 8, 75, 90, 91, 92, 93, 94, 95, 97, 98, 99, 110, 111, 112, 139, 140, 148, 149):
+        if opcode == 1:
+            inventory_model = reader.u16()
+        elif opcode in (110, 111, 112):
+            resize[opcode - 110] = reader.u16()
+        elif opcode == 113:
+            ambient = _s8(reader)
+        elif opcode == 114:
+            contrast = _s8(reader) * 5
+        elif opcode in (4, 5, 6, 7, 8, 75, 90, 91, 92, 93, 94, 95, 97, 98, 99, 139, 140, 148, 149):
             reader.u16()
         elif opcode == 2:
             name = _string(reader)
@@ -80,7 +102,7 @@ def decode_item(item_id: int, data: bytes) -> ItemDefinition:
             recolours = tuple((reader.u16(), reader.u16()) for _ in range(reader.u8()))
         elif opcode == 41:
             retextures = tuple((reader.u16(), reader.u16()) for _ in range(reader.u8()))
-        elif opcode in (42, 113, 114, 115):
+        elif opcode in (42, 115):
             reader.u8()
         elif opcode == 43:
             reader.u8()
@@ -121,7 +143,14 @@ def decode_item(item_id: int, data: bytes) -> ItemDefinition:
         recolours=recolours,
         retextures=retextures,
     )
-    return ItemDefinition(worn=worn, wear_positions=(wear[0], wear[1], wear[2]))
+    return ItemDefinition(
+        worn=worn,
+        wear_positions=(wear[0], wear[1], wear[2]),
+        inventory_model=inventory_model,
+        resize=(resize[0], resize[1], resize[2]),
+        ambient=ambient,
+        contrast=contrast,
+    )
 
 
 def _s8(reader: Reader) -> int:

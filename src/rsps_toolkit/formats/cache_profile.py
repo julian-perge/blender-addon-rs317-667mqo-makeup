@@ -16,7 +16,7 @@ from . import decode
 from .appearance import Kit, Palette, WornItem, assemble_body, assemble_slots, load_palette
 from .appearance_preset import AppearancePreset
 from .enum_definition import EnumDefinition, decode_enum
-from .item_definition import decode_item
+from .item_definition import ItemDefinition, decode_item
 from .js5 import DATA_FILE, REFERENCE_INDEX, DamagedGroupError, Js5Store, NotInCacheError
 from .kit_definition import decode_kit
 from .kit_names import STYLE_ENUMS, load_kit_names
@@ -50,8 +50,12 @@ def read_kits(store: Js5Store) -> dict[int, Kit]:
 
 
 def read_items(store: Js5Store) -> dict[int, WornItem]:
+    return {item_id: item.worn for item_id, item in read_item_definitions(store).items()}
+
+
+def read_item_definitions(store: Js5Store) -> dict[int, ItemDefinition]:
     files = store.files(CONFIG_INDEX, ITEM_GROUP)
-    return {item_id: decode_item(item_id, data).worn for item_id, data in files.items()}
+    return {item_id: decode_item(item_id, data) for item_id, data in files.items()}
 
 
 def read_style_enums(store: Js5Store) -> dict[int, EnumDefinition]:
@@ -147,6 +151,10 @@ class CacheProfile:
         return self._kept_unless_changed(
             "kit_names", lambda store: load_kit_names(read_style_enums(store), self.kits), (ENUM_GROUP, KIT_GROUP)
         )
+
+    @property
+    def item_definitions(self) -> dict[int, ItemDefinition]:
+        return self._kept_unless_changed("item_definitions", read_item_definitions, (ITEM_GROUP,))
 
     @property
     def items(self) -> dict[int, WornItem]:

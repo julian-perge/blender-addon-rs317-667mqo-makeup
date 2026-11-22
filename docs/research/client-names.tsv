@@ -1829,7 +1829,7 @@ method	iz	n	()V	post	runelite-mapper
 method	iz	r	(LBuffer;)V	loadBuffer	runelite-mapper
 method	iz	v	(LBuffer;I)V	populateFromBuffer	runelite-mapper
 method	iz	e	(LItemComposition;LItemComposition;)V	updateNote	runelite-mapper
-method	iz	p	(I)LModel;	getModel	runelite-mapper
+method	iz	p	(I)LModel;	getModel	docs/research/item-light.md
 method	iz	g	(Z)Z	readyWorn	runelite-mapper
 method	iz	k	(Z)LModelData;	getWornModelData	runelite-mapper
 method	iz	z	()I	getShiftClickActionIndex	runelite-mapper
@@ -2067,3 +2067,5 @@ field	kk	ar	I	javaVersionMajor	runelite-mapper
 field	kk	am	I	javaVersionMinor	runelite-mapper
 field	kk	aw	I	javaVersionPatch	runelite-mapper
 field	kk	aa	I	maxMemoryMB	runelite-mapper
+method	dv	h	(III)V	resize	docs/research/item-light.md
+method	dv	o	(SS)V	retexture	docs/research/item-light.md
