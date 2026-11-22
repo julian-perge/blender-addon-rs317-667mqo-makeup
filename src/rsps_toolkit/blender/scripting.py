@@ -8,6 +8,7 @@ call.
 
 import functools
 import math
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,12 +50,13 @@ def create_player(
     """A new player of the look, with its rig at `location`, linked to the scene (ADR 0031). Blender adds `.001` to a
     name that is taken. Two calls with one location put two players on the same place.
 
-    It refuses what `look_preset` refuses, and a kit, item or model that the cache lacks. Everything that can fail
-    runs before any Blender data exists."""
+    It refuses what `look_preset` refuses, and a kit, item or model that the cache lacks. A failure removes what was
+    made. The collection keeps the brightness, which lights the items that a later clip holds."""
     appearance_collection.check_no_edit_mode("creating a player")
     preset = look_preset(look, shared_profile(folder).kits, _item_wear())
     body, shading, slots = appearance_preview.assemble_parts(preset, folder)
     collection = appearance_collection.build_collection(body, shading, preset, name, brightness, location, slots)
+    collection[appearance_collection.BRIGHTNESS_KEY] = brightness
     return Player(
         collection, appearance_collection.armature_of(collection), tuple(appearance_collection.parts(collection))
     )
@@ -70,8 +72,9 @@ def attach_to_joint(
 ) -> bpy.types.Constraint:
     """Put `obj` on a joint of a rig with a new Child Of constraint, so that it follows the joint through every clip
     and takes the scale of the rig. `offset` is the place of the object's origin from the head of the joint, in game
-    units in the axes of the joint. `rotation` is an XYZ Euler in radians in those axes. It refuses a joint that the
-    rig does not have, before any change.
+    units in the axes of the joint. `rotation` is an XYZ Euler in radians in those axes, and the object gets that
+    rotation mode. It refuses a joint that the rig does not have, an object that is on a joint already and an object
+    with a parent, before any change.
 
     Blender 5.3 gives a new Child Of constraint a pending inverse, which it sets at the next evaluation to cancel the
     target's transform at that moment. On a rig with a scale of 0.01, that made a held item 100 times too large
@@ -79,6 +82,10 @@ def attach_to_joint(
     joints = [] if rig.pose is None else [b.name for b in rig.pose.bones if not _is_label_bone(b.name)]
     if joint not in joints:
         raise ValueError(f"{rig.name} has no joint {joint!r}. Its joints are {', '.join(joints)}")
+    if any(constraint.type == "CHILD_OF" for constraint in obj.constraints):
+        raise ValueError(f"{obj.name} is on a joint already")
+    if obj.parent is not None:
+        raise ValueError(f"{obj.name} has the parent {obj.parent.name}, which would move it as well")
     constraint = obj.constraints.new("CHILD_OF")
     assert isinstance(constraint, bpy.types.ChildOfConstraint)
     constraint.target = rig
@@ -86,12 +93,13 @@ def attach_to_joint(
     constraint.set_inverse_pending = False
     constraint.inverse_matrix = Matrix.Identity(4)
     obj.location = offset
+    obj.rotation_mode = "XYZ"
     obj.rotation_euler = rotation
     return constraint
 
 
 def bake_clip(
-    player: bpy.types.Collection,
+    player: Player | bpy.types.Collection,
     folder: Path,
     sequence: int,
     *,
@@ -101,15 +109,16 @@ def bake_clip(
     smooth: bool = False,
     set_scene_timing: bool = False,
 ) -> bpy.types.NlaStrip:
-    """Bake a sequence of the cache onto the rig of a player collection as a strip that starts at Blender frame
+    """Bake a sequence of the cache onto the rig of a player, or of a player collection, as a strip that starts at Blender frame
     `start`, which can be below 0, and return the strip. `repeat_until`, `action` and `smooth` are those of
     `appearance_clip.bake_clip_to_rig`, which also names what is refused.
 
     The frame rate and the frame range of the scene stay as they are, unless `set_scene_timing` is set. Then the bake
     sets them as the Bake Clip button does. One Blender frame of a clip is one client tick of 20 ms, so a clip plays
     at its game speed only at 50 frames in a second."""
+    collection = player.collection if isinstance(player, Player) else player
     appearance_clip.bake_clip_to_rig(
-        player,
+        collection,
         CacheClip(Js5Store(folder), sequence),
         action=action,
         start=start,
@@ -118,7 +127,7 @@ def bake_clip(
         set_scene_timing=set_scene_timing,
         repeat_until=repeat_until,
     )
-    animation = appearance_collection.armature_of(player).animation_data
+    animation = appearance_collection.armature_of(collection).animation_data
     assert animation is not None
     return next(s for s in animation.nla_tracks[appearance_clip.CLIP_TRACK].strips if round(s.frame_start) == start)
 
@@ -129,7 +138,14 @@ def key_travel(rig: bpy.types.Object, points: Sequence[Sequence[float]], *, star
     the last point. Each point is x, y and z in the space of the rig object, such as a `Regions.tile_point`.
 
     The keys go to the action of the rig object, beside the clip strips of the bone bakes. The actor does not turn
-    toward its direction. It refuses fewer than two points, before any key."""
+    toward its direction. It refuses fewer than two points, a point without x, y and z, and two points in a row at
+    the same x and y, which would get the same frame, before any key."""
+    for number, point in enumerate(points, 1):
+        if len(point) != 3:
+            raise ValueError(f"Point {number} {tuple(point)} needs x, y and z")
+    for number, (before, after) in enumerate(zip(points, points[1:], strict=False), 1):
+        if (before[0], before[1]) == (after[0], after[1]):
+            raise ValueError(f"Points {number} and {number + 1} are at the same x and y")
     frames = travel_frames(points, start, RUN_FRAMES_PER_TILE if run else WALK_FRAMES_PER_TILE)
     for point, frame in zip(points, frames, strict=True):
         rig.location = (point[0], point[1], point[2])
@@ -189,29 +205,38 @@ def import_regions(
     With `saved_folder`, a region comes from its saved region `region-<x>_<y>.blend` there when the key of that file
     fits (ADR 0033). In every other case the region is imported and saved there.
 
-    It refuses no region, a region named twice and a region origin outside the regions, before any change, and what
-    `region_import.import_region` refuses."""
+    It refuses no region, a region named twice, a region that the cache lacks and a region origin outside the
+    regions, before any change. When `region_import.import_region` refuses a region for another cause, the regions
+    before it stay in the file. A saved region that cannot be written gives a warning, and the import goes on."""
+    regions = [(x, y) for x, y in regions]
     if not regions:
         raise ValueError("An import needs at least one region")
     for x, y in regions:
-        if list(regions).count((x, y)) > 1:
+        if regions.count((x, y)) > 1:
             raise ValueError(f"Region {x}_{y} is named twice")
     store = Js5Store(folder)
     terrains = {(x, y): load_terrain(store, x, y) for x, y in regions}
+    for x, y in regions:
+        if (x, y) in terrains[x, y].missing:
+            raise region_import.RefusalError(f"The cache has no terrain for region {x}_{y}")
     origin = Vector() if origin_tile is None else _unmoved_tile_point(terrains, *origin_tile)
     turned = Matrix.Rotation(math.radians(turn), 3, "Z")
     parent = _scene_collection() if parent is None else parent
     collections: list[bpy.types.Collection] = []
     reports: list[RegionReport | None] = []
     for x, y in regions:
+        collection = report = None
         path = None if saved_folder is None else saved_folder / f"region-{x}_{y}.blend"
-        key = region_files.region_key(folder, x, y, brightness, decoration_clearance)
-        collection = None if path is None else region_files.append_region(parent, path, key)
-        report = None
+        key = "" if path is None else region_files.region_key(folder, x, y, brightness, decoration_clearance)
+        if path is not None:
+            collection = region_files.append_region(parent, path, key)
         if collection is None:
             collection, report = region_import.import_region(parent, folder, x, y, brightness, decoration_clearance)
             if path is not None:
-                region_files.save_region(collection, path, key)
+                try:
+                    region_files.save_region(collection, path, key)
+                except OSError as error:
+                    warnings.warn(f"Region {x}_{y} was not saved to {path}: {error}", stacklevel=2)
         offset = _region_offset(terrains, x, y) - origin
         # A list, because Blender 5.3 crashed on a change of objects during a loop over `all_objects`.
         for obj in list(collection.all_objects):

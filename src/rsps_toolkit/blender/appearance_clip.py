@@ -257,7 +257,8 @@ def _bake_strip(
     if replaced is not None and appearance_collection.RIG_ACTION_KEY not in (replaced.action or {}):
         raise ValueError(f"The strip {replaced.name!r} on {CLIP_TRACK} starts on frame {start} and is not a bake")
     for other in [] if track is None else track.strips:
-        if other != replaced and other.frame_start < start + length and start < other.frame_end:
+        # Blender keeps the repeat count as a 32-bit float, so a repeated strip can end a part of a frame late.
+        if other != replaced and round(other.frame_start) < start + length and start < round(other.frame_end):
             raise ValueError(
                 f"The clip would cover frames {start} to {start + length}, over the strip {other.name!r}. "
                 "Move the current frame or the strip"
@@ -369,6 +370,11 @@ def _add_clip_strip(
     strip.action_frame_end = 1 + cycle
     strip.action_frame_start = 1
     strip.repeat = length / cycle
+    # Blender keeps the repeat count as a 32-bit float, so the strip can end a few millionths of a frame late, and
+    # Blender then refuses a strip that starts on that frame. The count goes down by the smallest step until the
+    # strip ends in time. The held last pose fills the missing part of a frame.
+    while strip.frame_end > start + length:
+        strip.repeat *= 1 - 2e-7
     strip.extrapolation = "HOLD_FORWARD"
 
 

@@ -434,10 +434,22 @@ def test_a_bone_clip_can_start_before_frame_0(cache):
         assert largest_distance(posed_mesh(collection, -20 + offset), fitted[shown[offset]]) <= RIG_ROUNDING
 
 
+def test_a_clip_can_start_on_the_frame_where_a_repeated_clip_ends(cache):
+    # Blender keeps the repeat count of a strip as a 32-bit float. For the 49 frames of the walk and a repeat until
+    # frame 57, the strip ends at frame 57.000004, which must not count as an overlap with a clip from frame 57.
+    collection = player(cache)
+    appearance_clip.bake_clip_to_rig(collection, CLIP, start=0, repeat_until=57)
+
+    appearance_clip.bake_clip_to_rig(collection, CLIP, start=57)
+
+    assert [round(strip.frame_start) for strip in clip_strips(collection)] == [0, 57]
+
+
 # Issue 170, gap f: the owner asked for a repeat until a frame, in place of one bake for each cycle of a walk.
 def test_a_bone_clip_with_repeat_until_is_one_strip_that_plays_the_clip_again_and_again(cache):
     collection = player(cache)
     # The walk has 49 Blender frames (the strip of the test above), so 120 frames are two cycles and 22 frames.
+    # 8 is the count of client frames of the walk, as in the tests above: a repeat adds no frame.
     assert appearance_clip.bake_clip_to_rig(collection, CLIP, start=0, repeat_until=120) == 8
     (strip,) = clip_strips(collection)
     assert (strip.frame_start, strip.frame_end, strip.extrapolation) == (0, 120, "HOLD_FORWARD")

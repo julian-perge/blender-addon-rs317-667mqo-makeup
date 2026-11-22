@@ -43,6 +43,9 @@ HAND_PARTS = ((WEAPON_SLOT, "Weapon"), (SHIELD_SLOT, "Shield"))
 # An object a clip's held item adds (appearance_held). It also stores the slot, item id and item name below.
 HELD = "Held"
 HELD_SLOT_KEY, HELD_ITEM_KEY, HELD_NAME_KEY = "rs_held_slot", "rs_held_item", "rs_held_name"
+# On a player collection of scripted use: the brightness of its build, which lights the items that a clip holds
+# (ADR 0031). A collection of the panel has no such value, and the Brightness preference lights its held items.
+BRIGHTNESS_KEY = "rs_brightness"
 
 
 def build_collection(

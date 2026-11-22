@@ -1390,6 +1390,27 @@ def test_an_import_with_the_clearance_moves_only_the_wall_decorations_of_48_50()
     assert report.scenery.moved_decorations == moved > 0
 
 
+@pytest.mark.parametrize("rotation", [0, 1, 2, 3])
+def test_a_closed_wall_decoration_stays_at_every_rotation(rotation):
+    # The face normals of a closed shape sum to zero. After a rotation the sum is only close to zero, and the object
+    # must still stay (ADR 0034).
+    closed = replace(
+        PLATE_MODEL,
+        vertices=[(0, 0, 0), (128, 0, 0), (0, -128, 0), (0, 0, 128)],
+        faces=[(0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)],
+        face_colours=[HAND_COLOUR] * 4,
+        face_textures=[None] * 4,
+        render_priorities=[0] * 4,
+        face_alphas=[0] * 4,
+        face_texture_triangles=[None] * 4,
+        flat_shaded=[False] * 4,
+    )
+
+    _, counts = plate_scenery([Placement(1, 0, 8, 5, 4, rotation)], 2.0, closed)
+
+    assert counts.moved_decorations == 0
+
+
 def test_two_placements_that_differ_only_in_rotation_get_two_meshes_and_two_equal_ones_share_one():
     # ADR 0027 and rule 7 of spec 105: the client lights a loc model after its turn (ObjectComposition.java lines 792
     # to 801 and 585), so the rotation is part of the mesh key.

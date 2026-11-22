@@ -169,11 +169,14 @@ def _ensure_held_objects(collection: bpy.types.Collection, found: Variant) -> No
         if item < 0 or _held_object(collection, slot, item) is not None:
             continue
         name = found.names[item]
+        brightness = collection.get(appearance_collection.BRIGHTNESS_KEY)
+        if brightness is None:
+            brightness = preferences.brightness()
         obj = appearance_collection.mesh_object(
             found.model,
             found.shading,
             f"{collection.name} {name}",
-            preferences.brightness(),
+            brightness,
             collection,
             appearance_collection.HELD,
             found.slots[slot],

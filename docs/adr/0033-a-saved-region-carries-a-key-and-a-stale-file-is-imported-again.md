@@ -5,8 +5,8 @@ The import of region 51_49 takes 6 to 9 seconds, and a script that renders one s
 ## Decision
 
 - **`region_files.save_region` writes the region collection to its own .blend**, as `save_player` writes a player.
-- **The key is JSON text with every input of the import:** a SHA-256 of the files of the add-on (the code, the manifest with the version and the data tables), the size and the modified time of the cache data file and of the key file of the region, the region numbers, the brightness and the wall decoration clearance.
-- **The file holds the key in a text datablock named `rs_region_key <sha256 of the key>`.** Blender lists the names of a .blend without loading its data, so a stale file costs no append.
+- **The key is JSON text with every input of the import:** a SHA-256 of the files of the add-on (the code, the manifest with the version and the data tables), the Blender version, the size and the modified time of the cache data file and of the key file of the region, the region numbers, the brightness and the wall decoration clearance.
+- **The file holds the key in a text datablock named `rs_region_key <the first 32 hex digits of the SHA-256 of the key>`.** Blender lists the names of a .blend without loading its data, so a stale file costs no append.
 - **`region_files.append_region` returns None and changes nothing** when the file is missing, has another key or is not a .blend. `scripting.import_regions` then imports the region and writes the file again.
 - **The saved region is as the import made it.** The region origin and the turn are applied after the import or the append, so one file serves every origin.
 - **The hash of the files is part of the key** because the calling repo runs the add-on from a working tree, where the version does not change with the code.

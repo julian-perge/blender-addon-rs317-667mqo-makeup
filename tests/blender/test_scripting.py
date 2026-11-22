@@ -10,7 +10,15 @@ import pytest
 from js5_builder import build_region_cache, item_definition, rewrite_cache
 from mathutils import Vector
 
-from rsps_toolkit.blender import appearance_clip, appearance_collection, appearance_preview, scripting
+from rsps_toolkit.blender import (
+    appearance_clip,
+    appearance_collection,
+    appearance_held,
+    appearance_preview,
+    region_files,
+    region_import,
+    scripting,
+)
 from rsps_toolkit.blender.face_materials import srgb_to_linear
 from rsps_toolkit.formats import decode, face_colour_to_rgb
 from rsps_toolkit.formats.appearance_look import Look
@@ -168,6 +176,7 @@ def test_two_players_at_one_place_stand_on_the_same_place(cache):
 def test_create_player_takes_a_name(cache):
     player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS, name="Hero")
 
+    # `appearance_collection.build_collection` names the rig after the collection, with `_rig`.
     assert (player.collection.name, player.rig.name, player.parts[0].name) == ("Hero", "Hero_rig", "Hero")
 
 
@@ -294,7 +303,8 @@ def test_bake_clip_bakes_a_sequence_of_the_cache_before_frame_0_and_leaves_the_s
 def test_bake_clip_repeats_a_walk_until_a_frame():
     player = scripting.create_player(SNAPSHOT_430, Look(), brightness=BRIGHTNESS)
 
-    strip = scripting.bake_clip(player.collection, SNAPSHOT_430, WALK, start=0, repeat_until=90)
+    # The function takes the player or its collection.
+    strip = scripting.bake_clip(player, SNAPSHOT_430, WALK, start=0, repeat_until=90)
 
     assert (strip.frame_start, strip.frame_end) == (0, 90)
     assert strip.repeat == pytest.approx(90 / WALK_FRAMES)
@@ -377,6 +387,65 @@ def test_key_travel_refuses_fewer_than_two_points_before_any_key(cache):
         scripting.key_travel(player.rig, [(0.0, 0.0, 0.0)], start=0)
 
     assert player.rig.animation_data is None
+
+
+def test_key_travel_refuses_a_point_with_no_height_and_a_step_that_stays_in_place_before_any_key(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+
+    with pytest.raises(ValueError, match=r"Point 2 \(128.0, 0.0\) needs x, y and z"):
+        scripting.key_travel(player.rig, [(0.0, 0.0, 0.0), (128.0, 0.0)], start=0)
+    with pytest.raises(ValueError, match="Points 1 and 2 are at the same x and y"):
+        scripting.key_travel(player.rig, [(0.0, 0.0, 0.0), (0.0, 0.0, 50.0)], start=0)
+
+    assert player.rig.animation_data is None
+
+
+def test_attach_to_joint_refuses_an_object_that_is_attached_or_has_a_parent(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+    item = bpy.data.objects.new("Item", None)
+    scripting.attach_to_joint(item, player.rig, "hand.R")
+    with pytest.raises(ValueError, match="Item is on a joint already"):
+        scripting.attach_to_joint(item, player.rig, "hand.L")
+    assert len(item.constraints) == 1
+
+    child = bpy.data.objects.new("Child", None)
+    child.parent = item
+    with pytest.raises(ValueError, match="Child has the parent Item"):
+        scripting.attach_to_joint(child, player.rig, "hand.L")
+    assert len(child.constraints) == 0
+
+
+def test_attach_to_joint_turns_an_object_of_another_rotation_mode_by_the_xyz_euler(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+    item = bpy.data.objects.new("Item", None)
+    item.rotation_mode = "QUATERNION"
+
+    scripting.attach_to_joint(item, player.rig, "hand.R", rotation=(0.5, 0.0, 0.0))
+
+    assert item.rotation_mode == "XYZ"
+    assert item.rotation_euler.x == pytest.approx(0.5)
+
+
+# Sequence 1365 holds a steel axe (tests/blender/test_appearance_clip.py, the clip held-1365).
+@needs_snapshot_430
+def test_a_bake_of_a_clip_with_a_held_item_reads_no_preference_and_lights_the_item_as_the_player(monkeypatch):
+    def refuse() -> float:
+        raise AssertionError("scripted use read the Brightness preference")
+
+    monkeypatch.setattr(appearance_held.preferences, "brightness", refuse)
+    lit = {}
+    for brightness in (0.6, 0.8):
+        player = scripting.create_player(SNAPSHOT_430, Look(), brightness=brightness)
+        scripting.bake_clip(player, SNAPSHOT_430, 1365, action=True)
+        (axe,) = [obj for obj in player.collection.all_objects if "axe" in obj.name]
+        attribute = mesh_of(axe).color_attributes["rs_lit"]
+        assert isinstance(attribute, bpy.types.FloatColorAttribute)
+        values = [0.0] * (len(attribute.data) * 4)
+        attribute.data.foreach_get("color", values)
+        lit[brightness] = values
+        bpy.ops.wm.read_homefile(use_empty=True)
+
+    assert lit[0.6] != lit[0.8]
 
 
 @pytest.fixture
@@ -489,6 +558,8 @@ def test_no_region_and_a_region_named_twice_are_refused(region_cache):
         scripting.import_regions(region_cache, [], brightness=0.8)
     with pytest.raises(ValueError, match="Region 48_50 is named twice"):
         scripting.import_regions(region_cache, [(48, 50), (48, 50)], brightness=0.8)
+    with pytest.raises(ValueError, match="Region 48_50 is named twice"):
+        scripting.import_regions(region_cache, [[48, 50], [48, 50]], brightness=0.8)  # pyrefly: ignore[bad-argument-type]
     assert len(bpy.data.collections) == 0
 
 
@@ -548,3 +619,25 @@ def test_import_region_passes_the_wall_decoration_clearance_to_the_import():
 
     (report,) = regions.reports
     assert report is not None and report.scenery.moved_decorations > 0
+
+
+def test_a_region_that_the_cache_lacks_is_refused_before_the_regions_before_it_are_imported(region_cache):
+    # The fixture cache holds only region 48_50.
+    with pytest.raises(region_import.RefusalError, match="The cache has no terrain for region 20_20"):
+        scripting.import_regions(region_cache, [(48, 50), (20, 20)], brightness=0.8)
+
+    assert len(bpy.data.collections) == 0
+
+
+def test_a_save_that_fails_keeps_the_imported_region_and_warns(region_cache, tmp_path, monkeypatch):
+    # On Windows, the move of the new file fails while another Blender has the saved region open.
+    def fail(collection, path, key):
+        raise PermissionError("the file is in use")
+
+    monkeypatch.setattr(region_files, "save_region", fail)
+
+    with pytest.warns(UserWarning, match=r"Region 48_50 was not saved to .*region-48_50.blend: the file is in use"):
+        regions = scripting.import_region(region_cache, 48, 50, brightness=0.8, saved_folder=tmp_path / "saved")
+
+    assert regions.appended == (False,)
+    assert regions.collections[0].name == "Region 48_50"

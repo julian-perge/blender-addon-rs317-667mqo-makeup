@@ -177,6 +177,10 @@ def key_of(
     return region_files.region_key(cache, x, y, brightness, decoration_clearance)
 
 
+def test_the_key_names_the_blender_version_because_an_older_blender_cannot_read_a_newer_file(cache):
+    assert json.loads(key_of(cache))["blender"] == list(bpy.app.version)
+
+
 def test_the_key_is_the_same_for_the_same_inputs_and_names_the_region(cache):
     assert key_of(cache) == key_of(cache)
     assert (json.loads(key_of(cache))["x"], json.loads(key_of(cache))["y"]) == (48, 50)
@@ -202,6 +206,7 @@ def test_the_key_changes_when_the_cache_data_file_changes_in_size_or_time(cache)
 
 def test_the_key_changes_when_the_region_gets_a_key_file(cache):
     before = key_of(cache)
+    # 12338 is 48 * 256 + 50, the number that names the key file of 48_50 (GLOSSARY.md, Landscape keys).
     (cache.parent / "keys" / "12338.txt").write_text("1\n2\n3\n4\n")
 
     assert key_of(cache) != before

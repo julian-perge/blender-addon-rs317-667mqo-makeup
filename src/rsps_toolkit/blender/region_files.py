@@ -33,12 +33,14 @@ def add_on_hash() -> str:
 
 
 def region_key(folder: Path, x: int, y: int, brightness: float, decoration_clearance: float) -> str:
-    """The key of an import of region (x, y) as JSON text: the files of the add-on, the size and the modified time of
-    the cache data file and of the key file of the region, and the arguments of the import. Two imports with the same
-    key make the same region."""
+    """The key of an import of region (x, y) as JSON text: the files of the add-on, the Blender version, the size and
+    the modified time of the cache data file and of the key file of the region, and the arguments of the import. Two
+    imports with the same key make the same region. An older Blender does not read the file of a newer one, so the
+    version is in the key."""
     return json.dumps(
         {
             "key_version": KEY_VERSION,
+            "blender": list(bpy.app.version),
             "add_on": add_on_hash(),
             "cache": _file_state(folder / DATA_FILE),
             "landscape_key": _file_state(folder.parent / KEYS_FOLDER / f"{region_id(x, y)}.txt"),
@@ -70,7 +72,8 @@ def save_region(collection: bpy.types.Collection, path: Path, key: str) -> None:
     open file is not changed.
 
     The file is written beside `path` first and then moved there, so that another Blender that reads `path` at the
-    same time gets the old file or the new one, and never a part of one."""
+    same time gets the old file or the new one, and never a part of one. On Windows the move fails with an OSError
+    while another program has `path` open. The old file then stays."""
     path.parent.mkdir(parents=True, exist_ok=True)
     text = bpy.data.texts.new(_key_name(key))
     text.write(key)

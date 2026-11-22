@@ -35,8 +35,9 @@ from .mesh import MaterialKey, model_to_object
 
 # The loc types that the client puts in the wall decoration slot of a tile (`PacketBuffer.java` lines 160 to 503).
 WALL_DECORATION_TYPES = range(4, 9)
-# A sum of face normals below this length, in square game units, has no direction.
-_NO_DIRECTION = 1e-6
+# A sum of face normals that is shorter than this part of the summed face areas has no direction. The normals of a
+# closed shape sum to zero, and the 32-bit rotation of an object leaves a few parts in a million.
+_NO_DIRECTION = 1e-4
 
 type ModelKey = tuple[tuple[int, ...], tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]
 """The models of a part, and the recolours and retextures of the loc that shows them."""
@@ -173,6 +174,7 @@ def _clear_of_wall(obj: bpy.types.Object, clearance: float) -> bool:
     assert isinstance(mesh, bpy.types.Mesh)
     matrix = Matrix.LocRotScale(None, obj.rotation_euler, (obj.scale.x, obj.scale.y, obj.scale.z)).to_3x3()
     total = Vector()
+    area = 0.0
     for polygon in mesh.polygons:
         first, second, third = (
             matrix @ mesh.vertices[mesh.loops[polygon.loop_start + corner].vertex_index].co for corner in range(3)
@@ -180,9 +182,10 @@ def _clear_of_wall(obj: bpy.types.Object, clearance: float) -> bool:
         normal = (second - first).cross(third - first)
         assert isinstance(normal, Vector)
         total += normal
+        area += normal.length
     if matrix.determinant() < 0:
         total.negate()
-    if total.length < _NO_DIRECTION:
+    if total.length <= area * _NO_DIRECTION:
         return False
     obj.location = obj.location + total.normalized() * clearance
     return True
