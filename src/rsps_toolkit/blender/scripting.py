@@ -7,12 +7,13 @@ call.
 """
 
 import functools
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 from ..animation.clip import CacheClip
 from ..formats.appearance_look import Look, look_preset
@@ -21,8 +22,11 @@ from ..formats.item_model import inventory_model, item_lighting
 from ..formats.item_wear import ItemWear, load_item_wear
 from ..formats.js5 import Js5Store
 from ..formats.lighting import light_hsl
+from ..formats.region import REGION_SIZE, Terrain, load_terrain
 from ..formats.travel import RUN_FRAMES_PER_TILE, WALK_FRAMES_PER_TILE, travel_frames
-from . import appearance_clip, appearance_collection, appearance_preview
+from . import appearance_clip, appearance_collection, appearance_preview, region_files, region_import
+from .region_import import RegionReport
+from .region_terrain import TILE_SIZE, tile_position
 
 
 @dataclass(frozen=True)
@@ -141,6 +145,124 @@ def key_travel(rig: bpy.types.Object, points: Sequence[Sequence[float]], *, star
                             if start <= key.co.x <= frames[-1]:
                                 key.interpolation = "LINEAR"
     return frames[-1]
+
+
+@dataclass(frozen=True)
+class Regions:
+    """The regions of one `import_regions` call, in the order of the call."""
+
+    collections: tuple[bpy.types.Collection, ...]
+    appended: tuple[bool, ...]
+    """For each region, whether it came from its saved region."""
+    reports: tuple[RegionReport | None, ...]
+    """The report of each import, or None for an appended region."""
+    _terrains: dict[tuple[int, int], Terrain]
+    _origin: Vector
+    _turn: Matrix
+
+    def tile_point(self, x: int, y: int) -> Vector:
+        """The Blender point of the centre of world tile (x, y) at its ground height, after the region origin and the
+        turn. A script puts a player there. It refuses a tile outside the regions."""
+        return self._turn @ (_unmoved_tile_point(self._terrains, x, y) - self._origin)
+
+
+def import_regions(
+    folder: Path,
+    regions: Sequence[tuple[int, int]],
+    *,
+    brightness: float,
+    origin_tile: tuple[int, int] | None = None,
+    turn: float = 0.0,
+    decoration_clearance: float = 0.0,
+    saved_folder: Path | None = None,
+    parent: bpy.types.Collection | None = None,
+) -> Regions:
+    """Import the regions, given by their x and y numbers, side by side as in the game, into `parent` or the scene
+    collection (ADR 0031).
+
+    `origin_tile` is the region origin: a world tile of one of the regions, whose centre goes to the Blender origin at
+    its ground height. With None, the south-west corner of the first region is at the origin at height 0, as the
+    operator puts one region. `turn` is in degrees, counterclockwise seen from above, around the origin. Both change
+    only the location and the rotation of each object. `decoration_clearance` is the wall decoration clearance in
+    game units (ADR 0034).
+
+    With `saved_folder`, a region comes from its saved region `region-<x>_<y>.blend` there when the key of that file
+    fits (ADR 0033). In every other case the region is imported and saved there.
+
+    It refuses no region, a region named twice and a region origin outside the regions, before any change, and what
+    `region_import.import_region` refuses."""
+    if not regions:
+        raise ValueError("An import needs at least one region")
+    for x, y in regions:
+        if list(regions).count((x, y)) > 1:
+            raise ValueError(f"Region {x}_{y} is named twice")
+    store = Js5Store(folder)
+    terrains = {(x, y): load_terrain(store, x, y) for x, y in regions}
+    origin = Vector() if origin_tile is None else _unmoved_tile_point(terrains, *origin_tile)
+    turned = Matrix.Rotation(math.radians(turn), 3, "Z")
+    parent = _scene_collection() if parent is None else parent
+    collections: list[bpy.types.Collection] = []
+    reports: list[RegionReport | None] = []
+    for x, y in regions:
+        path = None if saved_folder is None else saved_folder / f"region-{x}_{y}.blend"
+        key = region_files.region_key(folder, x, y, brightness, decoration_clearance)
+        collection = None if path is None else region_files.append_region(parent, path, key)
+        report = None
+        if collection is None:
+            collection, report = region_import.import_region(parent, folder, x, y, brightness, decoration_clearance)
+            if path is not None:
+                region_files.save_region(collection, path, key)
+        offset = _region_offset(terrains, x, y) - origin
+        # A list, because Blender 5.3 crashed on a change of objects during a loop over `all_objects`.
+        for obj in list(collection.all_objects):
+            obj.location = turned @ (obj.location + offset)
+            obj.rotation_euler.z += math.radians(turn)
+        collections.append(collection)
+        reports.append(report)
+    return Regions(
+        tuple(collections), tuple(report is None for report in reports), tuple(reports), terrains, origin, turned
+    )
+
+
+def import_region(
+    folder: Path,
+    x: int,
+    y: int,
+    *,
+    brightness: float,
+    origin_tile: tuple[int, int] | None = None,
+    turn: float = 0.0,
+    decoration_clearance: float = 0.0,
+    saved_folder: Path | None = None,
+    parent: bpy.types.Collection | None = None,
+) -> Regions:
+    """`import_regions` for the one region (x, y)."""
+    return import_regions(
+        folder,
+        [(x, y)],
+        brightness=brightness,
+        origin_tile=origin_tile,
+        turn=turn,
+        decoration_clearance=decoration_clearance,
+        saved_folder=saved_folder,
+        parent=parent,
+    )
+
+
+def _region_offset(terrains: dict[tuple[int, int], Terrain], x: int, y: int) -> Vector:
+    """Where the south-west corner of region (x, y) is from that of the first region, in game units."""
+    first_x, first_y = next(iter(terrains))
+    return Vector(((x - first_x) * REGION_SIZE * TILE_SIZE, (y - first_y) * REGION_SIZE * TILE_SIZE, 0.0))
+
+
+def _unmoved_tile_point(terrains: dict[tuple[int, int], Terrain], x: int, y: int) -> Vector:
+    """The centre of world tile (x, y) at its ground height, before the region origin and the turn."""
+    region = (x // REGION_SIZE, y // REGION_SIZE)
+    if region not in terrains:
+        names = ", ".join(f"{region_x}_{region_y}" for region_x, region_y in terrains)
+        raise ValueError(f"Tile ({x}, {y}) is in none of the regions {names}")
+    point = tile_position(terrains[region], x % REGION_SIZE, y % REGION_SIZE)
+    return Vector(point) + _region_offset(terrains, *region)
 
 
 def _is_label_bone(name: str) -> bool:

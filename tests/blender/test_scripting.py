@@ -1,12 +1,13 @@
 """Scripted use (spec 170): every function takes its inputs as arguments, with the add-on not enabled."""
 
+import math
 import os
 import struct
 from pathlib import Path
 
 import bpy
 import pytest
-from js5_builder import item_definition, rewrite_cache
+from js5_builder import build_region_cache, item_definition, rewrite_cache
 from mathutils import Vector
 
 from rsps_toolkit.blender import appearance_clip, appearance_collection, appearance_preview, scripting
@@ -14,7 +15,9 @@ from rsps_toolkit.blender.face_materials import srgb_to_linear
 from rsps_toolkit.formats import decode, face_colour_to_rgb
 from rsps_toolkit.formats.appearance_look import Look
 from rsps_toolkit.formats.appearance_preset import loads_preset
+from rsps_toolkit.formats.js5 import Js5Store
 from rsps_toolkit.formats.lighting import light_hsl
+from rsps_toolkit.formats.region import ground_height, load_terrain
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 INVENTORY = FIXTURES / "inventory"
@@ -374,3 +377,174 @@ def test_key_travel_refuses_fewer_than_two_points_before_any_key(cache):
         scripting.key_travel(player.rig, [(0.0, 0.0, 0.0)], start=0)
 
     assert player.rig.animation_data is None
+
+
+@pytest.fixture
+def region_cache(tmp_path) -> Path:
+    """The groups of snapshot 430 that the import of 48_50 reads, with a keys folder that has no key file, so the
+    region has its terrain and no scenery (tests/blender/test_region_import.py, `keyless_cache`)."""
+    folder = tmp_path / "download" / "cache"
+    build_region_cache(folder, definitions=True)
+    (tmp_path / "download" / "keys").mkdir()
+    return folder
+
+
+# Region 48_50 starts at world tile (3072, 3200) (GLOSSARY.md, Region).
+WEST, SOUTH = 48 * 64, 50 * 64
+ORIGIN_TILE = (WEST + 10, SOUTH + 20)
+
+
+def ground(folder: Path, tile_x: int, tile_y: int) -> float:
+    """The Blender height of the centre of a tile of 48_50: the client's ground height there, with y up."""
+    terrain = load_terrain(Js5Store(folder), 48, 50)
+    return float(-ground_height(terrain, tile_x * 128 + 64, tile_y * 128 + 64))
+
+
+def terrain_of(regions: scripting.Regions, index: int = 0) -> bpy.types.Object:
+    return regions.collections[index].objects[0]
+
+
+def world_vertices(obj: bpy.types.Object) -> list[tuple[float, float, float]]:
+    view_layer = bpy.context.view_layer
+    assert view_layer is not None
+    view_layer.update()
+    return [xyz(obj.matrix_world @ vertex.co) for vertex in mesh_of(obj).vertices]
+
+
+def flat(points: list[tuple[float, float, float]]) -> list[float]:
+    """The numbers of the points in one list, which pytest.approx can compare."""
+    return [number for point in points for number in point]
+
+
+# Issue 170, gap a: one entry point that takes the cache folder and the brightness, with the add-on not enabled.
+def test_import_region_imports_a_region_as_the_operator_places_it(region_cache):
+    regions = scripting.import_region(region_cache, 48, 50, brightness=0.8)
+
+    (region,) = regions.collections
+    assert region.name == "Region 48_50"
+    scene = bpy.context.scene
+    assert scene is not None
+    assert region.name in scene.collection.children
+    assert regions.appended == (False,)
+    (report,) = regions.reports
+    assert report is not None and report.tiles > 0 and not report.has_key
+    terrain = terrain_of(regions)
+    assert terrain.name == "Terrain 48_50"
+    assert xyz(terrain.location) == (0.0, 0.0, 0.0)
+    # With no region origin, a tile centre is where `region_terrain.tile_position` puts it.
+    assert xyz(regions.tile_point(WEST + 10, SOUTH + 20)) == (
+        10 * 128 + 64,
+        20 * 128 + 64,
+        ground(region_cache, 10, 20),
+    )
+
+
+# Issue 170, gap h: a chosen tile goes to the origin.
+def test_the_centre_of_the_region_origin_tile_goes_to_the_blender_origin_at_its_ground_height(region_cache):
+    plain = world_vertices(terrain_of(scripting.import_region(region_cache, 48, 50, brightness=0.8)))
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    regions = scripting.import_region(region_cache, 48, 50, brightness=0.8, origin_tile=ORIGIN_TILE)
+
+    assert xyz(regions.tile_point(*ORIGIN_TILE)) == (0.0, 0.0, 0.0)
+    centre = (10 * 128 + 64, 20 * 128 + 64, ground(region_cache, 10, 20))
+    moved = world_vertices(terrain_of(regions))
+    assert flat(moved) == pytest.approx(flat([(x - centre[0], y - centre[1], z - centre[2]) for x, y, z in plain]))
+    # The tile to the east is 128 game units along x, at its own ground height.
+    east = regions.tile_point(ORIGIN_TILE[0] + 1, ORIGIN_TILE[1])
+    assert xyz(east) == pytest.approx((128.0, 0.0, ground(region_cache, 11, 20) - centre[2]))
+
+
+def test_a_turn_of_90_degrees_puts_east_on_the_y_axis(region_cache):
+    plain = world_vertices(
+        terrain_of(scripting.import_region(region_cache, 48, 50, brightness=0.8, origin_tile=ORIGIN_TILE))
+    )
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    regions = scripting.import_region(region_cache, 48, 50, brightness=0.8, origin_tile=ORIGIN_TILE, turn=90.0)
+
+    # Counterclockwise seen from above: a point (x, y) goes to (-y, x).
+    turned = world_vertices(terrain_of(regions))
+    assert flat(turned) == pytest.approx(flat([(-y, x, z) for x, y, z in plain]), abs=1e-3)
+    assert terrain_of(regions).rotation_euler.z == pytest.approx(math.pi / 2)
+    assert xyz(regions.tile_point(*ORIGIN_TILE)) == pytest.approx((0.0, 0.0, 0.0))
+    east = regions.tile_point(ORIGIN_TILE[0] + 1, ORIGIN_TILE[1])
+    north = regions.tile_point(ORIGIN_TILE[0], ORIGIN_TILE[1] + 1)
+    assert (east.x, east.y) == pytest.approx((0.0, 128.0), abs=1e-4)
+    assert (north.x, north.y) == pytest.approx((-128.0, 0.0), abs=1e-4)
+
+
+def test_a_region_origin_or_a_tile_outside_the_regions_is_refused(region_cache):
+    with pytest.raises(ValueError, match=r"Tile \(3136, 3200\) is in none of the regions 48_50"):
+        scripting.import_region(region_cache, 48, 50, brightness=0.8, origin_tile=(WEST + 64, SOUTH))
+    assert len(bpy.data.collections) == 0
+
+    regions = scripting.import_region(region_cache, 48, 50, brightness=0.8)
+    with pytest.raises(ValueError, match=r"Tile \(3071, 3200\) is in none of the regions 48_50"):
+        regions.tile_point(WEST - 1, SOUTH)
+
+
+def test_no_region_and_a_region_named_twice_are_refused(region_cache):
+    with pytest.raises(ValueError, match="at least one region"):
+        scripting.import_regions(region_cache, [], brightness=0.8)
+    with pytest.raises(ValueError, match="Region 48_50 is named twice"):
+        scripting.import_regions(region_cache, [(48, 50), (48, 50)], brightness=0.8)
+    assert len(bpy.data.collections) == 0
+
+
+# Issue 170, gap j: the second run appends the saved region.
+def test_with_a_saved_folder_the_first_call_saves_each_region_and_the_next_call_appends_it(region_cache, tmp_path):
+    saved = tmp_path / "saved"
+    arguments = {"brightness": 0.8, "origin_tile": ORIGIN_TILE, "turn": 90.0, "saved_folder": saved}
+    first = scripting.import_region(region_cache, 48, 50, **arguments)
+    expected = world_vertices(terrain_of(first))
+    assert first.appended == (False,)
+    assert [path.name for path in saved.iterdir()] == ["region-48_50.blend"]
+    written = (saved / "region-48_50.blend").stat().st_mtime_ns
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    second = scripting.import_region(region_cache, 48, 50, **arguments)
+
+    assert (second.appended, second.reports) == ((True,), (None,))
+    assert flat(world_vertices(terrain_of(second))) == pytest.approx(flat(expected))
+    assert xyz(second.tile_point(*ORIGIN_TILE)) == pytest.approx((0.0, 0.0, 0.0))
+    assert (saved / "region-48_50.blend").stat().st_mtime_ns == written
+
+
+def test_a_saved_region_of_another_brightness_is_imported_again_and_saved_again(region_cache, tmp_path):
+    saved = tmp_path / "saved"
+    scripting.import_region(region_cache, 48, 50, brightness=0.8, saved_folder=saved)
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    again = scripting.import_region(region_cache, 48, 50, brightness=0.6, saved_folder=saved)
+    bpy.ops.wm.read_homefile(use_empty=True)
+    third = scripting.import_region(region_cache, 48, 50, brightness=0.6, saved_folder=saved)
+
+    assert (again.appended, third.appended) == ((False,), (True,))
+
+
+@needs_snapshot_430
+def test_two_regions_stand_side_by_side_and_their_terrain_meets_at_the_shared_edge():
+    regions = scripting.import_regions(SNAPSHOT_430, [(48, 50), (49, 50)], brightness=0.8, origin_tile=(WEST, SOUTH))
+
+    assert [collection.name for collection in regions.collections] == ["Region 48_50", "Region 49_50"]
+    west, east = (terrain_of(regions, index) for index in (0, 1))
+    # A region is 64 tiles of 128 game units wide (GLOSSARY.md, Region and Tile).
+    assert east.location.x - west.location.x == pytest.approx(64 * 128)
+    assert (east.location.y, east.location.z) == pytest.approx((west.location.y, west.location.z))
+    edge_x = west.location.x + 64 * 128
+    west_edge = {(round(y), round(z)) for x, y, z in world_vertices(west) if abs(x - edge_x) < 0.01}
+    east_edge = {(round(y), round(z)) for x, y, z in world_vertices(east) if abs(x - edge_x) < 0.01}
+    assert len(west_edge) >= 64
+    assert west_edge == east_edge
+    # A tile of the second region has its point one region to the east.
+    point = regions.tile_point(WEST + 64 + 3, SOUTH + 5)
+    assert (point.x, point.y) == pytest.approx((64 * 128 + 3 * 128, 5 * 128))
+
+
+@needs_snapshot_430
+def test_import_region_passes_the_wall_decoration_clearance_to_the_import():
+    regions = scripting.import_region(SNAPSHOT_430, 48, 50, brightness=0.8, decoration_clearance=2.0)
+
+    (report,) = regions.reports
+    assert report is not None and report.scenery.moved_decorations > 0
