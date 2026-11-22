@@ -14,6 +14,8 @@ from .poses import evaluate_frame
 # index 1 group with the map's id, and sequences are the files of index 2 group 12.
 FRAME_INDEX, FRAME_MAP_INDEX, CONFIG_INDEX, SEQUENCE_GROUP = 0, 1, 2, 12
 NAMES_PATH = Path(__file__).parent.parent / "data" / "animation_names.json"
+# The file id of a chat frame that `jg.p` skips (docs/research/chatheads.md, section 1).
+NO_FRAME = 65535
 
 
 class ClipSource(Protocol):
@@ -26,6 +28,12 @@ class ClipSource(Protocol):
 def load_clip_names(path: Path = NAMES_PATH) -> dict[int, str]:
     """The sequences a player can play, by id, with RuneLite's names, as `scripts/generate-animation-names.py` wrote."""
     return {int(k): v for k, v in json.loads(path.read_text())["clips"].items()}
+
+
+def load_chat_clip_names(path: Path = NAMES_PATH) -> dict[int, str]:
+    """The chat clips, the sequences that a chathead plays, by id, with their names from `seq.sym` of the osrs-dumps
+    repo, as `scripts/generate-animation-names.py` wrote them (ADR 0038)."""
+    return {int(k): v for k, v in json.loads(path.read_text())["chat_clips"].items()}
 
 
 def clip_from_record(record: dict) -> "ClipSource":
@@ -110,26 +118,39 @@ def pose_vertices(
     clip: ClipSource | Path,
     face_labels: tuple[int, ...] | None = None,
     alphas: tuple[int, ...] = (),
+    *,
+    chat: bool = False,
 ) -> tuple[PosedFrame, ...]:
     """Pose vertices that carry vertex skin labels.
 
     With `face_labels` and the faces' rest `alphas`, each frame also holds the face alphas its alpha transforms
     (type 5) give, as the client computes them from the rest alphas.
+
+    With `chat`, each step also applies its chat frame after its frame, to the vertices and alphas that the frame gave,
+    as `jg.p` of gamepack 149 poses a chathead (docs/research/chatheads.md, section 1). A step past the end of the chat
+    frames, or whose chat frame has the file id 65535, gets its frame only.
     """
     source = source_of(clip)
     sequence = decode_sequence(source.sequence_bytes())
     if not sequence.frames:
         raise ValueError("The clip's sequence has no frames")
     maps: dict[int, bytes] = {}
-    result = []
-    for (group, file), ticks in zip(sequence.frames, sequence.durations, strict=True):
+
+    def decoded(group: int, file: int):
         data = source.frame_bytes(group, file)
         map_id = frame_map_id(data)
         if map_id not in maps:
             maps[map_id] = source.frame_map_bytes(map_id)
         frame_map = decode_frame_map(maps[map_id])
-        frame = decode_frame(data, frame_map)
-        posed, faded = evaluate_frame(vertices, labels, alphas, face_labels, frame, frame_map)
+        return decode_frame(data, frame_map), frame_map
+
+    chat_frames = (sequence.chat_frames or ()) if chat else ()
+    result = []
+    for step, ((group, file), ticks) in enumerate(zip(sequence.frames, sequence.durations, strict=True)):
+        posed, faded = evaluate_frame(vertices, labels, alphas, face_labels, *decoded(group, file))
+        if step < len(chat_frames) and chat_frames[step][1] != NO_FRAME:
+            start = tuple(faded) if face_labels is not None else alphas
+            posed, faded = evaluate_frame(posed, labels, start, face_labels, *decoded(*chat_frames[step]))
         result.append(PosedFrame(ticks, posed, faded if face_labels is not None else None))
     return tuple(result)
 

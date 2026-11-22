@@ -6,12 +6,17 @@
 """Writes `src/rsps_toolkit/data/animation_names.json`: the snapshot 430 sequences a player can play, with names.
 
     uv run scripts/generate-animation-names.py --snapshot <openrs2-430 folder> --names <AnimationID.java> \
-        --commit <runelite commit>
+        --commit <runelite commit> --chat-names <seq.sym> --chat-commit <osrs-dumps commit>
 
 A sequence is listed when every frame it shows uses frame map 0, the map of the player's walk (819). Names come from
 RuneLite's generated `runelite-api/src/main/java/net/runelite/api/gameval/AnimationID.java` (BSD 2-Clause), downloaded
 at the given commit; they are current names for the same ids. A listed sequence without a RuneLite name is refused,
 so a gap cannot pass silently.
+
+The chat clips are listed apart, under "chat_clips": each sequence of snapshot 430 with frames whose name in
+`symbols/seq.sym` of the osrs-dumps repo, at the given commit, starts with `chat`, with that name (spec 183, ADR 0038).
+They play on a chathead, not on the player body, so they are not in "clips". seq.sym holds the names of a current cache
+for the same ids.
 """
 
 import argparse
@@ -35,6 +40,8 @@ def main() -> None:
     parser.add_argument("--snapshot", type=Path, required=True)
     parser.add_argument("--names", type=Path, required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--chat-names", type=Path, required=True)
+    parser.add_argument("--chat-commit", required=True)
     parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
     names: dict[int, str] = {}
@@ -52,6 +59,16 @@ def main() -> None:
             if sequence_id not in names:
                 raise SystemExit(f"Sequence {sequence_id} plays on the player but RuneLite has no name for it")
             clips[sequence_id] = names[sequence_id]
+    sequences = store.files(CONFIG_INDEX, SEQUENCE_GROUP)
+    chat_clips = {}
+    for line in args.chat_names.read_text().splitlines():
+        sequence_id, _, name = line.partition("\t")
+        if (
+            name.startswith("chat")
+            and int(sequence_id) in sequences
+            and decode_sequence(sequences[int(sequence_id)]).frames
+        ):
+            chat_clips[int(sequence_id)] = name
     metadata = json.loads((args.snapshot / "metadata.json").read_text())
     header = {
         "source": "Sequences of snapshot 430 whose frames all use frame map 0, the player's",
@@ -61,12 +78,24 @@ def main() -> None:
             "openrs2_id": metadata["id"],
             "dat2_sha256": hashlib.sha256((args.snapshot / "cache/main_file_cache.dat2").read_bytes()).hexdigest(),
         },
+        "chat_names": "osrs-dumps symbols/seq.sym, the names that start with chat",
+        "osrs_dumps_commit": args.chat_commit,
         "generator": "scripts/generate-animation-names.py",
     }
     lines = [f'"{key}":{json.dumps(value, separators=(",", ":"))},' for key, value in header.items()]
     rows = [f'"{sequence_id}":{json.dumps(name)}' for sequence_id, name in clips.items()]
-    args.output.write_text("{\n" + "\n".join(lines) + '\n"clips":{\n' + ",\n".join(rows) + "\n}\n}\n")
-    print(f"{len(clips)} clips written to {args.output}")
+    chats = [f'"{sequence_id}":{json.dumps(name)}' for sequence_id, name in sorted(chat_clips.items())]
+    args.output.write_text(
+        "{\n"
+        + "\n".join(lines)
+        + '\n"clips":{\n'
+        + ",\n".join(rows)
+        + '\n},\n"chat_clips":{\n'
+        + ",\n".join(chats)
+        + "\n}\n}\n",
+        newline="\n",
+    )
+    print(f"{len(clips)} clips and {len(chat_clips)} chat clips written to {args.output}")
 
 
 if __name__ == "__main__":
