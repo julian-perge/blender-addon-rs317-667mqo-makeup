@@ -127,6 +127,8 @@ def bake_clip(
 
     A chathead, a spot effect or another NPC collection is baked with `appearance_clip.bake_npc_clip`, which poses a
     chathead with the chat frames of the clip (ADR 0038)."""
+    if isinstance(player, SpotEffect) and player.rig is None:
+        raise ValueError(f"{player.collection.name} has no sequence, so it has no rig to bake a clip on")
     collection = player if isinstance(player, bpy.types.Collection) else player.collection
     clip = CacheClip(Js5Store(folder), sequence)
     if npc_collection.NPC_KEY in collection:
@@ -368,8 +370,9 @@ class SpotEffect:
     mesh: bpy.types.Object
     start: int
     """The first frame that shows it."""
-    end: int | None
-    """The first frame after its sequence, which no longer shows it, or None for a spot effect with no sequence."""
+    end: int
+    """The first frame that no longer shows it: the frame after its sequence, or the frame after `start` for a spot
+    effect with no sequence, as `ap.fb` ends it."""
 
 
 def create_spot_effect(
@@ -390,8 +393,8 @@ def create_spot_effect(
     It is an NPC collection, rigged for the frame map of its sequence. The rig holds the scale and the turn of the
     spot effect. With no `joint`, the rig is at `location` and `height` game units higher, as the client lifts a spot
     effect on an actor by its height. With `joint=(rig, name)`, it is on that joint of the rig with `attach_to_joint`
-    and `offset`. A spot effect with no sequence is one mesh object at its place, shown from `start`. `name`
-    defaults to `Spot effect <id>`.
+    and `offset`. A spot effect with no sequence is one mesh object with the scale and the turn at its place, shown on
+    the frame `start` only, as `ap.fb` ends it on the next tick. `name` defaults to `Spot effect <id>`.
 
     It refuses a spot effect that the cache lacks, a `location` or `height` with a `joint`, a joint that the rig
     lacks, and a model with no vertex skins for a spot effect with a sequence, before any Blender data exists."""
@@ -409,15 +412,25 @@ def create_spot_effect(
     textures = appearance_preview.texture_pixels(folder, model, brightness)
     name = f"Spot effect {spot_effect_id}" if name is None else name
     place = (location[0], location[1], location[2] + height)
+    # ej.c turns (x, z) to (z, -x), which is a quarter turn clockwise seen from above (spot-effects.md).
+    turn = -math.radians(effect.rotation)
+    width, height_scale, _ = spot_effect_scale(effect)
     if effect.sequence == -1:
         mesh = appearance_preview.build_mesh(model, shading, name, brightness, loose=False, textures=textures)
         collection = bpy.data.collections.new(name)
         _scene_collection().children.link(collection)
         obj = bpy.data.objects.new(name, mesh)
         collection.objects.link(obj)
-        obj.location = place
-        _key_shown(obj, start, None)
-        return SpotEffect(collection, None, obj, start, None)
+        # Game (x, y, z) is Blender (x, z, -y), so the width scale goes on Blender x and y and the height on z.
+        obj.scale = (width, width, height_scale)
+        if joint is None:
+            obj.location = place
+            obj.rotation_euler.z = turn
+        else:
+            attach_to_joint(obj, joint[0], joint[1], offset=offset, rotation=(0.0, 0.0, turn))
+        # ap.fb ends a graphic with no sequence on the tick after it starts (offset 2238, spot-effects.md).
+        _key_shown(obj, start, start + 1)
+        return SpotEffect(collection, None, obj, start, start + 1)
     if model.vertex_skins is None:
         raise ValueError(
             f"The model {effect.model} of spot effect {spot_effect_id} has no vertex skins for its sequence"
@@ -434,8 +447,6 @@ def create_spot_effect(
     )
     try:
         rig = appearance_collection.armature_of(collection)
-        # ej.c turns (x, z) to (z, -x), which is a quarter turn clockwise seen from above (spot-effects.md).
-        turn = -math.radians(effect.rotation)
         if joint is None:
             rig.location = place
             rig.rotation_euler.z = turn

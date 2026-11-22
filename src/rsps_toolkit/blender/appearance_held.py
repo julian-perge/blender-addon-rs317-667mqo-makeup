@@ -168,6 +168,7 @@ def _ensure_held_objects(collection: bpy.types.Collection, found: Variant) -> No
     rig_obj = appearance_collection.armature_of(collection)
     variant_rig = derive_rig(found.model)
     _ensure_label_bones(rig_obj, variant_rig)
+    textures = None
     for slot in changed_slots(collection, found.equipment):
         item = found.equipment[slot] - ITEM_OFFSET
         if item < 0 or _held_object(collection, slot, item) is not None:
@@ -176,6 +177,8 @@ def _ensure_held_objects(collection: bpy.types.Collection, found: Variant) -> No
         brightness = collection.get(appearance_collection.BRIGHTNESS_KEY)
         if brightness is None:
             brightness = preferences.brightness()
+        if textures is None:
+            textures = appearance_preview.texture_pixels(found.folder, found.model, brightness)
         obj = appearance_collection.mesh_object(
             found.model,
             found.shading,
@@ -185,7 +188,7 @@ def _ensure_held_objects(collection: bpy.types.Collection, found: Variant) -> No
             appearance_collection.HELD,
             found.slots[slot],
             False,
-            appearance_preview.texture_pixels(found.folder, found.model, brightness),
+            textures,
         )
         obj[appearance_collection.HELD_SLOT_KEY] = slot
         obj[appearance_collection.HELD_ITEM_KEY] = item

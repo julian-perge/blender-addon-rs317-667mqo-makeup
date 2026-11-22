@@ -113,7 +113,7 @@ puff = scripting.create_spot_effect(CACHE, 86, brightness=BRIGHTNESS, location=t
 
 - A spot effect is lit as the client lights it and plays its sequence once from `start` ([ADR 0037](adr/0037-a-spot-effect-is-an-npc-collection-that-plays-its-sequence-once.md)). The server gives the delay of a spot effect in the game, so the script picks `start`.
 - At a point, `height` lifts it in game units, as the client lifts it on an actor. On a joint, `offset` is in the axes of the joint, as for `attach_to_joint`.
-- The rig holds the scale and the turn of the spot effect. A spot effect with no sequence has no rig and is never hidden.
+- The rig holds the scale and the turn of the spot effect. A spot effect with no sequence has no rig and shows on the frame `start` only, as the client ends it on the next tick.
 
 ## Chatheads
 

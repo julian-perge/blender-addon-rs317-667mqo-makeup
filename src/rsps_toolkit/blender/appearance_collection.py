@@ -109,6 +109,7 @@ def remove_collection(collection: bpy.types.Collection) -> None:
         if action is not None and action.users == 0:
             bpy.data.actions.remove(action)
     appearance_fades.remove_unused(materials)
+    appearance_preview.remove_unused_materials(materials)
     bpy.data.collections.remove(collection)
 
 

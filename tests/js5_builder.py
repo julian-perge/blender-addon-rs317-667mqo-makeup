@@ -13,7 +13,7 @@ CONFIG_INDEX, MODEL_INDEX = 2, 7
 REGION_FIXTURES = Path(__file__).parent / "fixtures/region"
 REGION_TERRAINS = tuple(f"m{x}_{y}" for x in (47, 48, 49) for y in (49, 50, 51))
 """The terrain groups of region `48_50` and its 8 neighbours, which `tests/fixtures/region/` holds as the cache stores them."""
-KIT_GROUP, ENUM_GROUP, NPC_GROUP, ITEM_GROUP, SPOT_EFFECT_GROUP = 3, 8, 9, 10, 13
+KIT_GROUP, ENUM_GROUP, NPC_GROUP, ITEM_GROUP = 3, 8, 9, 10
 UNDERLAY_GROUP, OVERLAY_GROUP, LOC_GROUP = 1, 4, 6
 SPRITE_INDEX, TEXTURE_INDEX, TEXTURE_GROUP = 8, 9, 0
 
@@ -84,12 +84,11 @@ def build_cache(
     items: Mapping[int, bytes] | None = None,
     enums: Mapping[int, bytes] | None = None,
     npcs: Mapping[int, bytes] | None = None,
-    spot_effects: Mapping[int, bytes] | None = None,
     textures: Mapping[int, bytes] | None = None,
     sprites: Mapping[int, bytes] | None = None,
 ) -> None:
-    """Write a disk cache that holds each model as file 0 of its own group in index 7. The kits, enums, NPCs, items
-    and spot effects become config groups 3, 8, 9, 10 and 13 in index 2, and each definition's id is its file id. A
+    """Write a disk cache that holds each model as file 0 of its own group in index 7. The kits, enums, NPCs and items
+    become config groups 3, 8, 9 and 10 in index 2, and each definition's id is its file id. A
     config group with one file has no size table, as in a real cache. A group with no files is left out. The reference
     table of index 2 holds each config group's CRC32, as in a real cache. The textures become group 0 of index 9 and
     each sprite group a group of index 8, as `build_region_cache` writes them. `region_textures()` gives the textures
@@ -101,7 +100,6 @@ def build_cache(
             (ENUM_GROUP, enums),
             (NPC_GROUP, npcs),
             (ITEM_GROUP, items),
-            (SPOT_EFFECT_GROUP, spot_effects),
         )
         if files
     }
@@ -155,8 +153,8 @@ def item_definition(
 
 
 def read_cache(folder: Path) -> dict[str, dict[int, bytes]]:
-    """Read back the models, kits, items, enums, NPCs, spot effects, textures and sprites of a cache that `build_cache`
-    wrote, as its keyword arguments."""
+    """Read back the models, kits, items, enums, NPCs, textures and sprites of a cache that `build_cache` wrote, as its
+    keyword arguments."""
     store = Js5Store(folder)
     config = store.groups(CONFIG_INDEX)
     indexes = {index for index in (TEXTURE_INDEX, SPRITE_INDEX) if (folder / f"main_file_cache.idx{index}").exists()}
@@ -175,7 +173,6 @@ def read_cache(folder: Path) -> dict[str, dict[int, bytes]]:
                 ("items", ITEM_GROUP),
                 ("enums", ENUM_GROUP),
                 ("npcs", NPC_GROUP),
-                ("spot_effects", SPOT_EFFECT_GROUP),
             )
         },
     }

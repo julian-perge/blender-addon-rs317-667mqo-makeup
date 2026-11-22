@@ -587,3 +587,29 @@ def test_faces_of_one_alpha_share_one_material_on_every_mesh():
 
     assert first.materials[1] == second.materials[1]
     assert [m.get(appearance_preview.ALPHA_KEY) for m in first.materials] == [None, 32]  # pyrefly: ignore
+
+
+def test_a_polygon_whose_material_slot_the_user_removed_goes_back_to_the_plain_material():
+    # Stored data survives the user's edits (CODING_STANDARDS.md): rs_lit_slot names slot 1, which the user removes.
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, 960],
+        face_textures=[None, None],
+        render_priorities=[0, 0],
+        face_alphas=[0, 64],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    obj = bpy.data.objects.new("Glass", appearance_preview.build_mesh(model, light(model), "Glass"))
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    mesh.materials.pop(index=1)
+    owner = bpy.data.objects.new("Owner", None)
+
+    appearance_fades.apply_fades(obj, owner, [appearance_fades.FadeGroup((1,), 0, (0,), (0, 128))])
+    appearance_fades.apply_fades(obj, owner, [])
+
+    after = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", after)
+    assert after == [0, 0]

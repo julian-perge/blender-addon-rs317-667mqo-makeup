@@ -63,7 +63,7 @@ The byte per face that the client lights a model by. 0 is a smooth face, 1 is a 
 _Avoid_: face type, draw type
 
 **Face alpha**:
-A byte of transparency per face, where 0 is opaque and 255 is fully transparent. A plain face covers (256 - alpha) / 256 of its pixels. A textured face ignores it, except that alpha 254 and 255 hide it ([ADR 0036](docs/adr/0036-textured-faces-and-face-alpha-show-as-the-client-draws-them.md)).
+A byte of transparency per face, where 0 is opaque and 255 is fully transparent. A plain face covers (256 - alpha) / 256 of its pixels, a plain face of alpha 254 covers none, and the client never draws a face of alpha 255. A textured face ignores it, except that alpha 254 and 255 hide it ([ADR 0036](docs/adr/0036-textured-faces-and-face-alpha-show-as-the-client-draws-them.md)).
 _Avoid_: opacity, transparency
 
 **Fade group**:

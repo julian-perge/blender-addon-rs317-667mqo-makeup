@@ -5,8 +5,9 @@ import struct
 
 from rsps_toolkit.animation.clip import FolderClip, load_chat_clip_names, pose_vertices
 
-# A frame map with one translate transform (type 1) that moves label 1.
-FRAME_MAP = bytes([1, 1, 1, 1])
+# A frame map with a translate transform (type 1) and a scale transform (type 3), each of label 1. The scale is about
+# the origin, so a scale after the move gives another place than a scale before it.
+FRAME_MAP = bytes([2, 1, 3, 1, 1, 1, 1])
 
 
 def frame(flag: int, value: int) -> bytes:
@@ -15,13 +16,19 @@ def frame(flag: int, value: int) -> bytes:
     return struct.pack(">HB", 9, 1) + bytes([flag, value + 64])
 
 
+def doubled() -> bytes:
+    """A frame of map 9 that scales transform 1 by 256 / 128 in x: two flags, then one two-byte smart value (value +
+    0xC000)."""
+    return struct.pack(">HB", 9, 2) + bytes([0, 1]) + (256 + 0xC000).to_bytes(2, "big")
+
+
 def clip_folder(tmp_path, chat_files: list[int]) -> FolderClip:
     """Two frames of group 7, file 0 (x + 10) and file 1 (x + 20), and the chat frames of `chat_files` in group 7,
-    where file 2 is y + 5."""
+    where file 2 is y + 5 and file 3 doubles x."""
     (tmp_path / "frames").mkdir()
     (tmp_path / "maps").mkdir()
     (tmp_path / "maps" / "9.dat").write_bytes(FRAME_MAP)
-    for file, data in ((0, frame(1, 10)), (1, frame(1, 20)), (2, frame(2, 5))):
+    for file, data in ((0, frame(1, 10)), (1, frame(1, 20)), (2, frame(2, 5)), (3, doubled())):
         (tmp_path / "frames" / f"7_{file}.dat").write_bytes(data)
     sequence = bytes([1]) + struct.pack(">H", 2) + struct.pack(">HH", 3, 4) + struct.pack(">HH", 0, 1)
     sequence += struct.pack(">HH", 7, 7)
@@ -32,8 +39,9 @@ def clip_folder(tmp_path, chat_files: list[int]) -> FolderClip:
 
 
 def test_a_chat_step_applies_its_frame_and_then_its_chat_frame(tmp_path):
-    frames = pose_vertices(((0, 0, 0),), (1,), clip_folder(tmp_path, [2]), chat=True)
-    assert frames[0].vertices == ((10, 5, 0),)
+    # The frame moves x from 1 to 11, and then the chat frame doubles it to 22. The other order would give 12.
+    frames = pose_vertices(((1, 0, 0),), (1,), clip_folder(tmp_path, [3]), chat=True)
+    assert frames[0].vertices == ((22, 0, 0),)
 
 
 def test_a_step_past_the_end_of_the_chat_frames_gets_its_frame_only(tmp_path):

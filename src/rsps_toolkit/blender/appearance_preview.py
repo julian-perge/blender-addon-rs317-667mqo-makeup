@@ -187,7 +187,8 @@ def _fill_mesh(
 
 def _alpha_material(alpha: int) -> bpy.types.Material:
     """The material of every player mesh of the file for a plain face of this alpha: it emits the lit corner colours
-    and covers (256 - alpha) / 256 of each pixel, as `ep.g` and `ep.m` blend such a face (ADR 0036,
+    and covers (256 - alpha) / 256 of each pixel, as `ep.g` and `ep.m` blend such a face, except that a face of alpha
+    254 covers nothing, because `ep.g` then copies the pixel beside it in place of the face (ADR 0036,
     docs/research/textured-light.md, section 2). It draws blended, and culls back faces as the plain material does."""
     name = f"{MATERIAL_NAME} alpha {alpha}"
     material = bpy.data.materials.get(name)
@@ -206,7 +207,7 @@ def _alpha_material(alpha: int) -> bpy.types.Material:
     links.new(light_node.outputs["Color"], emission.inputs["Color"])
     transparent = nodes.new("ShaderNodeBsdfTransparent")
     mix = nodes.new("ShaderNodeMixShader")
-    mix.inputs["Fac"].default_value = (256 - alpha) / 256
+    mix.inputs["Fac"].default_value = 0.0 if alpha == 254 else (256 - alpha) / 256
     links.new(transparent.outputs["BSDF"], mix.inputs[1])
     links.new(emission.outputs["Emission"], mix.inputs[2])
     links.new(mix.outputs["Shader"], nodes["Material Output"].inputs["Surface"])
@@ -229,7 +230,7 @@ def _texture_material(texture: int, pixels: TexturePixels | None, brightness: fl
     alpha does not count, because `ep.k` does not read it (docs/research/textured-light.md, section 2). With no
     pixels it emits magenta times the light value, as the scenery does (issue 130). Back faces are culled, as for the
     plain material."""
-    name = f"{MATERIAL_NAME} texture {texture} at {brightness:g}"
+    name = f"{MATERIAL_NAME} texture {texture} {'missing' if pixels is None else f'at {brightness:g}'}"
     material = bpy.data.materials.get(name)
     if material is not None:
         return material
@@ -351,3 +352,24 @@ def texture_pixels(folder: Path, model: Model, brightness: float) -> dict[int, T
         texture_id: (decoded_pixels(texture, sprites, brightness), texture.opaque)
         for texture_id, (texture, sprites) in textures.items()
     }
+
+
+def remove_unused_materials(materials: list[bpy.types.Material | None]) -> None:
+    """Remove the texture and alpha materials of `build_mesh` that no mesh uses any more, and the texture images that
+    only they used, so that a removed player, NPC or spot effect leaves none behind."""
+    for material in materials:
+        try:
+            if material is None or material.users or (TEXTURE_KEY not in material and ALPHA_KEY not in material):
+                continue
+        except ReferenceError:
+            # The fade materials in the list are removed already (`appearance_fades.remove_unused`).
+            continue
+        tree = material.node_tree
+        images: list[bpy.types.Image] = []
+        for node in [] if tree is None else tree.nodes:
+            if isinstance(node, bpy.types.ShaderNodeTexImage) and node.image is not None:
+                images.append(node.image)
+        bpy.data.materials.remove(material)
+        for image in images:
+            if image.users == 0:
+                bpy.data.images.remove(image)

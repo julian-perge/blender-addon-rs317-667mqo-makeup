@@ -163,12 +163,19 @@ def clear_fades(mesh_obj: bpy.types.Object) -> None:
 
 def lit_slots(mesh: bpy.types.Mesh) -> list[int]:
     """The material slot that `appearance_preview.build_mesh` gave each polygon, or slot 0 for each polygon of a mesh
-    built before meshes stored it, which had only the one lit material."""
+    built before meshes stored it, which had only the one lit material. A polygon that the user added has the value 0
+    of a new attribute value, so it gets slot 0 too."""
     slots = [0] * len(mesh.polygons)
     attribute = mesh.attributes.get(LIT_SLOT_ATTRIBUTE)
     if attribute is not None:
         attribute.data.foreach_get("value", slots)  # pyrefly: ignore[missing-attribute]
-    return slots
+    # A slot that the user removed, or that now holds a fade material, gives the polygon the plain material of slot 0.
+    materials = list(mesh.materials)
+    usable = [
+        index < len(materials) and (material := materials[index]) is not None and FADE_KEY not in material
+        for index in range(max(slots, default=0) + 1)
+    ]
+    return [slot if usable[slot] else 0 for slot in slots]
 
 
 def remove_unused(materials: list[bpy.types.Material | None]) -> None:

@@ -202,10 +202,9 @@ def test_a_textured_corner_holds_its_light_value_over_128_as_a_grey(cache):
     not (os.environ.get("RSPS_SNAPSHOT_430_CACHE") and Path(os.environ["RSPS_SNAPSHOT_430_CACHE"]).is_dir()),
     reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
 )
-def test_vial_of_water_shows_its_faces_of_alpha_254_with_a_cover_of_2_in_256():
+def test_vial_of_water_shows_its_glass_faces_and_its_faces_of_alpha_254_cover_nothing():
     # Model 2789 of Vial of water 227 has two faces of alpha 254 and faces of alpha 128 and 32 (RuneLite's model export
-    # of snapshot 430, docs/research/textured-light.md, section 4). dv.ae gives an untextured face of alpha 254 the
-    # colour 128, and ep.g draws it with that alpha.
+    # of snapshot 430, docs/research/textured-light.md, section 4).
     snapshot = Path(os.environ["RSPS_SNAPSHOT_430_CACHE"])
     mesh = mesh_of(scripting.import_item(snapshot, 227, brightness=BRIGHTNESS))
 
@@ -214,6 +213,10 @@ def test_vial_of_water_shows_its_faces_of_alpha_254_with_a_cover_of_2_in_256():
     alphas = [mesh.materials[slot].get(appearance_preview.ALPHA_KEY) for slot in slots]  # pyrefly: ignore
     assert alphas.count(254) == 2
     assert {128, 32} <= set(alphas)
+    # ep.g copies the pixel beside a face of alpha 254 in place of the face, so the face covers nothing.
+    glass = next(m for m in mesh.materials if m.get(appearance_preview.ALPHA_KEY) == 254)  # pyrefly: ignore
+    covers = [node.inputs["Fac"].default_value for node in glass.node_tree.nodes if node.type == "MIX_SHADER"]  # pyrefly: ignore
+    assert covers == [0.0]
 
 
 @pytest.mark.skipif(
@@ -781,12 +784,25 @@ def test_a_spot_effect_at_a_point_plays_its_sequence_once_and_is_hidden_after_it
 @SNAPSHOT
 def test_a_spot_effect_on_a_joint_follows_the_joint():
     player = scripting.create_player(snapshot(), Look(), brightness=BRIGHTNESS)
-    effect = scripting.create_spot_effect(snapshot(), 86, brightness=BRIGHTNESS, joint=(player.rig, "head"))
+    effect = scripting.create_spot_effect(snapshot(), 86, brightness=BRIGHTNESS, joint=(player.rig, "hand.R"))
 
     assert effect.rig is not None
     constraint = effect.rig.constraints[0]
     assert isinstance(constraint, bpy.types.ChildOfConstraint)
-    assert (constraint.target, constraint.subtarget) == (player.rig, "head")
+    assert (constraint.target, constraint.subtarget) == (player.rig, "hand.R")
+
+
+@SNAPSHOT
+def test_a_spot_effect_with_no_sequence_shows_on_its_start_frame_only_with_its_scale():
+    # Spot effect 9 has no sequence (fixtures/spot_effects). ap.fb ends a graphic with no sequence on the next tick
+    # (offset 2238, docs/research/spot-effects.md).
+    effect = scripting.create_spot_effect(snapshot(), 9, brightness=BRIGHTNESS, start=5)
+
+    assert (effect.rig, effect.end) == (None, 6)
+    assert hidden_on(effect.mesh, 5) == (False, False)
+    assert hidden_on(effect.mesh, 6) == (True, True)
+    with pytest.raises(ValueError, match="no sequence"):
+        scripting.bake_clip(effect, snapshot(), 654)
 
 
 @SNAPSHOT
@@ -850,6 +866,16 @@ def test_a_player_chathead_plays_chathap1_with_its_chat_frames():
     assert max((shown[i] - expected[i]).length for i in shown) < 1.0
 
 
+def test_a_duplicated_player_keeps_the_texture_of_its_worn_item(cache):
+    # Spec 183, section 1: Duplicate Player rebuilds the player from its stored settings and passes the textures.
+    player = scripting.create_player(cache, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    copy = appearance_collection.duplicate_player(player.collection, str(cache))
+
+    materials = [m for m in mesh_of(appearance_collection.mesh_of(copy)).materials if m is not None]
+    assert 16 in {material.get(appearance_preview.TEXTURE_KEY) for material in materials}
+
+
 @SNAPSHOT
 def test_the_chathead_of_man_bakes_chatneu1():
     head = scripting.create_npc_chathead(snapshot(), 3078, brightness=BRIGHTNESS)
@@ -869,3 +895,12 @@ def test_an_npc_with_no_chathead_models_and_an_unknown_chat_clip_are_refused():
     with pytest.raises(ValueError, match="not a chat clip"):
         scripting.chat_clip("chathap9")
     assert not bpy.data.objects
+
+
+def test_removing_a_player_with_a_textured_item_leaves_no_texture_material_or_image(cache):
+    player = scripting.create_player(cache, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    appearance_collection.remove_collection(player.collection)
+
+    assert not [m for m in bpy.data.materials if appearance_preview.TEXTURE_KEY in m]
+    assert not bpy.data.images

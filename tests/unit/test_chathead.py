@@ -100,3 +100,12 @@ def test_an_npc_with_no_chathead_models_is_refused():
 
 def test_the_widget_light_is_that_of_hy_u():
     assert WIDGET_LIGHTING == (64, 768, -50, -10, -50)
+
+
+def test_a_female_head_takes_the_female_head_models_of_an_item():
+    # The Dragon med helm 1149 has the female head models 117 and 129 (RuneLite's row), which iz.o joins for a female.
+    item = decode_item(1149, (FIXTURES / "chathead" / "item-1149.dat").read_bytes()).worn
+    equipment = [0] * 12
+    equipment[0] = 1149 + 512
+    head = player_head_model(equipment, KITS, {1149: item}, tagged, [0] * 5, PALETTE, female=True)
+    assert head.face_colours == [117, 129]

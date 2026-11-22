@@ -22,13 +22,13 @@ The issue names three capabilities. They share the lit mesh of `appearance_previ
 
 Each item is a guess until the owner confirms it. The decision comment of the build lists them again.
 
-1. A player keeps the render types that its flat shading gives (`lighting.light_hsl` before this spec). The join of parts loses a stored render type 2 or 3, as `lighting._stored_render_types` says. An item, a spot effect and a chathead model of one part use the stored render types of the model.
-2. Face alpha at rest shows on players, items, NPCs, spot effects and chatheads: a plain face covers (256 - alpha) / 256 of its pixels, as the region scenery does. Before this spec a player face drew opaque at rest.
+1. A player keeps the render types that its flat shading gives (`lighting.light_hsl` before this spec). The client's join copies the stored render type of each part, but the toolkit's `appearance.merge` drops it, so a stored render type 2 or 3 of a part is lost (accepted gap). A model of one part, such as an inventory model, uses its stored render types.
+2. Face alpha at rest shows on players, items, NPCs, spot effects and chatheads: a plain face of alpha 1 to 253 covers (256 - alpha) / 256 of its pixels, as the region scenery does, and a plain face of alpha 254 covers nothing (`ep.g` copies the pixel beside it). Before this spec a player face drew opaque at rest.
 3. A face that the client never draws (third lit value -2) is left out of the mesh. A clip that changes its alpha does not show it.
 4. A textured face in a fade group shows the grey light value without its texture while the clip fades it.
 5. A texture image is shared by texture id and brightness in one file, and a texture material by texture id and brightness. A texture that a caller does not supply shows magenta times the light value, as in the region scenery.
 6. The texture animation of the client (such as the moving lava of the Fire cape) is not shown.
-7. A spot effect plays its sequence once, from `start`, with the frame schedule of a Pose (frame 0 shows one tick longer), and its mesh is hidden from the frame after its last tick. A spot effect with no sequence shows its rest model from `start` and is never hidden.
+7. A spot effect plays its sequence once, from `start`, with the frame schedule of a Pose (frame 0 shows one tick longer), and its mesh is hidden from the frame after its last tick. A spot effect with no sequence shows on the frame `start` only, because `ap.fb` ends it on the next tick (evidence, offset 2238).
 8. A spot effect on a joint takes the place and the turn of the joint. The client puts it at the actor's place and lifts it by a height, and turns it with the actor (Guess in [spot-effects.md](../docs/research/spot-effects.md)).
 9. A chathead is rigged for the frame map of chatneu1 (588), the frame map 82 of the human chat clips, unless the script names another sequence.
 10. A chat clip loops in the client widget with no extra tick for frame 0 after the first cycle. The bake repeats it as a Pose, so frame 0 gets one extra tick in each cycle.
@@ -86,8 +86,8 @@ tests/unit/, tests/blender/                   Tests.
 ### 2. Textured faces and face alpha on a lit item
 
 - `scripting.import_item` lights the inventory model with `light` and the render types of the model, and passes its textures.
-- A plain face with alpha `a` from 1 to 255 gets a material that emits `rs_lit` and covers `(256 - a) / 256` of its pixels (`ep.g` and `ep.m`, textured-light.md section 2). Materials are shared by alpha. Face alpha 0 keeps the one shared material of players.
-- Vial of water (227, model 2789) builds. Its two faces of alpha 254 are drawn with a cover of 2 / 256.
+- A plain face with alpha `a` from 1 to 254 gets a material that emits `rs_lit` and covers `(256 - a) / 256` of its pixels, or nothing for 254 (`ep.g` and `ep.m`, textured-light.md section 2). A face of alpha 255 is not in the mesh (section 1). Materials are shared by alpha. Face alpha 0 keeps the one shared material of players.
+- Vial of water (227, model 2789) builds. Its two faces of alpha 254 cover nothing.
 
 ### 3. The spot effect decoder
 

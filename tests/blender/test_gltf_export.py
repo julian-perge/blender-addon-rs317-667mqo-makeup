@@ -1338,3 +1338,24 @@ def test_a_face_past_the_last_material_slot_draws_with_the_last_slot(tmp_path: P
     export(path)
     gltf, _ = read_glb(path)
     assert [m["name"] for m in gltf["materials"]] == ["rs_lit_100"]
+
+
+def test_the_export_refuses_a_player_mesh_with_textured_faces():
+    # Spec 183 leaves the glTF export of textured faces out, so a textured face is a problem, not a colour -1.
+    from rsps_toolkit.blender import export_gltf
+
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, None],
+        face_textures=[None, 16],
+        render_priorities=[0, 0],
+        face_alphas=[0, 0],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    obj = bpy.data.objects.new("Cape", appearance_preview.build_mesh(model, light(model), "Cape"))
+
+    assert export_gltf.face_value_problems([obj]) == [
+        "Cape has textured faces, which the glTF export does not write yet."
+    ]
