@@ -97,8 +97,39 @@ scripting.attach_to_joint(waterskin, player.rig, "hand.R", offset=(0.0, 0.0, 0.0
 - `offset` is in game units in the axes of the joint, and `rotation` is an XYZ Euler in radians.
 - The joints of a player are `root`, `spine`, `head`, `upper_arm.L`, `forearm.L`, `hand.L`, `thigh.L`, `shin.L`, `foot.L` and the same with `.R`.
 - The attached object takes the scale of its joint. A baked clip can scale a joint by a few parts in a thousand, because the bake fits each joint to the client's vertices.
-- A model with a textured face, or a face alpha of 254 or 255, is refused.
+- A textured face shows its texture times the light of the client, and a plain face with a face alpha covers (256 - alpha) / 256 of its pixels. A face that the client never draws is left out ([ADR 0036](adr/0036-textured-faces-and-face-alpha-show-as-the-client-draws-them.md)). The same holds for the worn items of a player, such as the Fire cape 6570.
+
+```python
+vial = scripting.import_item(CACHE, 227, brightness=BRIGHTNESS)  # Vial of water: glass faces with face alpha
+```
+
+## Spot effects
+
+```python
+smoke = scripting.create_spot_effect(CACHE, 86, brightness=BRIGHTNESS, start=0, joint=(player.rig, "head"))
+smoke.start, smoke.end  # shown from frame 0, hidden from smoke.end on
+puff = scripting.create_spot_effect(CACHE, 86, brightness=BRIGHTNESS, location=tuple(point), height=100.0)
+```
+
+- A spot effect is lit as the client lights it and plays its sequence once from `start` ([ADR 0037](adr/0037-a-spot-effect-is-an-npc-collection-that-plays-its-sequence-once.md)). The server gives the delay of a spot effect in the game, so the script picks `start`.
+- At a point, `height` lifts it in game units, as the client lifts it on an actor. On a joint, `offset` is in the axes of the joint, as for `attach_to_joint`.
+- The rig holds the scale and the turn of the spot effect. A spot effect with no sequence has no rig and is never hidden.
+
+## Chatheads
+
+```python
+head = scripting.create_player_chathead(CACHE, look, brightness=BRIGHTNESS, location=(0.0, 0.0, 0.0))
+scripting.bake_clip(head, CACHE, scripting.chat_clip("chathap1"), start=0, repeat_until=150)
+man = scripting.create_npc_chathead(CACHE, 3078, brightness=BRIGHTNESS, location=(300.0, 0.0, 0.0))
+scripting.bake_clip(man, CACHE, scripting.chat_clip("chatneu1"), start=0)
+```
+
+- A chathead is lit with the widget light `(64, 768, -50, -10, -50)` of the client, and a chat clip plays with its chat frames ([ADR 0038](adr/0038-a-chathead-is-an-npc-collection-lit-with-the-widget-light.md)).
+- A player chathead takes the chathead models of the kits and the head models of the worn items of the look.
+- The rig fits the human chat clips (frame map 82). For a goblin, ent or skull head, give `rig_sequence` a chat clip of that head, such as `scripting.chat_clip("chatgoblin1")`.
+- `scripting.chat_clip(name)` gives the id of a chat clip by its name in `seq.sym`, such as chathap1 (567), chatneu1 (588), chatshock1, chatlaugh1, chatsad1 and chatang1.
+- The script places its own camera: the client turns and zooms a chathead in the dialogue box.
 
 ## Not here
 
-Spot effects, chatheads, scenery animation, levels above 0 and bridge tiles.
+Scenery animation, texture animation, levels above 0 and bridge tiles.
