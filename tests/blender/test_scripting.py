@@ -10,6 +10,7 @@ import pytest
 from js5_builder import build_region_cache, item_definition, region_textures, rewrite_cache
 from mathutils import Vector
 
+from rsps_toolkit.animation.clip import CacheClip, read_sequence
 from rsps_toolkit.blender import (
     appearance_clip,
     appearance_collection,
@@ -735,3 +736,75 @@ def test_a_save_that_fails_keeps_the_imported_region_and_warns(region_cache, tmp
 
     assert regions.appended == (False,)
     assert regions.collections[0].name == "Region 48_50"
+
+
+SNAPSHOT = pytest.mark.skipif(
+    not (os.environ.get("RSPS_SNAPSHOT_430_CACHE") and Path(os.environ["RSPS_SNAPSHOT_430_CACHE"]).is_dir()),
+    reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
+)
+
+
+def snapshot() -> Path:
+    return Path(os.environ["RSPS_SNAPSHOT_430_CACHE"])
+
+
+def hidden_on(obj: bpy.types.Object, frame: int) -> tuple[bool, bool]:
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.frame_set(frame)
+    return obj.hide_viewport, obj.hide_render
+
+
+@SNAPSHOT
+def test_a_spot_effect_at_a_point_plays_its_sequence_once_and_is_hidden_after_it():
+    # The smoke puff 86 shows model 3076 with sequence 654 (fixtures/spot_effects). ap.fb ends the graphic when its
+    # frame passes the last one, and frame 0 shows one tick longer than its duration (docs/research/spot-effects.md).
+    durations = read_sequence(CacheClip(Js5Store(snapshot()), 654)).durations
+    effect = scripting.create_spot_effect(
+        snapshot(), 86, brightness=BRIGHTNESS, start=10, location=(128.0, 0.0, 0.0), height=40.0
+    )
+
+    assert effect.rig is not None and effect.end is not None
+    assert effect.rig.location[:] == (128.0, 0.0, 40.0)
+    assert effect.end == 10 + sum(durations) + 1
+    strips = effect.rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips  # pyrefly: ignore
+    assert [round(strip.frame_start) for strip in strips] == [10]
+    assert hidden_on(effect.mesh, 9) == (True, True)
+    assert hidden_on(effect.mesh, 10) == (False, False)
+    assert hidden_on(effect.mesh, effect.end - 1) == (False, False)
+    assert hidden_on(effect.mesh, effect.end) == (True, True)
+
+
+@SNAPSHOT
+def test_a_spot_effect_on_a_joint_follows_the_joint():
+    player = scripting.create_player(snapshot(), Look(), brightness=BRIGHTNESS)
+    effect = scripting.create_spot_effect(snapshot(), 86, brightness=BRIGHTNESS, joint=(player.rig, "head"))
+
+    assert effect.rig is not None
+    constraint = effect.rig.constraints[0]
+    assert isinstance(constraint, bpy.types.ChildOfConstraint)
+    assert (constraint.target, constraint.subtarget) == (player.rig, "head")
+
+
+@SNAPSHOT
+def test_a_spot_effect_takes_its_scale_and_turn_on_its_rig():
+    # Spot effect 188 has width 256 and height 128, and 79 has the rotation 270 (fixtures/spot_effects). ej.c turns
+    # (x, z) to (z, -x) once for each quarter (spot-effects.md).
+    wide = scripting.create_spot_effect(snapshot(), 188, brightness=BRIGHTNESS)
+    turned = scripting.create_spot_effect(snapshot(), 79, brightness=BRIGHTNESS)
+
+    assert wide.rig is not None and turned.rig is not None
+    assert wide.rig.scale[:] == pytest.approx((2.0, 2.0, 1.0))
+    assert turned.rig.rotation_euler.z == pytest.approx(-math.radians(270))
+
+
+@SNAPSHOT
+def test_a_spot_effect_on_a_joint_with_a_height_is_refused_before_any_change():
+    player = scripting.create_player(snapshot(), Look(), brightness=BRIGHTNESS)
+    before = (len(bpy.data.objects), len(bpy.data.collections))
+
+    with pytest.raises(ValueError, match="no location or height"):
+        scripting.create_spot_effect(snapshot(), 86, brightness=BRIGHTNESS, joint=(player.rig, "head"), height=10.0)
+    with pytest.raises(LookupError, match="no spot effect 99999"):
+        scripting.create_spot_effect(snapshot(), 99999, brightness=BRIGHTNESS)
+    assert (len(bpy.data.objects), len(bpy.data.collections)) == before
