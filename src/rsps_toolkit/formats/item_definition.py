@@ -49,6 +49,7 @@ def decode_item(item_id: int, data: bytes) -> ItemDefinition:
     inventory_model = -1
     resize = [128, 128, 128]
     ambient = contrast = 0
+    heads = [-1] * 4
     while (opcode := reader.u8()) != 0:
         if opcode == 1:
             inventory_model = reader.u16()
@@ -58,7 +59,10 @@ def decode_item(item_id: int, data: bytes) -> ItemDefinition:
             ambient = _s8(reader)
         elif opcode == 114:
             contrast = _s8(reader) * 5
-        elif opcode in (4, 5, 6, 7, 8, 75, 90, 91, 92, 93, 94, 95, 97, 98, 99, 139, 140, 148, 149):
+        elif 90 <= opcode <= 93:
+            # The chathead models: 90 male, 91 female, 92 male second, 93 female second (docs/research/chatheads.md).
+            heads[opcode - 90] = reader.u16()
+        elif opcode in (4, 5, 6, 7, 8, 75, 94, 95, 97, 98, 99, 139, 140, 148, 149):
             reader.u16()
         elif opcode == 2:
             name = _string(reader)
@@ -142,6 +146,8 @@ def decode_item(item_id: int, data: bytes) -> ItemDefinition:
         female_offset=female_offset,
         recolours=recolours,
         retextures=retextures,
+        male_head_models=(heads[0], heads[2]),
+        female_head_models=(heads[1], heads[3]),
     )
     return ItemDefinition(
         worn=worn,

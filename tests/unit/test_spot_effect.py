@@ -28,7 +28,11 @@ def test_a_spot_effect_has_the_values_of_runelite(spot_effect_id):
     effect = decoded(spot_effect_id)
 
     assert (effect.model, effect.sequence) == (row["modelId"], row["animationId"])
-    assert (effect.resize_width, effect.resize_height, effect.rotation) == (row["resizeX"], row["resizeY"], row["rotaton"])
+    assert (effect.resize_width, effect.resize_height, effect.rotation) == (
+        row["resizeX"],
+        row["resizeY"],
+        row["rotaton"],
+    )
     assert (effect.ambient, effect.contrast) == (row["ambient"], row["contrast"])
     finds, shows = row.get("recolorToFind", []), row.get("recolorToReplace", [])
     assert effect.recolours == tuple(zip(finds, shows, strict=True))
