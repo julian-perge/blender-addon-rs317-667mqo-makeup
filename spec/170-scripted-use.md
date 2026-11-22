@@ -15,9 +15,9 @@ Each item is a guess until the owner confirms it. The decision comment of the bu
 3. A lit item refuses a model with a textured face or a face alpha of 254 or 255, as a player does (`lighting.light_hsl`). #103 changes that.
 4. `repeat_until` is for a clip that plays as a Pose. A clip that plays as an Action follows its own loop offset, so the bake refuses the two together.
 5. Travel keys the location of the rig object in a straight line between the given points, with one tile in 30 frames at 50 fps for a walk. The run speed of 2 tiles in 30 frames is general knowledge of the game and is not checked in the client.
-6. The wall decoration offset moves the object, not the vertices, so the stored model data stays as the cache has it.
+6. The wall decoration clearance moves the object, not the vertices, so the stored model data stays as the cache has it.
 7. A saved region holds the region as the import made it, before the region origin and the turn. One file serves every origin.
-8. The key of a saved region holds the add-on version, a hash of the add-on's Python files, the size and the modified time of the cache data file and of the key file of the region, the region numbers, the brightness and the wall decoration offset.
+8. The key of a saved region holds the add-on version, a hash of the add-on's Python files, the size and the modified time of the cache data file and of the key file of the region, the region numbers, the brightness and the wall decoration clearance.
 9. `.gitattributes` gives every text file LF line ends on every system.
 
 ## Objective
@@ -44,7 +44,7 @@ BLENDER=<path to blender> scripts/test-blender.sh tests/blender/test_scripting.p
 ```
 src/rsps_toolkit/blender/scripting.py        The public functions of this spec. It reads no preference and no panel state.
 src/rsps_toolkit/blender/region_files.py     Save a region to a .blend and append it, with the key.
-src/rsps_toolkit/blender/region_import.py    import_region gets decoration_offset.
+src/rsps_toolkit/blender/region_import.py    import_region gets decoration_clearance.
 src/rsps_toolkit/blender/appearance_clip.py  bake_clip_to_rig gets repeat_until.
 src/rsps_toolkit/blender/render_style.py     The engine name of Blender 5.
 src/rsps_toolkit/formats/item_definition.py  ItemDefinition gets the inventory model, the resize, the ambient and the contrast.
@@ -149,16 +149,16 @@ It keys the location of the rig object at each point with linear interpolation a
 
 ### 9. Regions from a script (gaps a, h, i and j)
 
-`region_import.import_region` gets `decoration_offset: float = 0.0`. With a value above 0, each object of a placement with loc type 4 to 8 moves by that many game units along the mean of its face normals, weighted by face area, in the space of the region. An object whose normals sum to zero stays. The report gets the count of moved objects.
+`region_import.import_region` gets `decoration_clearance: float = 0.0`. With a value above 0, each object of a placement with loc type 4 to 8 moves by that many game units along the mean of its face normals, weighted by face area, in the space of the region. An object whose normals sum to zero stays. The report gets the count of moved objects.
 
 `blender/region_files.py`:
 
-- `region_key(folder, x, y, brightness, decoration_offset) -> str`: the key of assumption 8 as JSON text.
+- `region_key(folder, x, y, brightness, decoration_clearance) -> str`: the key of assumption 8 as JSON text.
 - `save_region(collection, path, key)`: writes the region collection and a text datablock named `rs_region_key <sha256 of the key>`, which holds the key, to a new .blend.
 - `append_region(parent, path, key) -> bpy.types.Collection | None`: reads the names of the file. When the text of the key is there, it appends the region collection, links it to `parent` and returns it. In every other case it changes nothing and returns None: no file, a file of another key, or a file that is not a .blend.
 
 ```python
-scripting.import_regions(folder, regions, *, brightness, origin_tile=None, turn=0.0, decoration_offset=0.0,
+scripting.import_regions(folder, regions, *, brightness, origin_tile=None, turn=0.0, decoration_clearance=0.0,
                          saved_folder=None, parent=None) -> Regions
 scripting.import_region(folder, x, y, **the same keywords) -> Regions
 ```
@@ -181,7 +181,7 @@ The Python follows [CODING_STANDARDS.md](../CODING_STANDARDS.md) and [docs/agent
 - Each gap gets a test that fails before its change. The task records the failing run.
 - Unit tests cover the decoder fields, the inventory model, the item light, the look preset and the travel frames. Their expected values come from RuneLite's JSON, from the bytecode offsets named in a comment, from `data/item_wear.json` and from the owner's decisions in issue 170.
 - Blender tests cover each function of `scripting` on the fixture caches of `tests/`: no add-on is enabled and no scene property exists while they run. They also cover the saved region: the same key appends, another key and a damaged file do not, and the appended region has the same objects, materials and image pixels.
-- Stored data: the wall decoration offset and the region move change only object transforms. Tests show that a second import in the same file and an append next to an import keep both regions right.
+- Stored data: the wall decoration clearance and the region move change only object transforms. Tests show that a second import in the same file and an append next to an import keep both regions right.
 - One script outside the repo builds the scene of the issue's "Done when" twice against snapshot 430, and the task records both run times.
 
 ## Boundaries

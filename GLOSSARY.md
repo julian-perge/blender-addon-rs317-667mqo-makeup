@@ -174,8 +174,8 @@ _Avoid_: baked light (the client light in `rs_lit` is baked too), Cycles light
 The world tile whose centre a scripted import puts at the Blender origin, at its ground height, with a turn around it in degrees. Regions of one import stand side by side around it, as in the game ([ADR 0031](docs/adr/0031-scripts-call-one-module-that-reads-no-preference.md)).
 _Avoid_: anchor tile, pivot
 
-**Wall decoration offset**:
-The game units that a region import moves each object of a wall decoration (loc types 4 to 8) along the mean of its face normals, so that a renderer with only a depth test draws it in front of its wall. It is 0 unless a script asks ([ADR 0034](docs/adr/0034-the-wall-decoration-offset-moves-objects-along-their-mean-face-normal.md)).
+**Wall decoration clearance**:
+The game units that a region import moves each object of a wall decoration (loc types 4 to 8) along the mean of its face normals, so that a renderer with only a depth test draws it in front of its wall. It is 0 unless a script asks ([ADR 0034](docs/adr/0034-the-wall-decoration-clearance-moves-objects-along-their-mean-face-normal.md)).
 _Avoid_: z-fight fix, decal offset
 
 **Saved region**:

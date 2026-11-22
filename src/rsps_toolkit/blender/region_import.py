@@ -128,7 +128,12 @@ def _span(axis: str, first: int, last: int) -> str:
 
 
 def import_region(
-    parent: bpy.types.Collection, folder: Path, x: int, y: int, brightness: float
+    parent: bpy.types.Collection,
+    folder: Path,
+    x: int,
+    y: int,
+    brightness: float,
+    decoration_clearance: float = 0.0,
 ) -> tuple[bpy.types.Collection, RegionReport]:
     """A new collection `Region <x>_<y>` in `parent`, with the object `Terrain <x>_<y>` and a child collection
     `Scenery <x>_<y>` of the level 0 placements (`region_scenery`), and the report of what it made. Everything is read
@@ -142,7 +147,10 @@ def import_region(
     49, Decisions).
 
     A region whose own terrain group the cache lacks is refused, and the name of the scenery collection is as above,
-    which the owner chose on 2026-11-14 (issue 47, Decisions)."""
+    which the owner chose on 2026-11-14 (issue 47, Decisions).
+
+    `decoration_clearance` is the wall decoration clearance in game units (ADR 0034). The operator leaves it 0, and
+    the count of moved objects is in the scenery counts of the report."""
     store = Js5Store(folder)
     terrain = load_terrain(store, x, y)
     if (x, y) in terrain.missing:
@@ -171,7 +179,9 @@ def import_region(
         region = bpy.data.collections.new(f"Region {x}_{y}")
         scenery = bpy.data.collections.new(f"Scenery {x}_{y}")
         region.children.link(scenery)
-        counts = scenery_objects(scenery, placed, locs, models, render_types, images, height, brightness)
+        counts = scenery_objects(
+            scenery, placed, locs, models, render_types, images, height, brightness, decoration_clearance
+        )
         terrain_obj = terrain_object(f"Terrain {x}_{y}", terrain, underlays, overlays, images, brightness, shadows)
         region.objects.link(terrain_obj)
         parent.children.link(region)

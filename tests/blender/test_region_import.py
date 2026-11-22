@@ -12,6 +12,7 @@ from typing import Any
 import bpy
 import pytest
 from js5_builder import REGION_FIXTURES, build_region_cache
+from mathutils import Vector
 from runelite_json import load_locs, load_overlays, load_underlays
 
 import rsps_toolkit.blender as addon
@@ -1221,6 +1222,172 @@ def hand_scenery(
     collection = bpy.data.collections.new("Scenery")
     counts = region_scenery.scenery_objects(collection, placed, locs, keys, render_types, {}, height, BRIGHTNESS)
     return collection, counts
+
+
+# One face in the plane of game z = 0, as a flat wall decoration is.
+PLATE_MODEL = Model(
+    vertices=[(0, 0, 0), (128, 0, 0), (0, -128, 0)],
+    faces=[(0, 1, 2)],
+    face_colours=[HAND_COLOUR],
+    face_textures=[None],
+    render_priorities=[0],
+    face_alphas=[0],
+    face_texture_triangles=[None],
+    flat_shaded=[False],
+)
+
+
+def plate_scenery(
+    placements: list[Placement], clearance: float, model: Model = PLATE_MODEL, **loc_changes: Any
+) -> tuple[bpy.types.Collection, region_scenery.SceneryCounts]:
+    """The scenery of the placements of loc 1, which shows `model` as a wall decoration (model type 4) and as an
+    object (type 10), with the wall decoration clearance."""
+    locs = {1: hand_loc(models=(11, 11), loc_types=(4, 10), **loc_changes)}
+    placed = place_scenery(placements, locs, lambda x, y: -40)
+    keys = {region_scenery.model_key(part, locs[1]): model for p in placed for part in p.parts}
+    collection = bpy.data.collections.new("Scenery")
+    counts = region_scenery.scenery_objects(
+        collection,
+        placed,
+        locs,
+        keys,
+        {(11,): [0] * len(model.faces)},
+        {},
+        lambda x, y: -40,
+        BRIGHTNESS,
+        decoration_clearance=clearance,
+    )
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.collection.children.link(collection)
+    view_layer = bpy.context.view_layer
+    assert view_layer is not None
+    view_layer.update()
+    return collection, counts
+
+
+def shown_normal(obj: bpy.types.Object) -> Vector:
+    """The mean of the face normals of the object as Blender shows them in the space of its collection, weighted by
+    face area. A normal goes through the inverse transpose of the object's matrix. For a mirrored object too, this is
+    the side that Blender draws as the front."""
+    normals = obj.matrix_world.to_3x3().inverted().transposed()
+    total = Vector()
+    for polygon in mesh_of(obj).polygons:
+        total = total + (normals @ polygon.normal).normalized() * polygon.area
+    return total.normalized()
+
+
+# Issue 170, gap i, and ADR 0034: the owner chose a move along the mean face normal for loc types 4 to 8.
+@pytest.mark.parametrize("loc_type", [4, 5, 6, 7, 8])
+@pytest.mark.parametrize("rotation", [0, 1, 2, 3])
+def test_each_object_of_a_wall_decoration_moves_by_the_clearance_along_its_mean_face_normal(loc_type, rotation):
+    placements = [Placement(1, 0, 5, 5, loc_type, rotation)]
+    plain, _ = plate_scenery(placements, 0.0)
+    places = [(obj.location.copy(), shown_normal(obj)) for obj in plain.objects]
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    moved, counts = plate_scenery(placements, 2.0)
+
+    # A wall decoration of type 8 shows two models, and each object moves along its own normal.
+    assert len(moved.objects) == (2 if loc_type == 8 else 1)
+    assert counts.moved_decorations == len(moved.objects)
+    for obj, (place, normal) in zip(moved.objects, places, strict=True):
+        step = obj.location - place
+        assert step.length == pytest.approx(2.0, abs=1e-4)
+        assert step.normalized().dot(normal) == pytest.approx(1.0, abs=1e-4)
+
+
+def test_the_two_objects_of_a_type_8_decoration_move_in_two_directions():
+    moved, _ = plate_scenery([Placement(1, 0, 5, 5, 8, 0)], 2.0)
+    first, second = (shown_normal(obj) for obj in moved.objects)
+    assert first.dot(second) < 0.99
+
+
+def test_the_clearance_moves_no_wall_and_no_object_and_leaves_the_meshes_as_they_are():
+    placements = [Placement(1, 0, 5, 5, 10, 0), Placement(1, 0, 8, 5, 4, 0)]
+    plain, _ = plate_scenery(placements, 0.0)
+    before = [
+        (obj.name, obj.location.copy(), [vertex.co.copy() for vertex in mesh_of(obj).vertices]) for obj in plain.objects
+    ]
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    moved, counts = plate_scenery(placements, 2.0)
+
+    assert counts.moved_decorations == 1
+    for obj, (name, place, vertices) in zip(moved.objects, before, strict=True):
+        assert obj.name == name
+        assert [vertex.co.copy() for vertex in mesh_of(obj).vertices] == vertices
+        assert ((obj.location - place).length > 1.0) == name.endswith("at 8_5")
+
+
+def test_with_no_clearance_no_object_moves_and_none_is_counted():
+    locs = {1: hand_loc(models=(11, 11), loc_types=(4, 10))}
+    (placed,) = place_scenery([Placement(1, 0, 8, 5, 4, 0)], locs, lambda x, y: -40)
+
+    scenery, counts = plate_scenery([Placement(1, 0, 8, 5, 4, 0)], 0.0)
+
+    assert counts.moved_decorations == 0
+    (obj,) = scenery.objects
+    assert (obj.location.x, obj.location.y, obj.location.z) == pytest.approx(placed.parts[0].location)
+
+
+def test_a_wall_decoration_whose_normals_sum_to_zero_stays():
+    # Two faces on the same corners that face opposite ways: the sum of their normals is zero (ADR 0034).
+    two_sided = replace(
+        PLATE_MODEL,
+        faces=[(0, 1, 2), (2, 1, 0)],
+        face_colours=[HAND_COLOUR] * 2,
+        face_textures=[None] * 2,
+        render_priorities=[0] * 2,
+        face_alphas=[0] * 2,
+        face_texture_triangles=[None] * 2,
+        flat_shaded=[False] * 2,
+    )
+    plain, _ = plate_scenery([Placement(1, 0, 8, 5, 4, 0)], 0.0, two_sided)
+    place = plain.objects[0].location.copy()
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    moved, counts = plate_scenery([Placement(1, 0, 8, 5, 4, 0)], 2.0, two_sided)
+
+    assert counts.moved_decorations == 0
+    assert moved.objects[0].location == place
+
+
+@needs_snapshot_430
+def test_an_import_with_the_clearance_moves_only_the_wall_decorations_of_48_50():
+    scene = bpy.context.scene
+    assert scene is not None
+    decorations = {
+        f"Loc {p.loc} at {p.x}_{p.y}"
+        for p in load_landscape(Js5Store(SNAPSHOT_430), 48, 50).placements
+        if p.level == 0 and 4 <= p.loc_type <= 8
+    }
+    others = {
+        f"Loc {p.loc} at {p.x}_{p.y}"
+        for p in load_landscape(Js5Store(SNAPSHOT_430), 48, 50).placements
+        if p.level == 0 and not 4 <= p.loc_type <= 8
+    }
+    plain, _ = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS)
+    before = [(obj.name, obj.location.copy(), obj.data) for obj in plain.children[0].objects]
+    bpy.ops.wm.read_homefile(use_empty=True)
+    scene = bpy.context.scene
+    assert scene is not None
+
+    region, report = region_import.import_region(scene.collection, SNAPSHOT_430, 48, 50, BRIGHTNESS, 2.0)
+
+    moved = 0
+    for obj, (name, place, _) in zip(region.children[0].objects, before, strict=True):
+        assert obj.name == name
+        distance = (obj.location - place).length
+        loc_name = without_number(name).removesuffix(" part 2")
+        if distance > 0:
+            assert distance == pytest.approx(2.0, abs=1e-3)
+            assert loc_name in decorations
+            moved += 1
+        elif loc_name not in others:
+            # A wall decoration that did not move has normals that sum to zero.
+            assert loc_name in decorations
+    assert report.scenery.moved_decorations == moved > 0
 
 
 def test_two_placements_that_differ_only_in_rotation_get_two_meshes_and_two_equal_ones_share_one():
