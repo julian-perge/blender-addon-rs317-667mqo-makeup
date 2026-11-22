@@ -316,3 +316,61 @@ def test_a_sequence_that_the_cache_lacks_is_refused():
 
     with pytest.raises(LookupError, match="no sequence 999999"):
         scripting.bake_clip(player.collection, SNAPSHOT_430, 999999)
+
+
+def place(rig: bpy.types.Object, frame: int) -> tuple[float, float, float]:
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.frame_set(frame)
+    return xyz(rig.location)
+
+
+# Issue 170, gap g: a clip does not move the place of an actor. A walk moves 1 tile of 128 game units in 0.6 seconds,
+# which is 30 frames at the 50 frames in a second of a clip (ADR 0035).
+def test_key_travel_moves_the_rig_one_tile_in_30_frames_at_one_speed(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS, location=(64.0, 64.0, 0.0))
+
+    last = scripting.key_travel(player.rig, [(64.0, 64.0, 0.0), (64.0, 448.0, -30.0)], start=10)
+
+    assert last == 100
+    assert place(player.rig, 10) == pytest.approx((64.0, 64.0, 0.0))
+    assert place(player.rig, 100) == pytest.approx((64.0, 448.0, -30.0))
+    # One speed: after 30 of the 90 frames the rig is a third of the way, in height too.
+    assert place(player.rig, 40) == pytest.approx((64.0, 192.0, -10.0), abs=1e-3)
+    assert place(player.rig, 0) == pytest.approx((64.0, 64.0, 0.0))
+    assert place(player.rig, 150) == pytest.approx((64.0, 448.0, -30.0))
+
+
+def test_key_travel_at_run_speed_takes_half_the_frames_and_turns_corners(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+
+    last = scripting.key_travel(
+        player.rig, [(0.0, 0.0, 0.0), (256.0, 0.0, 0.0), (256.0, 128.0, 0.0)], start=0, run=True
+    )
+
+    assert last == 45
+    assert place(player.rig, 30) == pytest.approx((256.0, 0.0, 0.0))
+    assert place(player.rig, 15) == pytest.approx((128.0, 0.0, 0.0), abs=1e-3)
+
+
+def test_a_player_with_travel_keys_takes_a_bone_bake_and_a_baked_player_takes_travel_keys(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+    scripting.key_travel(player.rig, [(0.0, 0.0, 0.0), (128.0, 0.0, 0.0)], start=0)
+
+    appearance_clip.bake_clip_to_rig(player.collection, WALK_CLIP, start=0, repeat_until=30)
+    scripting.key_travel(player.rig, [(128.0, 0.0, 0.0), (128.0, 128.0, 0.0)], start=30)
+    appearance_clip.bake_clip_to_rig(player.collection, WALK_CLIP, start=30, repeat_until=60)
+
+    assert place(player.rig, 15) == pytest.approx((64.0, 0.0, 0.0), abs=1e-3)
+    assert place(player.rig, 45) == pytest.approx((128.0, 64.0, 0.0), abs=1e-3)
+    assert player.rig.animation_data is not None
+    assert len(player.rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips) == 2
+
+
+def test_key_travel_refuses_fewer_than_two_points_before_any_key(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS)
+
+    with pytest.raises(ValueError, match="at least two points"):
+        scripting.key_travel(player.rig, [(0.0, 0.0, 0.0)], start=0)
+
+    assert player.rig.animation_data is None

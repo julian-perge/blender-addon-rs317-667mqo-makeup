@@ -7,6 +7,7 @@ call.
 """
 
 import functools
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from ..formats.item_model import inventory_model, item_lighting
 from ..formats.item_wear import ItemWear, load_item_wear
 from ..formats.js5 import Js5Store
 from ..formats.lighting import light_hsl
+from ..formats.travel import RUN_FRAMES_PER_TILE, WALK_FRAMES_PER_TILE, travel_frames
 from . import appearance_clip, appearance_collection, appearance_preview
 
 
@@ -115,6 +117,30 @@ def bake_clip(
     animation = appearance_collection.armature_of(player).animation_data
     assert animation is not None
     return next(s for s in animation.nla_tracks[appearance_clip.CLIP_TRACK].strips if round(s.frame_start) == start)
+
+
+def key_travel(rig: bpy.types.Object, points: Sequence[Sequence[float]], *, start: int, run: bool = False) -> int:
+    """Key the location of the rig object so that the actor is at the first point on frame `start` and goes from
+    point to point at one speed: 30 frames for a tile at a walk and 15 at a run (ADR 0035). It returns the frame of
+    the last point. Each point is x, y and z in the space of the rig object, such as a `Regions.tile_point`.
+
+    The keys go to the action of the rig object, beside the clip strips of the bone bakes. The actor does not turn
+    toward its direction. It refuses fewer than two points, before any key."""
+    frames = travel_frames(points, start, RUN_FRAMES_PER_TILE if run else WALK_FRAMES_PER_TILE)
+    for point, frame in zip(points, frames, strict=True):
+        rig.location = (point[0], point[1], point[2])
+        rig.keyframe_insert("location", frame=frame)
+    animation = rig.animation_data
+    assert animation is not None and animation.action is not None
+    for layer in animation.action.layers:
+        for strip in layer.strips:
+            for bag in strip.channelbags:  # pyrefly: ignore[missing-attribute]
+                for curve in bag.fcurves:
+                    if curve.data_path == "location":
+                        for key in curve.keyframe_points:
+                            if start <= key.co.x <= frames[-1]:
+                                key.interpolation = "LINEAR"
+    return frames[-1]
 
 
 def _is_label_bone(name: str) -> bool:
