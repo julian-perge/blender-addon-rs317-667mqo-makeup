@@ -13,12 +13,14 @@ from pathlib import Path
 import bpy
 from mathutils import Matrix
 
+from ..animation.clip import CacheClip
 from ..formats.appearance_look import Look, look_preset
 from ..formats.cache_profile import shared_profile
 from ..formats.item_model import inventory_model, item_lighting
 from ..formats.item_wear import ItemWear, load_item_wear
+from ..formats.js5 import Js5Store
 from ..formats.lighting import light_hsl
-from . import appearance_collection, appearance_preview
+from . import appearance_clip, appearance_collection, appearance_preview
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,39 @@ def attach_to_joint(
     obj.location = offset
     obj.rotation_euler = rotation
     return constraint
+
+
+def bake_clip(
+    player: bpy.types.Collection,
+    folder: Path,
+    sequence: int,
+    *,
+    start: int = 0,
+    repeat_until: int | None = None,
+    action: bool = False,
+    smooth: bool = False,
+    set_scene_timing: bool = False,
+) -> bpy.types.NlaStrip:
+    """Bake a sequence of the cache onto the rig of a player collection as a strip that starts at Blender frame
+    `start`, which can be below 0, and return the strip. `repeat_until`, `action` and `smooth` are those of
+    `appearance_clip.bake_clip_to_rig`, which also names what is refused.
+
+    The frame rate and the frame range of the scene stay as they are, unless `set_scene_timing` is set. Then the bake
+    sets them as the Bake Clip button does. One Blender frame of a clip is one client tick of 20 ms, so a clip plays
+    at its game speed only at 50 frames in a second."""
+    appearance_clip.bake_clip_to_rig(
+        player,
+        CacheClip(Js5Store(folder), sequence),
+        action=action,
+        start=start,
+        smooth=smooth,
+        cache_folder=str(folder),
+        set_scene_timing=set_scene_timing,
+        repeat_until=repeat_until,
+    )
+    animation = appearance_collection.armature_of(player).animation_data
+    assert animation is not None
+    return next(s for s in animation.nla_tracks[appearance_clip.CLIP_TRACK].strips if round(s.frame_start) == start)
 
 
 def _is_label_bone(name: str) -> bool:

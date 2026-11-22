@@ -1,5 +1,6 @@
 """Scripted use (spec 170): every function takes its inputs as arguments, with the add-on not enabled."""
 
+import os
 import struct
 from pathlib import Path
 
@@ -254,3 +255,64 @@ def test_a_label_bone_is_not_a_joint(cache):
 
     with pytest.raises(ValueError, match="has no joint"):
         scripting.attach_to_joint(item, player.rig, label)
+
+
+SNAPSHOT_430 = Path(os.environ.get("RSPS_SNAPSHOT_430_CACHE", "")).expanduser()
+needs_snapshot_430 = pytest.mark.skipif(
+    "RSPS_SNAPSHOT_430_CACHE" not in os.environ or not SNAPSHOT_430.is_dir(),
+    reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
+)
+# Sequence 819 is the walk of the fixture tests/fixtures/animation149/walk, which has 49 Blender frames
+# (tests/blender/test_appearance_clip.py).
+WALK, WALK_FRAMES = 819, 49
+
+
+def timing(scene: bpy.types.Scene) -> tuple[int, float, int, int]:
+    return scene.render.fps, scene.render.fps_base, scene.frame_start, scene.frame_end
+
+
+# Issue 170, gap f: a bake from a script starts before frame 0 and leaves the frame range of the scene alone.
+@needs_snapshot_430
+def test_bake_clip_bakes_a_sequence_of_the_cache_before_frame_0_and_leaves_the_scene_timing():
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.render.fps, scene.frame_start, scene.frame_end = 30, 5, 77
+    player = scripting.create_player(SNAPSHOT_430, Look(), brightness=BRIGHTNESS)
+
+    strip = scripting.bake_clip(player.collection, SNAPSHOT_430, WALK, start=-20)
+
+    assert (strip.frame_start, strip.frame_end) == (-20, -20 + WALK_FRAMES)
+    assert player.rig.animation_data is not None
+    assert strip == player.rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips[0]
+    assert timing(scene) == (30, 1.0, 5, 77)
+
+
+@needs_snapshot_430
+def test_bake_clip_repeats_a_walk_until_a_frame():
+    player = scripting.create_player(SNAPSHOT_430, Look(), brightness=BRIGHTNESS)
+
+    strip = scripting.bake_clip(player.collection, SNAPSHOT_430, WALK, start=0, repeat_until=90)
+
+    assert (strip.frame_start, strip.frame_end) == (0, 90)
+    assert strip.repeat == pytest.approx(90 / WALK_FRAMES)
+
+
+@needs_snapshot_430
+def test_bake_clip_sets_the_scene_timing_when_the_script_asks():
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.render.fps, scene.frame_start, scene.frame_end = 30, 5, 77
+    player = scripting.create_player(SNAPSHOT_430, Look(), brightness=BRIGHTNESS)
+
+    scripting.bake_clip(player.collection, SNAPSHOT_430, WALK, start=1, set_scene_timing=True)
+
+    # The Bake Clip button sets 50 frames in a second and the range of the first clip (`bake_clip_to_rig`).
+    assert timing(scene) == (50, 1.0, 1, WALK_FRAMES)
+
+
+@needs_snapshot_430
+def test_a_sequence_that_the_cache_lacks_is_refused():
+    player = scripting.create_player(SNAPSHOT_430, Look(), brightness=BRIGHTNESS)
+
+    with pytest.raises(LookupError, match="no sequence 999999"):
+        scripting.bake_clip(player.collection, SNAPSHOT_430, 999999)

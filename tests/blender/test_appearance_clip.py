@@ -422,6 +422,82 @@ def test_the_clip_is_a_strip_that_plays_from_the_start_frame_and_holds_its_last_
     assert largest_distance(posed_mesh(collection, 70), fitted[shown[47]]) <= RIG_ROUNDING
 
 
+# Issue 170, gap f: a script starts a clip before frame 0, such as a fall that is already over at frame 0.
+def test_a_bone_clip_can_start_before_frame_0(cache):
+    collection = player(cache)
+    appearance_clip.bake_clip_to_rig(collection, CLIP, start=-20)
+    (strip,) = clip_strips(collection)
+    assert (strip.frame_start, strip.frame_end) == (-20, 29)
+    fitted = fitted_clip(collection, POSE, CLIP)
+    shown = TIMING[819, "pose"]
+    for offset in (0, 7, 30, 47):
+        assert largest_distance(posed_mesh(collection, -20 + offset), fitted[shown[offset]]) <= RIG_ROUNDING
+
+
+# Issue 170, gap f: the owner asked for a repeat until a frame, in place of one bake for each cycle of a walk.
+def test_a_bone_clip_with_repeat_until_is_one_strip_that_plays_the_clip_again_and_again(cache):
+    collection = player(cache)
+    # The walk has 49 Blender frames (the strip of the test above), so 120 frames are two cycles and 22 frames.
+    assert appearance_clip.bake_clip_to_rig(collection, CLIP, start=0, repeat_until=120) == 8
+    (strip,) = clip_strips(collection)
+    assert (strip.frame_start, strip.frame_end, strip.extrapolation) == (0, 120, "HOLD_FORWARD")
+    fitted = fitted_clip(collection, POSE, CLIP)
+    shown = TIMING[819, "pose"]
+    for cycle in (0, 1, 2):
+        for offset in (0, 7, 21):
+            pose = posed_mesh(collection, cycle * 49 + offset)
+            assert largest_distance(pose, fitted[shown[offset]]) <= RIG_ROUNDING
+    # The last cycle is cut short at frame 120, and the strip holds that pose after it.
+    assert largest_distance(posed_mesh(collection, 140), posed_mesh(collection, 119)) <= RIG_ROUNDING
+    assert not appearance_collection.is_edited(collection)
+
+
+def test_a_clip_after_a_repeated_one_is_accepted_and_one_inside_it_is_refused(cache):
+    collection = player(cache)
+    appearance_clip.bake_clip_to_rig(collection, CLIP, start=0, repeat_until=120)
+    with pytest.raises(ValueError, match="would cover frames 60 to"):
+        appearance_clip.bake_clip_to_rig(collection, CLIPS / "idle", start=60)
+    appearance_clip.bake_clip_to_rig(collection, CLIPS / "idle", start=120)
+    assert [strip.frame_start for strip in clip_strips(collection)] == [0, 120]
+
+
+def test_a_repeated_clip_that_would_run_into_the_next_strip_is_refused(cache):
+    collection = player(cache)
+    appearance_clip.bake_clip_to_rig(collection, CLIPS / "idle", start=100)
+    with pytest.raises(ValueError, match="would cover frames 0 to 120"):
+        appearance_clip.bake_clip_to_rig(collection, CLIP, start=0, repeat_until=120)
+    assert [strip.frame_start for strip in clip_strips(collection)] == [100]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        # A clip that plays as an Action follows its own loop offset (GLOSSARY.md, Play as).
+        ({"start": 0, "repeat_until": 120, "action": True}, "plays as a Pose"),
+        ({"start": 10, "repeat_until": 10}, "after its start frame 10"),
+        ({"start": 10, "repeat_until": 4}, "after its start frame 10"),
+    ],
+)
+def test_a_repeat_that_cannot_be_baked_is_refused_before_any_change(cache, arguments, message):
+    collection = player(cache)
+    with pytest.raises(ValueError, match=message):
+        appearance_clip.bake_clip_to_rig(collection, CLIP, **arguments)
+    assert clip_strips(collection) == []
+    assert len(bpy.data.actions) == 0
+
+
+def test_a_repeated_clip_is_recorded_and_baked_again_with_its_repeat(cache):
+    collection = player(cache)
+    appearance_clip.bake_clip_to_rig(collection, CLIP, start=-10, repeat_until=120)
+    ((record, start),) = appearance_clip.recorded_clips(collection)
+    copy = player(cache)
+
+    appearance_clip.bake_recorded(copy, record, start, str(cache))
+
+    (strip,) = clip_strips(copy)
+    assert (strip.frame_start, strip.frame_end) == (-10, 120)
+
+
 def test_a_gap_between_clips_holds_the_earlier_clips_last_pose(cache):
     collection = player(cache)
     appearance_clip.bake_clip_to_rig(collection, CLIP)
