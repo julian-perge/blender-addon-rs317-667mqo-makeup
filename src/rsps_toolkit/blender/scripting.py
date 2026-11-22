@@ -6,14 +6,54 @@ is the client brightness that colours are shown at, such as 0.6 or 0.8. docs/scr
 call.
 """
 
+import functools
+from dataclasses import dataclass
 from pathlib import Path
 
 import bpy
 
+from ..formats.appearance_look import Look, look_preset
 from ..formats.cache_profile import shared_profile
 from ..formats.item_model import inventory_model, item_lighting
+from ..formats.item_wear import ItemWear, load_item_wear
 from ..formats.lighting import light_hsl
-from . import appearance_preview
+from . import appearance_collection, appearance_preview
+
+
+@dataclass(frozen=True)
+class Player:
+    collection: bpy.types.Collection
+    """The player collection, which the bakes and `save_player` take."""
+    rig: bpy.types.Object
+    parts: tuple[bpy.types.Object, ...]
+    """The mesh objects: the body, then a worn weapon and a worn shield."""
+
+
+def create_player(
+    folder: Path,
+    look: Look,
+    *,
+    brightness: float,
+    location: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    name: str = "Player",
+) -> Player:
+    """A new player of the look, with its rig at `location`, linked to the scene (ADR 0031). Blender adds `.001` to a
+    name that is taken. Two calls with one location put two players on the same place.
+
+    It refuses what `look_preset` refuses, and a kit, item or model that the cache lacks. Everything that can fail
+    runs before any Blender data exists."""
+    appearance_collection.check_no_edit_mode("creating a player")
+    preset = look_preset(look, shared_profile(folder).kits, _item_wear())
+    body, shading, slots = appearance_preview.assemble_parts(preset, folder)
+    collection = appearance_collection.build_collection(body, shading, preset, name, brightness, location, slots)
+    return Player(
+        collection, appearance_collection.armature_of(collection), tuple(appearance_collection.parts(collection))
+    )
+
+
+@functools.cache
+def _item_wear() -> ItemWear:
+    return load_item_wear()
 
 
 def import_item(

@@ -6,18 +6,11 @@ import bpy
 from bpy.app.handlers import persistent
 
 from ..formats.appearance import (
-    ARMS_SLOT,
     BODY_PART_SLOTS,
+    COVER_PAIRS,
     FEMALE_CATEGORY_OFFSET,
-    HAIR_SLOT,
-    HANDS_SLOT,
-    HEAD_ITEM_SLOT,
     ITEM_OFFSET,
-    JAW_SLOT,
     KIT_OFFSET,
-    SHIELD_SLOT,
-    TORSO_SLOT,
-    WEAPON_SLOT,
     Palette,
     default_equipment,
     default_slot_value,
@@ -28,6 +21,7 @@ from ..formats.appearance_preset import AppearancePreset
 from ..formats.cache_profile import (
     PALETTE_PATH,
     REVISION,
+    SNAPSHOT_ID,
     CacheProfile,
     DamagedCacheError,
     MissingResourceError,
@@ -36,10 +30,6 @@ from ..formats.cache_profile import (
 from ..formats.item_wear import ItemWear, load_item_wear
 from . import appearance_swatches, preferences
 
-# OpenRS2 snapshot that the kit, item and model ids come from.
-SNAPSHOT_ID = 430
-
-
 # What each body part category dresses, in the order of BODY_PART_SLOTS.
 BODY_PART_LABELS = ("Head", "Jaw", "Torso", "Arms", "Hands", "Legs", "Feet")
 # Dropdown identifiers, which sit beside kit ids written as decimal strings.
@@ -47,13 +37,17 @@ NONE_KIT = "none"
 OTHER = "other"
 # The covers toggles: the property, the slot of the item that covers, the slot it empties, and the label. The
 # emptied slot holds a kit, or for the shield an item.
-COVERS = (
-    ("covers_arms", TORSO_SLOT, ARMS_SLOT, "Covers arms"),
-    ("covers_hair", HEAD_ITEM_SLOT, HAIR_SLOT, "Covers hair"),
-    ("covers_jaw", HEAD_ITEM_SLOT, JAW_SLOT, "Covers jaw"),
-    ("covers_hands", TORSO_SLOT, HANDS_SLOT, "Covers hands"),
-    ("weapon_covers_hands", WEAPON_SLOT, HANDS_SLOT, "Covers hands"),
-    ("covers_shield", WEAPON_SLOT, SHIELD_SLOT, "Covers shield"),
+_COVER_NAMES = (
+    ("covers_arms", "Covers arms"),
+    ("covers_hair", "Covers hair"),
+    ("covers_jaw", "Covers jaw"),
+    ("covers_hands", "Covers hands"),
+    ("weapon_covers_hands", "Covers hands"),
+    ("covers_shield", "Covers shield"),
+)
+COVERS = tuple(
+    (name, item_slot, kit_slot, label)
+    for (name, label), (item_slot, kit_slot) in zip(_COVER_NAMES, COVER_PAIRS, strict=True)
 )
 # How a baked clip advances its frames, chosen in the panel and passed to the bake.
 PLAY_AS_ITEMS = (

@@ -7,9 +7,11 @@ import bpy
 import pytest
 from js5_builder import item_definition, rewrite_cache
 
-from rsps_toolkit.blender import appearance_preview, scripting
+from rsps_toolkit.blender import appearance_collection, appearance_preview, scripting
 from rsps_toolkit.blender.face_materials import srgb_to_linear
 from rsps_toolkit.formats import decode, face_colour_to_rgb
+from rsps_toolkit.formats.appearance_look import Look
+from rsps_toolkit.formats.appearance_preset import loads_preset
 from rsps_toolkit.formats.lighting import light_hsl
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -117,3 +119,54 @@ def test_an_item_with_a_textured_inventory_model_is_refused_and_nothing_is_left(
 def test_an_item_that_the_cache_lacks_is_refused(cache):
     with pytest.raises(ValueError, match="no item 4"):
         scripting.import_item(cache, 4, brightness=BRIGHTNESS)
+
+
+# The Steel med helm 1149, the Rune platebody (g) 2653 and the Rune platelegs (t) 4087 are items of the appearance
+# fixtures. data/item_wear.json gives them the slots 0, 4 and 7.
+ARMOUR = Look(kits={"torso": 18}, colours=(0, 6, 0, 0, 0), items=(1149, 2653, 4087))
+
+
+def test_create_player_builds_the_look_with_the_rig_at_the_given_place(cache):
+    player = scripting.create_player(cache, ARMOUR, brightness=BRIGHTNESS, location=(640.0, 320.0, -12.0))
+
+    assert player.collection.name == "Player"
+    assert player.rig == appearance_collection.armature_of(player.collection)
+    assert (player.rig.location.x, player.rig.location.y, player.rig.location.z) == (640.0, 320.0, -12.0)
+    assert list(player.parts) == appearance_collection.parts(player.collection)
+    assert all(part.type == "MESH" and part.parent == player.rig for part in player.parts)
+    preset = loads_preset(player.collection[appearance_preview.PRESET_KEY])
+    assert (preset.female, preset.colours) == (False, (0, 6, 0, 0, 0))
+    assert [value - 512 for value in preset.equipment if value >= 512] == [1149, 2653, 4087]
+    assert not appearance_collection.is_edited(player.collection)
+
+
+def test_create_player_shows_the_lit_colours_at_the_given_brightness(cache):
+    dark = scripting.create_player(cache, Look(), brightness=0.9, name="Dark")
+    bright = scripting.create_player(cache, Look(), brightness=0.6, name="Bright")
+
+    # The client raises each channel to the power of the brightness, so 0.6 gives lighter colours than 0.9
+    # (`face_colour_to_rgb`).
+    assert sum(lit_colours(mesh_of(bright.parts[0]))) > sum(lit_colours(mesh_of(dark.parts[0])))
+
+
+def test_two_players_at_one_place_stand_on_the_same_place(cache):
+    # The place is the script's choice (ADR 0031). Only the Create Player button puts a player beside the last one.
+    first = scripting.create_player(cache, Look(), brightness=BRIGHTNESS, location=(64.0, 64.0, 0.0))
+    second = scripting.create_player(cache, Look(female=True), brightness=BRIGHTNESS, location=(64.0, 64.0, 0.0))
+
+    assert first.collection != second.collection
+    assert first.rig.location == second.rig.location
+    assert second.collection.name == "Player.001"
+
+
+def test_create_player_takes_a_name(cache):
+    player = scripting.create_player(cache, Look(), brightness=BRIGHTNESS, name="Hero")
+
+    assert (player.collection.name, player.rig.name, player.parts[0].name) == ("Hero", "Hero_rig", "Hero")
+
+
+def test_a_look_that_cannot_be_built_is_refused_and_nothing_is_left(cache):
+    with pytest.raises(ValueError, match="Item 229 has no equipment slot"):
+        scripting.create_player(cache, Look(items=(229,)), brightness=BRIGHTNESS)
+
+    assert (len(bpy.data.objects), len(bpy.data.collections)) == (0, 0)

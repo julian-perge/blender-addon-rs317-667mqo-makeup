@@ -23,6 +23,8 @@ from .kit_names import STYLE_ENUMS, load_kit_names
 from .model import Model
 
 REVISION = 149
+# OpenRS2 snapshot that the kit, item and model ids come from.
+SNAPSHOT_ID = 430
 PALETTE_PATH = Path(__file__).parent.parent / "data" / "revision149-palette.json"
 CONFIG_INDEX, MODEL_INDEX = 2, 7
 KIT_GROUP, ENUM_GROUP, ITEM_GROUP = 3, 8, 10

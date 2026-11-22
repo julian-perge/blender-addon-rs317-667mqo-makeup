@@ -4,6 +4,7 @@ from js5_builder import damage_group, rewrite_cache
 
 from rsps_toolkit.blender import appearance_props, appearance_swatches
 from rsps_toolkit.formats import cache_profile
+from rsps_toolkit.formats.appearance import JAW_SLOT
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
 
 FEMALE = AppearancePreset(149, 430, True, (0, 0, 0, 0, 312, 0, 317, 326, 301, 323, 335, 0), (1, 2, 3, 4, 5))
@@ -159,7 +160,7 @@ def test_the_panel_says_a_damaged_kit_group_is_damaged_and_names_it(props, kits_
 def test_the_covers_toggles_say_why_when_the_kits_do_not_decode(props, kits_folder):
     rewrite_cache(kits_folder, lambda parts: parts["kits"].update({101: UNKNOWN_OPCODE}))
     appearance_props.profile_error = ""
-    assert appearance_props.has_kits(props, appearance_props.JAW_SLOT)
+    assert appearance_props.has_kits(props, JAW_SLOT)
     assert "Kit 101 has unknown opcode 99" in appearance_props.profile_error
 
 

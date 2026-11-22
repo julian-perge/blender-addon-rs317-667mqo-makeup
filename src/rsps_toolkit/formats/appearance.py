@@ -19,6 +19,16 @@ HEAD_ITEM_SLOT, TORSO_SLOT, ARMS_SLOT, HAIR_SLOT, JAW_SLOT = 0, 4, 6, 8, 11
 WEAPON_SLOT, SHIELD_SLOT, HANDS_SLOT = 3, 5, 9
 # The client's equipment slot numbers.
 SLOT_LABELS = ("Head", "Cape", "Neck", "Weapon", "Torso", "Shield", "Arms", "Legs", "Hair", "Hands", "Feet", "Jaw")
+# The slot of a worn item and a slot that it can empty in the game. The panel has one covers toggle for each pair, and a
+# look empties the same slots (`appearance_look`). The emptied slot holds a kit, or for the shield an item.
+COVER_PAIRS = (
+    (TORSO_SLOT, ARMS_SLOT),
+    (HEAD_ITEM_SLOT, HAIR_SLOT),
+    (HEAD_ITEM_SLOT, JAW_SLOT),
+    (TORSO_SLOT, HANDS_SLOT),
+    (WEAPON_SLOT, HANDS_SLOT),
+    (WEAPON_SLOT, SHIELD_SLOT),
+)
 KIT_OFFSET = 256
 ITEM_OFFSET = 512
 # Female kits use the same seven body part categories shifted up by this many (hu.a, evidence section 8).
