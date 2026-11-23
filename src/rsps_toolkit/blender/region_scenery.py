@@ -20,6 +20,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 import bpy
+from mathutils import Matrix, Vector
 
 from ..formats.colour import face_colour_to_rgb
 from ..formats.lighting import Shading
@@ -31,6 +32,12 @@ from ..formats.region_placement import PlacedLoc, PlacedPart
 from .appearance_preview import LIT_ATTRIBUTE
 from .face_materials import FACE_COLOUR, MISSING_TEXTURE, TEXTURE_ID, material_values, srgb_to_linear
 from .mesh import MaterialKey, model_to_object
+
+# The loc types that the client puts in the wall decoration slot of a tile (`PacketBuffer.java` lines 160 to 503).
+WALL_DECORATION_TYPES = range(4, 9)
+# A sum of face normals that is shorter than this part of the summed face areas has no direction. The normals of a
+# closed shape sum to zero, and the 32-bit rotation of an object leaves a few parts in a million.
+_NO_DIRECTION = 1e-4
 
 type ModelKey = tuple[tuple[int, ...], tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]
 """The models of a part, and the recolours and retextures of the loc that shows them."""
@@ -52,6 +59,8 @@ class SceneryCounts:
     """The meshes of one object each, for placements bent to uneven ground or with a transform that Blender cannot hold."""
     shown_nothing: int
     """The placements that show no model: their impostor is -1, or their loc has no model for their type."""
+    moved_decorations: int = 0
+    """The objects of wall decorations that the wall decoration clearance moved (ADR 0034)."""
 
     @property
     def placements_made(self) -> int:
@@ -88,6 +97,7 @@ def scenery_objects(
     images: Mapping[int, bpy.types.Image],
     height: Callable[[int, int], int],
     brightness: float,
+    decoration_clearance: float = 0.0,
 ) -> SceneryCounts:
     """Link one new object to `collection` for each part of each placement in `placed`, in that order.
 
@@ -98,13 +108,16 @@ def scenery_objects(
     is the height of a tile corner, as `place_scenery` takes it. `brightness` is the Brightness preference that the
     face colours and the `rs_lit` colours are shown at.
 
+    With `decoration_clearance` above 0, each object of a placement with loc type 4 to 8 moves by that many game
+    units along the mean of its face normals (`_clear_of_wall`, ADR 0034).
+
     The meshes of one call share one new material for each material key (issue 67). `import_region` calls this once
     for each import, so no material comes from an earlier import, and its cleanup still removes every material made.
     """
     shared: dict[MeshKey, bpy.types.Mesh] = {}
     materials: dict[MaterialKey, bpy.types.Material] = {}
     lit: set[bpy.types.Material] = set()
-    objects = own = nothing = 0
+    objects = own = nothing = moved = 0
     for placed_loc in placed:
         placement, shown_id = placed_loc.placement, placed_loc.shown_id
         if shown_id is None or not placed_loc.parts:
@@ -141,9 +154,41 @@ def scenery_objects(
                 obj = bpy.data.objects.new(name, mesh)
                 own += 1
             obj.location = part.location
+            if decoration_clearance > 0 and placement.loc_type in WALL_DECORATION_TYPES:
+                moved += _clear_of_wall(obj, decoration_clearance)
             collection.objects.link(obj)
             objects += 1
-    return SceneryCounts(len(placed), objects, len(shared), own, nothing)
+    return SceneryCounts(len(placed), objects, len(shared), own, nothing, moved)
+
+
+def _clear_of_wall(obj: bpy.types.Object, clearance: float) -> bool:
+    """Move the object by `clearance` game units along the mean of its face normals, weighted by face area, in the
+    space of its collection. The client draws a wall decoration after its wall, and a renderer with only a depth test
+    lets the wall show through a decoration that is less than a game unit in front of it (ADR 0034). Only the location
+    of the object changes. An object whose normals sum to zero stays, and the result says whether the object moved.
+
+    The cross product of two edges of a triangle is its normal times twice its area. The edges are taken after the
+    rotation and the scale of the object. A mirror reverses the corner order of each face, and Blender still draws the
+    same side as the front, so the sum is turned around for a mirrored object."""
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    matrix = Matrix.LocRotScale(None, obj.rotation_euler, (obj.scale.x, obj.scale.y, obj.scale.z)).to_3x3()
+    total = Vector()
+    area = 0.0
+    for polygon in mesh.polygons:
+        first, second, third = (
+            matrix @ mesh.vertices[mesh.loops[polygon.loop_start + corner].vertex_index].co for corner in range(3)
+        )
+        normal = (second - first).cross(third - first)
+        assert isinstance(normal, Vector)
+        total += normal
+        area += normal.length
+    if matrix.determinant() < 0:
+        total.negate()
+    if total.length <= area * _NO_DIRECTION:
+        return False
+    obj.location = obj.location + total.normalized() * clearance
+    return True
 
 
 def _moved(model: Model, vertices: Sequence[tuple[float, float, float]], part: PlacedPart) -> Model:

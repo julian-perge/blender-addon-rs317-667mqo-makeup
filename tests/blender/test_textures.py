@@ -62,6 +62,8 @@ def test_texture_folder_setting_starting_with_a_tilde_means_the_home_folder(
 ):
     # A leading ~ names the home folder in the shell and in Python's os.path.expanduser, and users type paths that way.
     monkeypatch.setenv("HOME", str(tmp_path))
+    # On Windows, os.path.expanduser reads USERPROFILE and not HOME.
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
 
     assert folder_in_setting("~/textures") == tmp_path / "textures"
 

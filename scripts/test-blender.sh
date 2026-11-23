@@ -10,12 +10,20 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 blender="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
-site_packages="$(cd "$root" && uv run python3 -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+site_packages="$(cd "$root" && uv run python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+source_folder="$root/src"
+separator=":"
+# Git Bash on Windows gives POSIX paths, and Blender for Windows reads Windows paths that are joined with ";".
+if command -v cygpath >/dev/null 2>&1; then
+  source_folder="$(cygpath -w "$source_folder")"
+  site_packages="$(cygpath -w "$site_packages")"
+  separator=";"
+fi
 cd "$root"
 
 # Runs pytest in one Blender. The argument is the pytest arguments as the items of a Python list.
 run_pytest() {
-  PYTHONPATH="$root/src:$site_packages" "$blender" -b --factory-startup --python-use-system-env --python-exit-code 1 \
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$source_folder$separator$site_packages" "$blender" -b --factory-startup --python-use-system-env --python-exit-code 1 \
     --python-expr "import sys, pytest; sys.exit(pytest.main(['-q', '-p', 'no:cacheprovider', $1]))"
 }
 
@@ -45,10 +53,10 @@ run_shard() {
   fi
 }
 
-jobs="${BLENDER_TEST_JOBS:-$(getconf _NPROCESSORS_ONLN)}"
+jobs="${BLENDER_TEST_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc)}"
 logs="$(mktemp -d)"
 trap 'rm -rf "$logs"' EXIT
-export root blender site_packages logs jobs
+export root blender source_folder separator site_packages logs jobs
 export -f run_pytest run_shard
 
 status=0

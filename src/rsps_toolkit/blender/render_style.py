@@ -12,12 +12,14 @@ class RSPS_OT_setup_runescape_style(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
 
-        # Set render engine to Eevee Next
-        scene.render.engine = "BLENDER_EEVEE_NEXT"
+        # Blender 4.2 to 4.5 name the engine BLENDER_EEVEE_NEXT, and Blender 5 names it BLENDER_EEVEE.
+        engines = [item.identifier for item in scene.render.bl_rna.properties["engine"].enum_items]
+        scene.render.engine = "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in engines else "BLENDER_EEVEE"
 
-        # Eevee Next settings for stylized look (strict OSRS: no RT, no AO)
-        scene.eevee.use_raytracing = False  # No raytracing for true OSRS flatness
-        scene.eevee.use_gtao = False  # No AO for minimal shadows
+        # Eevee settings for stylized look (strict OSRS: no RT, no AO). Blender 5 has no use_gtao.
+        for setting in ("use_raytracing", "use_gtao"):
+            if hasattr(scene.eevee, setting):
+                setattr(scene.eevee, setting, False)
 
         # Remove existing lights if any (optional)
         bpy.ops.object.select_all(action="DESELECT")
@@ -125,6 +127,9 @@ class RSPS_OT_setup_runescape_style(bpy.types.Operator):
             lineset.select_edge_mark = False
 
             # Access the linestyle and set thickness
+            # A line set made in a file with no line style has none.
+            if lineset.linestyle is None:
+                lineset.linestyle = bpy.data.linestyles.new("LineStyle")
             linestyle = lineset.linestyle
             linestyle.thickness = 2.0
             linestyle.color = (0, 0, 0)

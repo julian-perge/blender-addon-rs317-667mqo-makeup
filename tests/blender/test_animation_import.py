@@ -189,6 +189,8 @@ def test_full_addon_register_unregister_reregister_in_clean_blender(tmp_path):
                 bpy.app.binary_path,
                 "--background",
                 "--factory-startup",
+                # The run inherits PYTHONDONTWRITEBYTECODE from scripts/test-blender.sh only with this flag.
+                "--python-use-system-env",
                 "--python-exit-code",
                 "1",
                 "--python",

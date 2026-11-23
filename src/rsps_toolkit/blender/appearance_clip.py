@@ -38,6 +38,8 @@ USER_TRACK = "Your motion"
 # One Blender frame is one client tick at 50 fps. The 20 ms tick is revision 1's clock and is unverified for
 # revision 149.
 CLIP_FPS = 50
+# In the record of a bone clip that repeats: the Blender frames from the start of its strip to its end.
+REPEAT_KEY = "repeat_frames"
 # The NLA strip settings that Update and Duplicate Player copy onto the new rig for the user's own strips, in an order
 # Blender accepts.
 STRIP_SETTINGS = (
@@ -128,8 +130,14 @@ def bake_clip_to_rig(
     smooth: bool = False,
     cache_folder: str = "",
     set_scene_timing: bool = True,
+    repeat_until: int | None = None,
 ) -> int:
-    """Add the clip to the rig as an NLA strip on the "RS clips" track, starting at Blender frame `start`.
+    """Add the clip to the rig as an NLA strip on the "RS clips" track, starting at Blender frame `start`, which can
+    be below 0.
+
+    With `repeat_until`, the strip plays the clip again and again from `start` until that frame, and the last cycle
+    can be cut short. It is for a clip that plays as a Pose, such as a walk, so it is refused with `action`, and when
+    it is not after `start`. The strip's action records the repeat, and Update and Duplicate Player bake it again.
 
     Each joint bone is keyed with the least-squares rotation, uniform scale and location that moves the vertices of
     the labels it owns closest to the client's posed vertices (`label_fit.fit_frame`), as seen from its parent, on
@@ -149,6 +157,10 @@ def bake_clip_to_rig(
     until the next strip (`appearance_held`). Returns the number of frames.
     """
     appearance_collection.check_object_mode(collection, "baking a clip")
+    if repeat_until is not None and action:
+        raise ValueError("A clip repeats until a frame only when it plays as a Pose. An Action follows its loop offset")
+    if repeat_until is not None and repeat_until <= start:
+        raise ValueError(f"The clip must repeat until a frame after its start frame {start}, not until {repeat_until}")
     objects = appearance_collection.parts(collection)
     rig = appearance_collection.armature_of(collection)
     if not appearance_collection.is_joint_rig(rig):
@@ -174,6 +186,7 @@ def bake_clip_to_rig(
         smooth=smooth,
         set_scene_timing=set_scene_timing,
         hands=True,
+        repeat_until=repeat_until,
     )
 
 
@@ -230,18 +243,22 @@ def _bake_strip(
     smooth: bool,
     set_scene_timing: bool,
     hands: bool,
+    repeat_until: int | None = None,
 ) -> int:
     """The steps that the player and NPC bone bakes share, from the overlap refusal to the new fingerprint. With
-    `hands`, the player's hand objects are keyed to show what each clip strip holds."""
+    `hands`, the player's hand objects are keyed to show what each clip strip holds. With `repeat_until`, the strip
+    repeats the clip until that frame."""
     rig = appearance_collection.armature_of(collection)
     objects = appearance_collection.parts(collection)
-    length = sum(ticks for _, ticks in posed.schedule)
+    cycle = sum(ticks for _, ticks in posed.schedule)
+    length = cycle if repeat_until is None else repeat_until - start
     track = _clip_track(rig)
     replaced = None if track is None else next((s for s in track.strips if round(s.frame_start) == start), None)
     if replaced is not None and appearance_collection.RIG_ACTION_KEY not in (replaced.action or {}):
         raise ValueError(f"The strip {replaced.name!r} on {CLIP_TRACK} starts on frame {start} and is not a bake")
     for other in [] if track is None else track.strips:
-        if other != replaced and other.frame_start < start + length and start < other.frame_end:
+        # Blender keeps the repeat count as a 32-bit float, so a repeated strip can end a part of a frame late.
+        if other != replaced and round(other.frame_start) < start + length and start < round(other.frame_end):
             raise ValueError(
                 f"The clip would cover frames {start} to {start + length}, over the strip {other.name!r}. "
                 "Move the current frame or the strip"
@@ -260,7 +277,10 @@ def _bake_strip(
         # A fade group has one property on the rig, whichever objects hold its faces.
         fades = list({fade.prop: fade for part in parts for fade in part.fades}.values())
         name = f"{collection.name} {_title(source)}"
-        record = json.dumps({**source.record(), "method": "BONES", "action": action, "smooth": smooth, **posed.record})
+        repeat = {} if repeat_until is None else {REPEAT_KEY: length}
+        record = json.dumps(
+            {**source.record(), "method": "BONES", "action": action, "smooth": smooth, **repeat, **posed.record}
+        )
         new, slot = appearance_bone_action.write(name, rig, posed, fades, smooth=smooth)
         try:
             new[appearance_collection.CLIP_KEY] = record
@@ -278,7 +298,7 @@ def _bake_strip(
             if replaced is not None:
                 old = replaced.action
                 track.strips.remove(replaced)
-            _add_clip_strip(track, name, start, new, slot, length)
+            _add_clip_strip(track, name, start, new, slot, cycle, length)
         except Exception:
             bpy.data.actions.remove(new)
             raise
@@ -331,22 +351,30 @@ def _add_clip_strip(
     start: int,
     action: bpy.types.Action,
     slot: bpy.types.ActionSlot,
+    cycle: int,
     length: int,
 ) -> None:
-    """Add the clip's strip at `start`, playing the action's frames 1 to 1 + `length` and then holding its last pose
-    until the next strip starts (Hold Forward).
+    """Add the clip's strip at `start`, playing the action's frames 1 to 1 + `cycle` for `length` frames and then
+    holding its last pose until the next strip starts (Hold Forward). A `length` above `cycle` repeats the clip, and
+    the last cycle can be cut short.
 
     Blender sizes a new strip from its action's frame range, and the baked keys start at frame 0. So the action first
-    gets its own range of 1 to 1 + `length` (Manual Frame Range). Without it the new strip would come out one frame
+    gets its own range of 1 to 1 + `cycle` (Manual Frame Range). Without it the new strip would come out one frame
     longer than the clip, and Blender would refuse it where it ends at the start of the next strip (issue 13,
     decision 3).
     """
     action.use_frame_range = True
-    action.frame_start, action.frame_end = 1, 1 + length
+    action.frame_start, action.frame_end = 1, 1 + cycle
     strip = track.strips.new(name, start, action)
     strip.action_slot = slot
-    strip.action_frame_end = 1 + length
+    strip.action_frame_end = 1 + cycle
     strip.action_frame_start = 1
+    strip.repeat = length / cycle
+    # Blender keeps the repeat count as a 32-bit float, so the strip can end a few millionths of a frame late, and
+    # Blender then refuses a strip that starts on that frame. The count goes down by the smallest step until the
+    # strip ends in time. The held last pose fills the missing part of a frame.
+    while strip.frame_end > start + length:
+        strip.repeat *= 1 - 2e-7
     strip.extrapolation = "HOLD_FORWARD"
 
 
@@ -382,6 +410,7 @@ def bake_recorded(collection: bpy.types.Collection, clip: str, start: int = 1, c
             smooth=record.get("smooth", False),
             cache_folder=cache_folder,
             set_scene_timing=False,
+            repeat_until=start + record[REPEAT_KEY] if REPEAT_KEY in record else None,
         )
     return bake_clip(
         collection,

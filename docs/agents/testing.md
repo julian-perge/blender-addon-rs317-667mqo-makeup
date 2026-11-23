@@ -16,6 +16,8 @@ PYTHONPATH=src uv run python3 <script.py>
 - The pre-push hook runs the Blender tests when the push changes a file that they read. The `files` pattern of the `blender-tests` hook in `prek.toml` lists those files. A push of only docs or other scripts skips them. This hook is the only run of the whole suite, so a session runs only the Blender test files of the area it changed.
 - Ad-hoc scripts need `PYTHONPATH=src` because uv does not install the package.
 
+On Windows, run the commands in Git Bash and set `BLENDER` to `blender.exe`, such as `BLENDER="<path to blender.exe>" scripts/test-blender.sh`. The script gives Blender Windows paths. `.gitattributes` keeps LF line ends in every checkout, because tests pin SHA-256 values of fixture files. `uv run` makes `.venv/` in the repo, which git ignores.
+
 For cache round trips and installed-extension checks, read [Blender execution and packaging](blender.md).
 
 ## Fixture provenance

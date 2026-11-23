@@ -170,6 +170,18 @@ _Avoid_: scenery shading, loc lighting
 Light that a Blender renderer bakes into a corner colour attribute of the meshes of one scene, such as the fire light of a night scene. The add-on does not make it. The glTF export draws it when the user names its attribute in place of `rs_lit` (ADR 0028).
 _Avoid_: baked light (the client light in `rs_lit` is baked too), Cycles light
 
+**Region origin**:
+The world tile whose centre a scripted import puts at the Blender origin, at its ground height, with a turn around it in degrees. Regions of one import stand side by side around it, as in the game ([ADR 0031](docs/adr/0031-scripts-call-one-module-that-reads-no-preference.md)).
+_Avoid_: anchor tile, pivot
+
+**Wall decoration clearance**:
+The game units that a region import moves each object of a wall decoration (loc types 4 to 8) along the mean of its face normals, so that a renderer with only a depth test draws it in front of its wall. It is 0 unless a script asks ([ADR 0034](docs/adr/0034-the-wall-decoration-clearance-moves-objects-along-their-mean-face-normal.md)).
+_Avoid_: z-fight fix, decal offset
+
+**Saved region**:
+A .blend that holds one imported region and the key of its import. A scripted import appends it when the key fits, and imports the region again when it does not ([ADR 0033](docs/adr/0033-a-saved-region-carries-a-key-and-a-stale-file-is-imported-again.md)).
+_Avoid_: region cache (the cache is the game's data store), baked region
+
 **Landscape**:
 The group `l<x>_<y>` of a region. It lists the placements of the region and is encrypted with landscape keys.
 _Avoid_: scenery file, loc file
@@ -263,6 +275,26 @@ _Avoid_: skin colours, preset
 **Worn model**:
 The model files an item shows on a player's body, up to three per body type, separate from its inventory model. Several items can share one worn model.
 _Avoid_: equip model, wear model
+
+**Inventory model**:
+The model that the client shows for an item on the ground and in its icon, named by opcode 1 of the item definition. The client scales it by the item's resize, recolours and retextures it, and lights it with the item light (`iz.p` of gamepack 149, [docs/research/item-light.md](docs/research/item-light.md)).
+_Avoid_: ground model, prop model, drop model (an export preset uses that word)
+
+**Item light**:
+The light that the client gives the face corners of an inventory model, from the item's ambient plus 64, its contrast plus 768 and the direction `-50, -10, -50` ([ADR 0032](docs/adr/0032-an-item-is-lit-with-the-item-light-of-the-client.md)).
+_Avoid_: item shading, icon light
+
+**Look**:
+What a script names to get a player: the body type, the identity kits by body part, the five colour choices and the worn items by item id. The add-on turns it into the twelve equipment values with the rules of the panel ([ADR 0031](docs/adr/0031-scripts-call-one-module-that-reads-no-preference.md)).
+_Avoid_: outfit, loadout, appearance (the panel's word for its own state)
+
+**Travel**:
+The keys on the location of a rig object that move an actor from tile to tile, at 30 frames for one tile for a walk and 15 for a run. A clip does not move the place of an actor ([ADR 0035](docs/adr/0035-travel-keys-one-tile-in-30-frames.md)).
+_Avoid_: root motion, path
+
+**Scripted use**:
+A Python script that builds a scene through `rsps_toolkit.blender.scripting`, with the add-on not enabled and every input as an argument ([ADR 0031](docs/adr/0031-scripts-call-one-module-that-reads-no-preference.md)).
+_Avoid_: headless mode, API mode
 
 **Recolour**:
 A pair of face colours, one to find and one to show in its place, that an item or identity kit applies to its models. The model file keeps the colour that is found.

@@ -1,0 +1,2 @@
+# The tests pin SHA-256 values of fixture files, so every text file has LF line ends in every checkout.
+* text=auto eol=lf
