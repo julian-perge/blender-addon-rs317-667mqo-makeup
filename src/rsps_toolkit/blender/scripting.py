@@ -157,8 +157,8 @@ def bake_clip(
     sets them as the Bake Clip button does. One Blender frame of a clip is one client tick of 20 ms, so a clip plays
     at its game speed only at 50 frames in a second.
 
-    An NPC, a chathead, a spot effect or another NPC collection is baked with `appearance_clip.bake_npc_clip`, which poses a
-    chathead with the chat frames of the clip (ADR 0038)."""
+    An NPC, a chathead, a spot effect or another NPC collection is baked with `appearance_clip.bake_npc_clip`, which
+    poses a chathead with the chat frames of the clip (ADR 0038)."""
     if isinstance(player, SpotEffect) and player.rig is None:
         raise ValueError(f"{player.collection.name} has no sequence, so it has no rig to bake a clip on")
     collection = player if isinstance(player, bpy.types.Collection) else player.collection

@@ -6,11 +6,11 @@ Status: approved
 
 Commands, structure and code style are in [AGENTS.md](../AGENTS.md) and [CODING_STANDARDS.md](../CODING_STANDARDS.md). Terms follow [GLOSSARY.md](../GLOSSARY.md). The NPC collection follows [ADR 0025](../docs/adr/0025-an-npc-is-created-and-baked-only.md), and the scripted use follows [ADR 0031](../docs/adr/0031-scripts-call-one-module-that-reads-no-preference.md) and [spec 170](170-scripted-use.md).
 
-The issue is one task with acceptance criteria, so it went straight to Build. The owner's run brief holds the design.
+The issue is one task with acceptance criteria, so it went straight to Build. Issue 193 holds the design.
 
 ## Objective
 
-A script of osrs-shorts puts the Zombie 30 in region 50_154 and Chronozon 4987 in region 48_155 with public functions only. Today `npc_collection.create_npc` builds the NPC body, but it puts the rig beside the other actors and takes no name.
+A script of another repo puts the Zombie 30 in region 50_154 and Chronozon 4987 in region 48_155 with public functions only. Today `npc_collection.create_npc` builds the NPC body, but it puts the rig beside the other actors and takes no name.
 
 ## Public seams
 

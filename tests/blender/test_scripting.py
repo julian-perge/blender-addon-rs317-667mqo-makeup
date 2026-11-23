@@ -908,7 +908,7 @@ def test_removing_a_player_with_a_textured_item_leaves_no_texture_material_or_im
     assert not bpy.data.images
 
 
-# Issue 193: the NPCs of two topics of osrs-shorts, Zombie 30 and Chronozon 4987.
+# The NPCs that issue 193 names.
 TOPIC_NPCS = [(30, "Zombie"), (4987, "Chronozon")]
 
 
@@ -935,7 +935,7 @@ def test_create_npc_takes_a_name_and_two_npcs_at_one_place_stand_on_the_same_pla
 @SNAPSHOT
 @pytest.mark.parametrize(("npc_id", "name"), TOPIC_NPCS)
 def test_bake_clip_bakes_the_stand_clip_of_an_npc(npc_id, name):
-    npc = scripting.create_npc(snapshot(), npc_id, brightness=BRIGHTNESS)
+    npc = scripting.create_npc(snapshot(), npc_id, brightness=BRIGHTNESS, location=(256.0, 128.0, 10.0))
     stand = read_npc(Js5Store(snapshot()), npc_id).stand
 
     scripting.bake_clip(npc, snapshot(), stand, start=0, repeat_until=60)
@@ -951,7 +951,7 @@ def test_create_npc_refuses_an_npc_that_the_cache_lacks_before_any_blender_data_
     assert not bpy.data.objects and not bpy.data.collections
 
 
-# Issue 193: the regions of the four topics of osrs-shorts. 50_154 and 48_155 are underground map squares.
+# The regions that issue 193 names. 50_154 and 48_155 are underground map squares.
 @SNAPSHOT
 @pytest.mark.parametrize(("x", "y"), [(48, 52), (38, 54), (50, 154), (48, 155)])
 def test_each_region_of_a_topic_imports_with_its_terrain_and_its_scenery(x, y):

@@ -67,7 +67,8 @@ A look starts from the default look of the body type. An item goes to the slot t
 ## NPCs
 
 ```python
-zombie = scripting.create_npc(CACHE, 30, brightness=BRIGHTNESS, location=tuple(regions.tile_point(3245, 9883)))
+cave = scripting.import_region(CACHE, 50, 154, brightness=BRIGHTNESS)
+zombie = scripting.create_npc(CACHE, 30, brightness=BRIGHTNESS, location=tuple(cave.tile_point(3243, 9893)))
 zombie.collection, zombie.rig, zombie.mesh
 scripting.bake_clip(zombie, CACHE, 5565, start=0, repeat_until=90)  # stand 5565 of the Zombie 30
 ```
