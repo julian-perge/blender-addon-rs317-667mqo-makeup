@@ -140,7 +140,19 @@ def face_value_problems(objects: Sequence[bpy.types.Object]) -> list[str]:
                 f"{obj.name} was built before meshes stored their face colours. Run Update Player on a player, or "
                 "Create NPC or Make Rig again on an NPC."
             )
+        elif FACE_ATTRIBUTE in mesh.attributes and _has_textured_face(mesh):
+            # Spec 183 leaves the glTF export of textured faces out, so the export refuses them rather than writing
+            # them as a colour that no face has.
+            problems.append(f"{obj.name} has textured faces, which the glTF export does not write yet.")
     return problems
+
+
+def _has_textured_face(mesh: bpy.types.Mesh) -> bool:
+    """True when a face of a mesh of `appearance_preview.build_mesh` has no face colour, which only a textured face
+    lacks (-1 in FACE_COLOUR_ATTRIBUTE)."""
+    colours = [0] * len(mesh.polygons)
+    mesh.attributes[FACE_COLOUR_ATTRIBUTE].data.foreach_get("value", colours)  # pyrefly: ignore[missing-attribute]
+    return -1 in colours
 
 
 def write_glb(path: Path) -> None:

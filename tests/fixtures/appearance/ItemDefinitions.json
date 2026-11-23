@@ -9,7 +9,11 @@
     "femaleModel0": 501,
     "femaleModel1": -1,
     "femaleModel2": -1,
-    "femaleOffset": 6
+    "femaleOffset": 6,
+    "maleHeadModel": -1,
+    "maleHeadModel2": -1,
+    "femaleHeadModel": -1,
+    "femaleHeadModel2": -1
   },
   {
     "id": 1149,
@@ -22,6 +26,10 @@
     "femaleModel1": 413,
     "femaleModel2": -1,
     "femaleOffset": 0,
+    "maleHeadModel": 57,
+    "maleHeadModel2": 71,
+    "femaleHeadModel": 117,
+    "femaleHeadModel2": 129,
     "colorFind": [
       61
     ],
@@ -40,6 +48,10 @@
     "femaleModel1": 344,
     "femaleModel2": 3381,
     "femaleOffset": 0,
+    "maleHeadModel": -1,
+    "maleHeadModel2": -1,
+    "femaleHeadModel": -1,
+    "femaleHeadModel2": -1,
     "colorFind": [
       61,
       41,
@@ -62,6 +74,10 @@
     "femaleModel1": 337,
     "femaleModel2": -1,
     "femaleOffset": 0,
+    "maleHeadModel": -1,
+    "maleHeadModel2": -1,
+    "femaleHeadModel": -1,
+    "femaleHeadModel2": -1,
     "colorFind": [
       61
     ],
@@ -79,6 +95,10 @@
     "femaleModel0": 5025,
     "femaleModel1": -1,
     "femaleModel2": -1,
-    "femaleOffset": 0
+    "femaleOffset": 0,
+    "maleHeadModel": -1,
+    "maleHeadModel2": -1,
+    "femaleHeadModel": -1,
+    "femaleHeadModel2": -1
   }
 ]

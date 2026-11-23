@@ -198,19 +198,28 @@ def bake_npc_clip(
     start: int = 1,
     smooth: bool = False,
     set_scene_timing: bool = True,
+    repeat_until: int | None = None,
 ) -> int:
     """Add the clip to an NPC's rig as an NLA strip on the "RS clips" track, starting at Blender frame `start`, with
-    the strip, track, Your motion, frame rate, scene range, fit and fade rules of `bake_clip_to_rig` (spec 13, Bake).
+    the strip, track, Your motion, frame rate, scene range, fit, fade and repeat rules of `bake_clip_to_rig` (spec 13,
+    Bake).
 
     The NPC's model is posed with the clip alone (`appearance_pose.pose_model`): an NPC has no held items, no body
-    palette and no weapon clips. Refuses, before any change, Edit Mode, a clip with a frame on another frame map than
-    the NPC's, an edited NPC and a strip that would overlap another on the track. Returns the number of frames.
+    palette and no weapon clips. A chathead, an NPC collection whose record says `chathead`, is posed with the chat
+    frames of the clip too, as the client poses a head in a dialogue box (ADR 0038). Refuses, before any change, Edit
+    Mode, a clip with a frame on another frame map than the NPC's, an edited NPC, a repeat with `action` or not after
+    `start`, and a strip that would overlap another on the track. Returns the number of frames.
     """
     if npc_collection.NPC_KEY not in collection:
         raise ValueError(f"{collection.name} is not an NPC")
     appearance_collection.check_object_mode(collection, "baking a clip")
+    if repeat_until is not None and action:
+        raise ValueError("A clip repeats until a frame only when it plays as a Pose. An Action follows its loop offset")
+    if repeat_until is not None and repeat_until <= start:
+        raise ValueError(f"The clip must repeat until a frame after its start frame {start}, not until {repeat_until}")
     source = source_of(clip)
-    frame_map = json.loads(collection[npc_collection.NPC_KEY])["frame_map"]
+    record = json.loads(collection[npc_collection.NPC_KEY])
+    frame_map = record["frame_map"]
     for group, file in read_sequence(source).frames:
         used = frame_map_id(source.frame_bytes(group, file))
         if used != frame_map:
@@ -220,7 +229,7 @@ def bake_npc_clip(
             )
     if appearance_collection.is_edited(collection):
         raise ValueError(f"{collection.name} has edits, so a clip cannot be baked onto it")
-    posed = appearance_pose.pose_model(collection, source, action=action)
+    posed = appearance_pose.pose_model(collection, source, action=action, chat=bool(record.get("chathead")))
     return _bake_strip(
         collection,
         source,
@@ -230,6 +239,7 @@ def bake_npc_clip(
         smooth=smooth,
         set_scene_timing=set_scene_timing,
         hands=False,
+        repeat_until=repeat_until,
     )
 
 

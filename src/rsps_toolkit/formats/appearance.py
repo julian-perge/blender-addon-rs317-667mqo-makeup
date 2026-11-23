@@ -58,6 +58,11 @@ class WornItem:
     female_offset: int
     recolours: tuple[tuple[int, int], ...]
     retextures: tuple[tuple[int, int], ...]
+    male_head_models: tuple[int, int] = (-1, -1)
+    """The models of the item in a male chathead: opcodes 90 and 92 (`iz.as` and `iz.av`, docs/research/chatheads.md,
+    section 3). -1 is none."""
+    female_head_models: tuple[int, int] = (-1, -1)
+    """The models of the item in a female chathead: opcodes 91 and 93 (`iz.ab` and `iz.at`)."""
 
 
 @dataclass(frozen=True)

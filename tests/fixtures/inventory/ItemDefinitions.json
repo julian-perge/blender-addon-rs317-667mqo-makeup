@@ -16,6 +16,10 @@
     "femaleModel1": -1,
     "femaleModel2": -1,
     "femaleOffset": 0,
+    "maleHeadModel": -1,
+    "maleHeadModel2": -1,
+    "femaleHeadModel": -1,
+    "femaleHeadModel2": -1,
     "wearPos1": -1,
     "wearPos2": -1,
     "wearPos3": -1
@@ -43,6 +47,10 @@
     "femaleModel1": -1,
     "femaleModel2": -1,
     "femaleOffset": 0,
+    "maleHeadModel": -1,
+    "maleHeadModel2": -1,
+    "femaleHeadModel": -1,
+    "femaleHeadModel2": -1,
     "wearPos1": -1,
     "wearPos2": -1,
     "wearPos3": -1
@@ -64,6 +72,10 @@
     "femaleModel1": -1,
     "femaleModel2": -1,
     "femaleOffset": 0,
+    "maleHeadModel": -1,
+    "maleHeadModel2": -1,
+    "femaleHeadModel": -1,
+    "femaleHeadModel2": -1,
     "wearPos1": -1,
     "wearPos2": -1,
     "wearPos3": -1
@@ -85,6 +97,10 @@
     "femaleModel1": -1,
     "femaleModel2": -1,
     "femaleOffset": 0,
+    "maleHeadModel": -1,
+    "maleHeadModel2": -1,
+    "femaleHeadModel": -1,
+    "femaleHeadModel2": -1,
     "wearPos1": -1,
     "wearPos2": -1,
     "wearPos3": -1

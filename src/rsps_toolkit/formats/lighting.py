@@ -4,7 +4,8 @@ This follows `ModelData.light` and `computeNormals` in the May 2018 RuneLite tre
 `runescape-client/src/main/java/ModelData.java` lines 1408 to 1480 and 1538 to 1718). The player cases are checked
 against lit models that the unchanged revision 149 client produced (see `tests/fixtures/appearance/reference.json`).
 Textured faces, faces with alpha 254 or 255, and faces of render type 2 or 3 are checked on hand-made models against
-the arithmetic of those lines (`tests/unit/test_lighting.py`). Flat-shaded faces are covered only by the male player
+the arithmetic of those lines (`tests/unit/test_lighting.py`). `dv.ae` and `dv.z` of gamepack 149 take the same branches with the same
+clamps (docs/research/textured-light.md, section 1). Flat-shaded faces are covered only by the male player
 cases (8 faces) and the hand-made models, and 32-bit overflow of the face normal is not modelled.
 """
 
@@ -16,8 +17,6 @@ from .model import Model
 
 # The ambient, contrast and light direction that the client passes when it lights a player body.
 PLAYER_LIGHTING = (64, 850, -30, -50, -30)
-# Face alpha values the client reads as signed bytes -2 and -1, which switch the face to special shading.
-_HIDDEN_ALPHAS = (254, 255)
 
 
 @dataclass(frozen=True)
@@ -95,20 +94,6 @@ def light(
 
     `render_types` is the stored render type of each face. When it is None, they come from the model itself."""
     return _light(model, lighting, _stored_render_types(model) if render_types is None else render_types)
-
-
-def light_hsl(model: Model, lighting: tuple[int, int, int, int, int] = PLAYER_LIGHTING) -> Shading:
-    """Light a model for a caller whose `rs_lit` holds only HSL colours, such as Create Player.
-
-    It refuses a textured face and a face with alpha 254 or 255, and it lights a face of render type 2 or 3
-    from its flat shading alone, as `light` did before `light` read those faces. The owner decided this on 2026-11-17
-    (issues 105 and 127), and issue 103 changes it.
-    """
-    if any(t is not None for t in model.face_textures):
-        raise ValueError("Lighting of textured faces is not verified against the client")
-    if any(a in _HIDDEN_ALPHAS for a in model.face_alphas):
-        raise ValueError("Lighting of faces with alpha 254 or 255 is not verified against the client")
-    return _light(model, lighting, [1 if flat else 0 for flat in model.flat_shaded])
 
 
 def _light(model: Model, lighting: tuple[int, int, int, int, int], render_types: Sequence[int]) -> Shading:

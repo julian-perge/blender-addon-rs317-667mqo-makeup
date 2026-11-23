@@ -7,9 +7,10 @@ from pathlib import Path
 
 import bpy
 import pytest
-from js5_builder import build_region_cache, item_definition, rewrite_cache
+from js5_builder import build_region_cache, item_definition, region_textures, rewrite_cache
 from mathutils import Vector
 
+from rsps_toolkit.animation.clip import CacheClip, pose_vertices, read_sequence
 from rsps_toolkit.blender import (
     appearance_clip,
     appearance_collection,
@@ -19,12 +20,16 @@ from rsps_toolkit.blender import (
     region_import,
     scripting,
 )
+from rsps_toolkit.blender.axes import game_to_blender
 from rsps_toolkit.blender.face_materials import srgb_to_linear
 from rsps_toolkit.formats import decode, face_colour_to_rgb
-from rsps_toolkit.formats.appearance_look import Look
+from rsps_toolkit.formats.appearance_look import Look, look_preset
 from rsps_toolkit.formats.appearance_preset import loads_preset
+from rsps_toolkit.formats.cache_profile import shared_profile
+from rsps_toolkit.formats.chathead import player_head_model
+from rsps_toolkit.formats.item_wear import load_item_wear
 from rsps_toolkit.formats.js5 import Js5Store
-from rsps_toolkit.formats.lighting import light_hsl
+from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, light
 from rsps_toolkit.formats.region import ground_height, load_terrain
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -52,10 +57,13 @@ def raw_files(folder: Path) -> dict[int, bytes]:
 
 @pytest.fixture
 def cache(cache) -> Path:
-    """The appearance cache with the items and inventory models of fixtures/inventory, and item 9000, whose inventory
-    model 135 has textured faces."""
+    """The appearance cache with the items and inventory models of fixtures/inventory, item 9000, whose inventory
+    model 135 has textured faces, a stand-in for the Fire cape 6570 that wears model 135 (texture 16), and the textures
+    and sprites of fixtures/region."""
 
     def add(parts: dict[str, dict[int, bytes]]) -> None:
+        parts |= region_textures()
+        parts["items"][6570] = item_definition("Textured cape", male=(135, -1, -1), female=(135, -1, -1))
         parts["items"] |= raw_files(INVENTORY / "items")
         parts["items"][9000] = bytes([1]) + struct.pack(">H", 135) + item_definition("Textured thing")
         parts["models"] |= raw_files(INVENTORY / "models")
@@ -93,7 +101,7 @@ def test_import_item_makes_the_inventory_model_with_the_item_light_in_rs_lit(cac
     assert [material.name for material in mesh.materials if material] == [appearance_preview.MATERIAL_NAME]
     # The Waterskin(4) 1823 shows model 2699 with no recolour (RuneLite's row in fixtures/inventory).
     model = decode((INVENTORY / "models" / "2699.dat").read_bytes(), profile="osrs-149")
-    shading = light_hsl(model, BASE_ITEM_LIGHT)
+    shading = light(model, BASE_ITEM_LIGHT)
     expected: list[float] = []
     for face, corners in enumerate(model.faces):
         if len(set(corners)) < 3:  # A face that repeats a vertex stays out of the mesh (ADR 0005).
@@ -123,16 +131,109 @@ def test_import_item_takes_a_name(cache):
     assert scripting.import_item(cache, 1823, brightness=BRIGHTNESS, name="Flask").name == "Flask"
 
 
-def test_an_item_with_a_textured_inventory_model_is_refused_and_nothing_is_left(cache):
-    with pytest.raises(ValueError, match="textured"):
+def test_an_item_with_a_textured_inventory_model_shows_its_texture(cache):
+    # Issue 103: the inventory model 135 of item 9000 names texture 16 (fixtures/models/osrs), and dv.ae lights it
+    # (docs/research/textured-light.md).
+    mesh = mesh_of(scripting.import_item(cache, 9000, brightness=BRIGHTNESS))
+
+    shown = {material.get(appearance_preview.TEXTURE_KEY) for material in mesh.materials}  # pyrefly: ignore
+    assert 16 in shown
+
+
+def test_an_item_whose_texture_the_cache_lacks_is_refused_and_nothing_is_left(cache):
+    rewrite_cache(cache, lambda parts: parts["textures"].pop(16))
+
+    with pytest.raises(OSError, match="texture 16"):
         scripting.import_item(cache, 9000, brightness=BRIGHTNESS)
 
-    assert (len(bpy.data.objects), len(bpy.data.meshes)) == (0, 0)
+    assert (len(bpy.data.objects), len(bpy.data.meshes), len(bpy.data.images)) == (0, 0, 0)
 
 
 def test_an_item_that_the_cache_lacks_is_refused(cache):
     with pytest.raises(ValueError, match="no item 4"):
         scripting.import_item(cache, 4, brightness=BRIGHTNESS)
+
+
+def polygon_values(mesh: bpy.types.Mesh, name: str) -> list[int]:
+    values = [0] * len(mesh.polygons)
+    mesh.attributes[name].data.foreach_get("value", values)  # pyrefly: ignore[missing-attribute]
+    return values
+
+
+def test_a_player_who_wears_an_item_with_textured_faces_shows_its_texture(cache):
+    # Issue 103. The stand-in cape wears model 135, whose textured faces name texture 16 (fixtures/models/osrs).
+    player = scripting.create_player(cache, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    mesh = mesh_of(player.parts[0])
+    body = shared_profile(cache).assemble(loads_preset(player.collection[appearance_preview.PRESET_KEY]))
+    faces = appearance_preview.face_indices(mesh)
+    assert faces is not None
+    slots = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", slots)
+    shown = [mesh.materials[slot].get(appearance_preview.TEXTURE_KEY) for slot in slots]  # pyrefly: ignore
+    assert 16 in shown
+    assert shown == [body.face_textures[face] for face in faces]
+    image = next(m for m in mesh.materials if m.get(appearance_preview.TEXTURE_KEY) == 16)  # pyrefly: ignore
+    assert any(node.type == "TEX_IMAGE" and node.image is not None for node in image.node_tree.nodes)  # pyrefly: ignore
+    assert polygon_values(mesh, appearance_preview.LIT_SLOT_ATTRIBUTE) == slots
+
+
+def test_a_textured_corner_holds_its_light_value_over_128_as_a_grey(cache):
+    # The client multiplies each texel by the light value over 128 (docs/research/textured-light.md, section 2).
+    player = scripting.create_player(cache, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    mesh = mesh_of(player.parts[0])
+    body = shared_profile(cache).assemble(loads_preset(player.collection[appearance_preview.PRESET_KEY]))
+    shading = light(body, PLAYER_LIGHTING)
+    faces = appearance_preview.face_indices(mesh)
+    assert faces is not None
+    colours = lit_colours(mesh)
+    polygon = next(p for p, face in enumerate(faces) if body.face_textures[face] is not None)
+    face = faces[polygon]
+    third = shading.corner_c[face]
+    values = (shading.corner_a[face],) * 3 if third == -1 else (shading.corner_a[face], shading.corner_b[face], third)
+    start = mesh.polygons[polygon].loop_start
+    for corner, value in enumerate(values):
+        grey = srgb_to_linear(value / 128)
+        assert colours[4 * (start + corner) : 4 * (start + corner) + 4] == pytest.approx([grey, grey, grey, 1.0])
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("RSPS_SNAPSHOT_430_CACHE") and Path(os.environ["RSPS_SNAPSHOT_430_CACHE"]).is_dir()),
+    reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
+)
+def test_vial_of_water_shows_its_glass_faces_and_its_faces_of_alpha_254_cover_nothing():
+    # Model 2789 of Vial of water 227 has two faces of alpha 254 and faces of alpha 128 and 32 (RuneLite's model export
+    # of snapshot 430, docs/research/textured-light.md, section 4).
+    snapshot = Path(os.environ["RSPS_SNAPSHOT_430_CACHE"])
+    mesh = mesh_of(scripting.import_item(snapshot, 227, brightness=BRIGHTNESS))
+
+    slots = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", slots)
+    alphas = [mesh.materials[slot].get(appearance_preview.ALPHA_KEY) for slot in slots]  # pyrefly: ignore
+    assert alphas.count(254) == 2
+    assert {128, 32} <= set(alphas)
+    # ep.g copies the pixel beside a face of alpha 254 in place of the face, so the face covers nothing.
+    glass = next(m for m in mesh.materials if m.get(appearance_preview.ALPHA_KEY) == 254)  # pyrefly: ignore
+    covers = [node.inputs["Fac"].default_value for node in glass.node_tree.nodes if node.type == "MIX_SHADER"]  # pyrefly: ignore
+    assert covers == [0.0]
+
+
+@pytest.mark.skipif(
+    not (os.environ.get("RSPS_SNAPSHOT_430_CACHE") and Path(os.environ["RSPS_SNAPSHOT_430_CACHE"]).is_dir()),
+    reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
+)
+def test_a_male_player_who_wears_the_fire_cape_shows_its_24_faces_of_texture_40():
+    # Issue 103: the male worn model 9638 of the Fire cape 6570 has texture 40 on 24 of its 63 faces (RuneLite's model
+    # export of snapshot 430, docs/research/textured-light.md, section 4).
+    snapshot = Path(os.environ["RSPS_SNAPSHOT_430_CACHE"])
+    player = scripting.create_player(snapshot, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    mesh = mesh_of(player.parts[0])
+    slots = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", slots)
+    shown = [mesh.materials[slot].get(appearance_preview.TEXTURE_KEY) for slot in slots]  # pyrefly: ignore
+    assert shown.count(40) == 24
 
 
 # The Steel med helm 1149, the Rune platebody (g) 2653 and the Rune platelegs (t) 4087 are items of the appearance
@@ -641,3 +742,165 @@ def test_a_save_that_fails_keeps_the_imported_region_and_warns(region_cache, tmp
 
     assert regions.appended == (False,)
     assert regions.collections[0].name == "Region 48_50"
+
+
+SNAPSHOT = pytest.mark.skipif(
+    not (os.environ.get("RSPS_SNAPSHOT_430_CACHE") and Path(os.environ["RSPS_SNAPSHOT_430_CACHE"]).is_dir()),
+    reason="RSPS_SNAPSHOT_430_CACHE does not name a snapshot 430 cache folder",
+)
+
+
+def snapshot() -> Path:
+    return Path(os.environ["RSPS_SNAPSHOT_430_CACHE"])
+
+
+def hidden_on(obj: bpy.types.Object, frame: int) -> tuple[bool, bool]:
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.frame_set(frame)
+    return obj.hide_viewport, obj.hide_render
+
+
+@SNAPSHOT
+def test_a_spot_effect_at_a_point_plays_its_sequence_once_and_is_hidden_after_it():
+    # The smoke puff 86 shows model 3076 with sequence 654 (fixtures/spot_effects). ap.fb ends the graphic when its
+    # frame passes the last one, and frame 0 shows one tick longer than its duration (docs/research/spot-effects.md).
+    durations = read_sequence(CacheClip(Js5Store(snapshot()), 654)).durations
+    effect = scripting.create_spot_effect(
+        snapshot(), 86, brightness=BRIGHTNESS, start=10, location=(128.0, 0.0, 0.0), height=40.0
+    )
+
+    assert effect.rig is not None and effect.end is not None
+    assert effect.rig.location[:] == (128.0, 0.0, 40.0)
+    assert effect.end == 10 + sum(durations) + 1
+    strips = effect.rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips  # pyrefly: ignore
+    assert [round(strip.frame_start) for strip in strips] == [10]
+    assert hidden_on(effect.mesh, 9) == (True, True)
+    assert hidden_on(effect.mesh, 10) == (False, False)
+    assert hidden_on(effect.mesh, effect.end - 1) == (False, False)
+    assert hidden_on(effect.mesh, effect.end) == (True, True)
+
+
+@SNAPSHOT
+def test_a_spot_effect_on_a_joint_follows_the_joint():
+    player = scripting.create_player(snapshot(), Look(), brightness=BRIGHTNESS)
+    effect = scripting.create_spot_effect(snapshot(), 86, brightness=BRIGHTNESS, joint=(player.rig, "hand.R"))
+
+    assert effect.rig is not None
+    constraint = effect.rig.constraints[0]
+    assert isinstance(constraint, bpy.types.ChildOfConstraint)
+    assert (constraint.target, constraint.subtarget) == (player.rig, "hand.R")
+
+
+@SNAPSHOT
+def test_a_spot_effect_with_no_sequence_shows_on_its_start_frame_only_with_its_scale():
+    # Spot effect 9 has no sequence (fixtures/spot_effects). ap.fb ends a graphic with no sequence on the next tick
+    # (offset 2238, docs/research/spot-effects.md).
+    effect = scripting.create_spot_effect(snapshot(), 9, brightness=BRIGHTNESS, start=5)
+
+    assert (effect.rig, effect.end) == (None, 6)
+    assert hidden_on(effect.mesh, 5) == (False, False)
+    assert hidden_on(effect.mesh, 6) == (True, True)
+    with pytest.raises(ValueError, match="no sequence"):
+        scripting.bake_clip(effect, snapshot(), 654)
+
+
+@SNAPSHOT
+def test_a_spot_effect_takes_its_scale_and_turn_on_its_rig():
+    # Spot effect 188 has width 256 and height 128, and 79 has the rotation 270 (fixtures/spot_effects). ej.c turns
+    # (x, z) to (z, -x) once for each quarter (spot-effects.md).
+    wide = scripting.create_spot_effect(snapshot(), 188, brightness=BRIGHTNESS)
+    turned = scripting.create_spot_effect(snapshot(), 79, brightness=BRIGHTNESS)
+
+    assert wide.rig is not None and turned.rig is not None
+    assert wide.rig.scale[:] == pytest.approx((2.0, 2.0, 1.0))
+    assert turned.rig.rotation_euler.z == pytest.approx(-math.radians(270))
+
+
+@SNAPSHOT
+def test_a_spot_effect_on_a_joint_with_a_height_is_refused_before_any_change():
+    player = scripting.create_player(snapshot(), Look(), brightness=BRIGHTNESS)
+    before = (len(bpy.data.objects), len(bpy.data.collections))
+
+    with pytest.raises(ValueError, match="no location or height"):
+        scripting.create_spot_effect(snapshot(), 86, brightness=BRIGHTNESS, joint=(player.rig, "head"), height=10.0)
+    with pytest.raises(LookupError, match="no spot effect 99999"):
+        scripting.create_spot_effect(snapshot(), 99999, brightness=BRIGHTNESS)
+    assert (len(bpy.data.objects), len(bpy.data.collections)) == before
+
+
+def posed_positions(obj: bpy.types.Object, frame: int) -> dict[int, Vector]:
+    """The evaluated place of each model vertex of the mesh at a frame, in game units in the space of its rig."""
+    scene = bpy.context.scene
+    assert scene is not None
+    scene.frame_set(frame)
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    indices = appearance_preview.vertex_indices(mesh_of(obj))
+    positions = {index: vertex.co.copy() for index, vertex in zip(indices, mesh.vertices, strict=True)}
+    evaluated.to_mesh_clear()
+    return positions
+
+
+@SNAPSHOT
+def test_a_player_chathead_plays_chathap1_with_its_chat_frames():
+    # jg.p applies the frame and then the chat frame of each step to a chathead (docs/research/chatheads.md). The bake
+    # fits joints to those posed vertices, so the mesh follows them to within the rounding of the fit.
+    head = scripting.create_player_chathead(snapshot(), Look(), brightness=BRIGHTNESS)
+    chathap1 = scripting.chat_clip("chathap1")
+    scripting.bake_clip(head, snapshot(), chathap1, start=0)
+
+    profile = shared_profile(snapshot())
+    preset = look_preset(Look(), profile.kits, load_item_wear())
+    model = player_head_model(
+        preset.equipment, profile.kits, profile.items, profile.load_model, preset.colours, profile.palette
+    )
+    assert model.vertex_skins is not None
+    clip = CacheClip(Js5Store(snapshot()), chathap1)
+    chat = pose_vertices(tuple(model.vertices), tuple(model.vertex_skins), clip, chat=True)
+    plain = pose_vertices(tuple(model.vertices), tuple(model.vertex_skins), clip)
+    step = next(i for i, (a, b) in enumerate(zip(chat, plain, strict=True)) if a.vertices != b.vertices)
+    frame = sum(f.ticks for f in chat[:step]) + 1
+    shown = posed_positions(head.mesh, frame)
+    expected = {i: Vector(game_to_blender(chat[step].vertices[i])) for i in shown}
+    assert max((shown[i] - expected[i]).length for i in shown) < 1.0
+
+
+def test_a_duplicated_player_keeps_the_texture_of_its_worn_item(cache):
+    # Spec 183, section 1: Duplicate Player rebuilds the player from its stored settings and passes the textures.
+    player = scripting.create_player(cache, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    copy = appearance_collection.duplicate_player(player.collection, str(cache))
+
+    materials = [m for m in mesh_of(appearance_collection.mesh_of(copy)).materials if m is not None]
+    assert 16 in {material.get(appearance_preview.TEXTURE_KEY) for material in materials}
+
+
+@SNAPSHOT
+def test_the_chathead_of_man_bakes_chatneu1():
+    head = scripting.create_npc_chathead(snapshot(), 3078, brightness=BRIGHTNESS)
+
+    scripting.bake_clip(head, snapshot(), scripting.chat_clip("chatneu1"), start=0, repeat_until=100)
+
+    assert head.collection.name == "Man chathead"
+    strips = head.rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips  # pyrefly: ignore
+    assert [(round(s.frame_start), round(s.frame_end)) for s in strips] == [(0, 100)]
+
+
+@SNAPSHOT
+def test_an_npc_with_no_chathead_models_and_an_unknown_chat_clip_are_refused():
+    # The cow 2805 has no chathead models (RuneLite's row in fixtures/npc/chathead-models.json).
+    with pytest.raises(ValueError, match="no chathead models"):
+        scripting.create_npc_chathead(snapshot(), 2805, brightness=BRIGHTNESS)
+    with pytest.raises(ValueError, match="not a chat clip"):
+        scripting.chat_clip("chathap9")
+    assert not bpy.data.objects
+
+
+def test_removing_a_player_with_a_textured_item_leaves_no_texture_material_or_image(cache):
+    player = scripting.create_player(cache, Look(items=(6570,)), brightness=BRIGHTNESS)
+
+    appearance_collection.remove_collection(player.collection)
+
+    assert not [m for m in bpy.data.materials if appearance_preview.TEXTURE_KEY in m]
+    assert not bpy.data.images

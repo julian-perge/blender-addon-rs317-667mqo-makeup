@@ -59,6 +59,9 @@ class NpcDefinition:
     """The scale in game height. 128 is a scale of 1."""
     ambient: int
     contrast: int
+    chathead_models: tuple[int, ...] = ()
+    """The models of the NPC's chathead (opcode 60, `ip.w`), in the order that `ip.e` joins them (docs/research/
+    chatheads.md, section 2). Empty when the NPC has none."""
 
 
 def read_npc(store: Js5Store, npc_id: int) -> NpcDefinition:
@@ -113,6 +116,7 @@ def decode_npc(npc_id: int, data: bytes) -> NpcDefinition:
     retextures: tuple[tuple[int, int], ...] = ()
     width_scale = height_scale = 128
     ambient = contrast = 0
+    chathead_models: tuple[int, ...] = ()
     while (opcode := reader.u8()) != 0:
         if opcode == 1:
             models = tuple(reader.u16() for _ in range(reader.u8()))
@@ -138,8 +142,8 @@ def decode_npc(npc_id: int, data: bytes) -> NpcDefinition:
         elif opcode == 41:
             retextures = tuple((reader.u16(), reader.u16()) for _ in range(reader.u8()))
         elif opcode == 60:
-            # Lines 301 to 307: the chat head models, which an NPC rig does not use.
-            reader.take(2 * reader.u8())
+            # Lines 301 to 307, and `ip.r` of gamepack 149: a count, then one model id each.
+            chathead_models = tuple(reader.u16() for _ in range(reader.u8()))
         elif opcode in (93, 99, 107, 109, 111):
             # These opcodes read no value and set fields that an NPC rig does not keep.
             pass
@@ -183,6 +187,7 @@ def decode_npc(npc_id: int, data: bytes) -> NpcDefinition:
         height_scale=height_scale,
         ambient=ambient,
         contrast=contrast,
+        chathead_models=chathead_models,
     )
 
 

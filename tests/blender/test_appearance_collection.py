@@ -6,11 +6,11 @@ import bmesh
 import bpy
 import pytest
 
-from rsps_toolkit.blender import appearance_collection, appearance_preview
+from rsps_toolkit.blender import appearance_collection, appearance_fades, appearance_preview
 from rsps_toolkit.blender.animation import assert_static_exportable
 from rsps_toolkit.formats.appearance_preset import AppearancePreset, loads_preset
 from rsps_toolkit.formats.appearance_rig import BONE_LENGTH, derive_rig
-from rsps_toolkit.formats.lighting import light_hsl
+from rsps_toolkit.formats.lighting import light
 from rsps_toolkit.formats.model import Model
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "appearance"
@@ -502,7 +502,7 @@ def test_a_mesh_of_a_model_with_no_face_skins_still_has_its_face_colours_and_fac
         face_texture_triangles=[None, None],
         flat_shaded=[True, True],
     )
-    mesh = appearance_preview.build_mesh(model, light_hsl(model), "Fire")
+    mesh = appearance_preview.build_mesh(model, light(model), "Fire")
     assert {"rs_face_label"}.isdisjoint(mesh.attributes.keys())
     assert face_values(mesh, appearance_preview.FACE_COLOUR_ATTRIBUTE) == [8741, 960]
     assert face_values(mesh, appearance_preview.FACE_ALPHA_ATTRIBUTE) == [0, 128]
@@ -514,3 +514,102 @@ def face_values(mesh: bpy.types.Mesh, name: str) -> list[int]:
     out = [0] * len(mesh.polygons)
     attribute.data.foreach_get("value", out)
     return out
+
+
+def test_a_textured_polygon_goes_back_to_its_texture_material_when_its_fade_ends():
+    # A fade group that holds a textured polygon, then no fade group, as when a clip that fades it is baked over.
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, None],
+        face_textures=[None, 16],
+        render_priorities=[0, 0],
+        face_alphas=[0, 0],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    obj = bpy.data.objects.new("Fire", appearance_preview.build_mesh(model, light(model), "Fire"))
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    built = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", built)
+    assert built == [0, 1]
+    owner = bpy.data.objects.new("Owner", None)
+
+    appearance_fades.apply_fades(obj, owner, [appearance_fades.FadeGroup((1,), 0, (1,), (0, 128))])
+    appearance_fades.apply_fades(obj, owner, [])
+
+    after = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", after)
+    assert after == built
+    appearance_fades.apply_fades(obj, owner, [appearance_fades.FadeGroup((1,), 0, (1,), (0, 128))])
+    appearance_fades.clear_fades(obj)
+    mesh.polygons.foreach_get("material_index", after)
+    assert after == built
+
+
+def test_a_plain_face_with_alpha_covers_its_share_of_the_pixels_as_the_client_blends_it():
+    # ep.g and ep.m blend a plain face by (256 - alpha) / 256 (docs/research/textured-light.md, section 2, ADR 0036).
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, 960],
+        face_textures=[None, None],
+        render_priorities=[0, 0],
+        face_alphas=[0, 128],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    mesh = appearance_preview.build_mesh(model, light(model), "Glass")
+
+    slots = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", slots)
+    plain, glass = (mesh.materials[slot] for slot in slots)
+    assert plain is not None and plain.name == appearance_preview.MATERIAL_NAME
+    assert glass is not None and glass.get(appearance_preview.ALPHA_KEY) == 128
+    covers = [node.inputs["Fac"].default_value for node in glass.node_tree.nodes if node.type == "MIX_SHADER"]  # pyrefly: ignore
+    assert covers == [pytest.approx(128 / 256)]
+
+
+def test_faces_of_one_alpha_share_one_material_on_every_mesh():
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, 960],
+        face_textures=[None, None],
+        render_priorities=[0, 0],
+        face_alphas=[32, 32],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    first = appearance_preview.build_mesh(model, light(model), "One")
+    second = appearance_preview.build_mesh(model, light(model), "Two")
+
+    assert first.materials[1] == second.materials[1]
+    assert [m.get(appearance_preview.ALPHA_KEY) for m in first.materials] == [None, 32]  # pyrefly: ignore
+
+
+def test_a_polygon_whose_material_slot_the_user_removed_goes_back_to_the_plain_material():
+    # Stored data survives the user's edits (CODING_STANDARDS.md): rs_lit_slot names slot 1, which the user removes.
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, 960],
+        face_textures=[None, None],
+        render_priorities=[0, 0],
+        face_alphas=[0, 64],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    obj = bpy.data.objects.new("Glass", appearance_preview.build_mesh(model, light(model), "Glass"))
+    mesh = obj.data
+    assert isinstance(mesh, bpy.types.Mesh)
+    mesh.materials.pop(index=1)
+    owner = bpy.data.objects.new("Owner", None)
+
+    appearance_fades.apply_fades(obj, owner, [appearance_fades.FadeGroup((1,), 0, (0,), (0, 128))])
+    appearance_fades.apply_fades(obj, owner, [])
+
+    after = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", after)
+    assert after == [0, 0]

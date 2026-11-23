@@ -286,31 +286,21 @@ def textured_first_face(model):
     )
 
 
-def alpha_on_first_face(alpha):
-    return lambda model: dataclasses.replace(model, face_alphas=[alpha, *model.face_alphas[1:]])
+def shows_texture(texture: int) -> bool:
+    return any(
+        material.get(appearance_preview.TEXTURE_KEY) == texture
+        and any(node.type == "TEX_IMAGE" and node.image is not None for node in material.node_tree.nodes)  # pyrefly: ignore
+        for material in bpy.data.materials
+    )
 
 
-UNDRAWN_FACES = pytest.mark.parametrize(
-    ("change", "message"),
-    [
-        (textured_first_face, "Lighting of textured faces is not verified against the client"),
-        (alpha_on_first_face(254), "Lighting of faces with alpha 254 or 255 is not verified against the client"),
-        (alpha_on_first_face(255), "Lighting of faces with alpha 254 or 255 is not verified against the client"),
-    ],
-    ids=["textured face", "alpha 254", "alpha 255"],
-)
-
-
-@UNDRAWN_FACES
-def test_create_npc_refuses_a_face_it_cannot_draw_and_changes_nothing(monkeypatch, change, message):
-    # The owner's decision of 2026-11-17 on issue 105: NPC import keeps refusing these faces until issue 103. The
-    # gnome has none, so the test gives its model one.
+def test_create_npc_builds_a_textured_face_with_its_texture(monkeypatch):
+    # Issue 103: NPC import lit and drew no textured face before. The gnome has none, so the test gives its model one
+    # with texture 5, which snapshot 430 holds.
     build = npc_collection.npc_model
-    monkeypatch.setattr(npc_collection, "npc_model", lambda npc, load: change(build(npc, load)))
-    before = blender_data()
-    with pytest.raises(RuntimeError, match=message):
-        create(4233)
-    assert blender_data() == before
+    monkeypatch.setattr(npc_collection, "npc_model", lambda npc, load: textured_first_face(build(npc, load)))
+    create(4233)
+    assert shows_texture(5)
 
 
 def test_create_npc_refuses_an_npc_id_that_the_cache_lacks_and_changes_nothing():
@@ -929,20 +919,18 @@ def test_make_rig_refuses_and_changes_nothing(make_active, sequence, message):
     assert (blender_data(), None if obj is None or obj.type != "MESH" else object_state(obj)) == before
 
 
-@UNDRAWN_FACES
-def test_make_rig_refuses_a_face_it_cannot_draw_and_changes_nothing(monkeypatch, change, message):
-    # The owner's decision of 2026-11-17 on issue 127: Make rig keeps refusing these faces until issue 103, as NPC
-    # import does. The gnome has none, so the test gives the model that model export builds one.
+def test_make_rig_builds_a_textured_face_with_its_texture(monkeypatch):
+    # Issue 103: as for NPC import. The gnome has no textured face, so the test gives the model that model export
+    # builds one with texture 5, which snapshot 430 holds.
+    change = textured_first_face
     obj = imported_gnome()
     bpy.context.view_layer.objects.active = obj  # pyrefly: ignore[missing-attribute]
     evaluated = npc_collection.export_model.evaluated_model
     monkeypatch.setattr(
         npc_collection.export_model, "evaluated_model", lambda *args, **kwargs: change(evaluated(*args, **kwargs))
     )
-    before = (blender_data(), object_state(obj))
-    with pytest.raises(RuntimeError, match=message):
-        make_rig(195)
-    assert (blender_data(), object_state(obj)) == before
+    make_rig(195)
+    assert shows_texture(5)
 
 
 def test_the_npc_panel_draws_the_make_rig_field_and_button_after_create_npc():

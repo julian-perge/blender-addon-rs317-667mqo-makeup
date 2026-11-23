@@ -45,6 +45,8 @@ def load_items(path: Path) -> dict[int, WornItem]:
             female_offset=row["femaleOffset"],
             recolours=_pairs(row.get("colorFind"), row.get("colorReplace")),
             retextures=_pairs(row.get("textureFind"), row.get("textureReplace")),
+            male_head_models=(row.get("maleHeadModel", -1), row.get("maleHeadModel2", -1)),
+            female_head_models=(row.get("femaleHeadModel", -1), row.get("femaleHeadModel2", -1)),
         )
         items[item.id] = item
     return items
@@ -114,7 +116,15 @@ def load_locs(path: Path) -> dict[int, LocDefinition]:
 
 
 def load_npcs(path: Path) -> dict[int, NpcDefinition]:
-    """Read the `npcs.json` that `NpcReference.java` writes."""
+    """Read the `npcs.json` that `NpcReference.java` writes. That file has no chathead models, so they come from the
+    `chathead-models.json` beside it, which holds the rows of RuneLite's decoding of snapshot 430 (the dump of the data
+    workspace, `npcs/NpcDefinitions.json`)."""
+    heads_path = path.parent / "chathead-models.json"
+    heads = (
+        {row["id"]: tuple(row["chatheadModels"] or ()) for row in json.loads(heads_path.read_text())}
+        if heads_path.is_file()
+        else {}
+    )
     return {
         row["id"]: NpcDefinition(
             models=tuple(row["models"] or ()),
@@ -132,6 +142,7 @@ def load_npcs(path: Path) -> dict[int, NpcDefinition]:
             height_scale=row["heightScale"],
             ambient=row["ambient"],
             contrast=row["contrast"],
+            chathead_models=heads.get(row["id"], ()),
         )
         for row in json.loads(path.read_text())
     }

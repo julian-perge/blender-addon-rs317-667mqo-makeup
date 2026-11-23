@@ -19,7 +19,7 @@ from ..animation.frames import decode_frame_map, decode_sequence
 from ..formats.appearance_rig import derive_rig, frame_map_joint_specs
 from ..formats.cache_profile import shared_profile
 from ..formats.js5 import Js5Store
-from ..formats.lighting import Shading, light_hsl
+from ..formats.lighting import Shading, light
 from ..formats.model import Model
 from ..formats.npc_definition import LIGHT_DIRECTION, NpcDefinition, npc_lighting, npc_model, npc_scale, read_npc
 from . import appearance_collection, appearance_preview, export_model, preferences, rs_layers
@@ -71,11 +71,12 @@ def create_npc(npc_id: int, folder: Path, brightness: float) -> bpy.types.Collec
     store = Js5Store(folder)
     npc = read_npc(store, npc_id)
     model = npc_model(npc, shared_profile(folder).load_model)
-    shading = light_hsl(model, npc_lighting(npc))
+    shading = light(model, npc_lighting(npc))
+    textures = appearance_preview.texture_pixels(folder, model, brightness)
     map_id, frame_map = stand_frame_map(store, npc)
     sequences = {field: getattr(npc, field) for field in SEQUENCE_FIELDS if getattr(npc, field) != -1}
     record = {"npc": npc_id, "name": npc.name, "frame_map": map_id, "sequences": sequences}
-    return _build(model, shading, map_id, frame_map, npc_scale(npc), npc.name, record, brightness)
+    return build(model, shading, map_id, frame_map, npc_scale(npc), npc.name, record, brightness, textures)
 
 
 def make_rig(obj: bpy.types.Object | None, sequence_id: int, folder: Path, brightness: float) -> bpy.types.Collection:
@@ -101,12 +102,13 @@ def make_rig(obj: bpy.types.Object | None, sequence_id: int, folder: Path, brigh
     # The same errors that model export reports for one object (export_model.prepare_exports).
     except (ValueError, OverflowError, IndexError) as error:
         raise ValueError(f"{obj.name!r} cannot have a rig: {error}") from error
-    shading = light_hsl(model, MADE_RIG_LIGHTING)
+    shading = light(model, MADE_RIG_LIGHTING)
+    textures = appearance_preview.texture_pixels(folder, model, brightness)
     record = {"npc": None, "name": obj.name, "frame_map": map_id, "sequences": {}, "sequence": sequence_id}
-    return _build(model, shading, map_id, frame_map, (1.0, 1.0, 1.0), obj.name, record, brightness)
+    return build(model, shading, map_id, frame_map, (1.0, 1.0, 1.0), obj.name, record, brightness, textures)
 
 
-def _build(
+def build(
     model: Model,
     shading: Shading,
     map_id: int,
@@ -115,9 +117,12 @@ def _build(
     name: str,
     record: Mapping[str, object],
     brightness: float,
+    textures: Mapping[int, appearance_preview.TexturePixels] | None = None,
 ) -> bpy.types.Collection:
     """The NPC collection of a lit model: the mesh, the rig for the frame map with the scale in game x, height and z,
-    and the record that `NPC_KEY` describes. The joints are derived before any Blender data exists."""
+    and the record that `NPC_KEY` describes. `textures` holds the pixels of the textures of the model
+    (`appearance_preview.texture_pixels`). The joints are derived before any Blender data exists. Spot effects and
+    chatheads are NPC collections too (ADR 0037 and ADR 0038)."""
     assert model.vertex_skins is not None
     rig = derive_rig(model, frame_map_joint_specs(map_id, frame_map, model.vertex_skins))
     location = beside_actors(min(x for x, _, _ in model.vertices) * scale[0])
@@ -125,7 +130,7 @@ def _build(
     try:
         bpy.context.scene.collection.children.link(collection)
         mesh_obj = appearance_collection.mesh_object(
-            model, shading, name, brightness, collection, appearance_collection.BODY
+            model, shading, name, brightness, collection, appearance_collection.BODY, textures=textures
         )
         armature_obj = appearance_collection._armature_object(rig, name, collection)
         appearance_collection.bind(mesh_obj, armature_obj, rig)

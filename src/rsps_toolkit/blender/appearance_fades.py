@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import bpy
 
 from ..animation.clip import PosedFrame
-from .appearance_preview import FACE_ALPHA_ATTRIBUTE, FACE_LABEL_ATTRIBUTE, LIT_ATTRIBUTE
+from .appearance_preview import FACE_ALPHA_ATTRIBUTE, FACE_LABEL_ATTRIBUTE, LIT_ATTRIBUTE, LIT_SLOT_ATTRIBUTE
 
 # Names a fade material's group property; the property sits on the clip's owner.
 FADE_KEY = "rs_fade"
@@ -113,16 +113,18 @@ def fade_groups(
 def apply_fades(mesh_obj: bpy.types.Object, owner: bpy.types.ID, groups: list[FadeGroup]) -> None:
     """Give each group's polygons its fade material, reading the group's property on `owner`, at rest alpha.
 
-    Polygons that a group no longer holds go back to the lit material, and a fade material no polygon uses is removed.
+    Polygons that a group no longer holds go back to their lit material (`lit_slots`), and a fade material no polygon
+    uses is removed.
     """
     mesh = mesh_obj.data
     assert isinstance(mesh, bpy.types.Mesh)
     indices = [0] * len(mesh.polygons)
     mesh.polygons.foreach_get("material_index", indices)
+    lit = lit_slots(mesh)
     for polygon, slot in enumerate(indices):
         material = mesh.materials[slot] if slot < len(mesh.materials) else None
         if material is not None and FADE_KEY in material:
-            indices[polygon] = 0
+            indices[polygon] = lit[polygon]
     for group in groups:
         owner[group.prop] = float(group.rest)
         slot = next((i for i, m in enumerate(mesh.materials) if m is not None and m.get(FADE_KEY) == group.prop), None)
@@ -147,16 +149,33 @@ def apply_fades(mesh_obj: bpy.types.Object, owner: bpy.types.ID, groups: list[Fa
 
 
 def clear_fades(mesh_obj: bpy.types.Object) -> None:
-    """Put every polygon back on the lit material and drop the fade materials nothing else uses."""
+    """Put every polygon back on its lit material (`lit_slots`) and drop the fade materials nothing else uses."""
     mesh = mesh_obj.data
     assert isinstance(mesh, bpy.types.Mesh)
-    mesh.polygons.foreach_set("material_index", [0] * len(mesh.polygons))
+    mesh.polygons.foreach_set("material_index", lit_slots(mesh))
     for index in reversed(range(len(mesh.materials))):
         material = mesh.materials[index]
         if material is not None and FADE_KEY in material:
             mesh.materials.pop(index=index)
             if material.users == 0:
                 bpy.data.materials.remove(material)
+
+
+def lit_slots(mesh: bpy.types.Mesh) -> list[int]:
+    """The material slot that `appearance_preview.build_mesh` gave each polygon, or slot 0 for each polygon of a mesh
+    built before meshes stored it, which had only the one lit material. A polygon that the user added has the value 0
+    of a new attribute value, so it gets slot 0 too."""
+    slots = [0] * len(mesh.polygons)
+    attribute = mesh.attributes.get(LIT_SLOT_ATTRIBUTE)
+    if attribute is not None:
+        attribute.data.foreach_get("value", slots)  # pyrefly: ignore[missing-attribute]
+    # A slot that the user removed, or that now holds a fade material, gives the polygon the plain material of slot 0.
+    materials = list(mesh.materials)
+    usable = [
+        index < len(materials) and (material := materials[index]) is not None and FADE_KEY not in material
+        for index in range(max(slots, default=0) + 1)
+    ]
+    return [slot if usable[slot] else 0 for slot in slots]
 
 
 def remove_unused(materials: list[bpy.types.Material | None]) -> None:

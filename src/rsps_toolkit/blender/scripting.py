@@ -16,16 +16,21 @@ from pathlib import Path
 import bpy
 from mathutils import Matrix, Vector
 
-from ..animation.clip import CacheClip
+from ..animation.clip import CacheClip, load_chat_clip_names, read_sequence
+from ..animation.frames import frame_schedule
 from ..formats.appearance_look import Look, look_preset
 from ..formats.cache_profile import shared_profile
+from ..formats.chathead import WIDGET_LIGHTING, npc_head_model, player_head_model
 from ..formats.item_model import inventory_model, item_lighting
 from ..formats.item_wear import ItemWear, load_item_wear
 from ..formats.js5 import Js5Store
-from ..formats.lighting import light_hsl
+from ..formats.lighting import light
+from ..formats.model import Model
+from ..formats.npc_definition import read_npc
 from ..formats.region import REGION_SIZE, Terrain, load_terrain
+from ..formats.spot_effect import read_spot_effect, spot_effect_lighting, spot_effect_model, spot_effect_scale
 from ..formats.travel import RUN_FRAMES_PER_TILE, WALK_FRAMES_PER_TILE, travel_frames
-from . import appearance_clip, appearance_collection, appearance_preview, region_files, region_import
+from . import appearance_clip, appearance_collection, appearance_preview, npc_collection, region_files, region_import
 from .region_import import RegionReport
 from .region_terrain import TILE_SIZE, tile_position
 
@@ -55,7 +60,10 @@ def create_player(
     appearance_collection.check_no_edit_mode("creating a player")
     preset = look_preset(look, shared_profile(folder).kits, _item_wear())
     body, shading, slots = appearance_preview.assemble_parts(preset, folder)
-    collection = appearance_collection.build_collection(body, shading, preset, name, brightness, location, slots)
+    textures = appearance_preview.texture_pixels(folder, body, brightness)
+    collection = appearance_collection.build_collection(
+        body, shading, preset, name, brightness, location, slots, textures
+    )
     collection[appearance_collection.BRIGHTNESS_KEY] = brightness
     return Player(
         collection, appearance_collection.armature_of(collection), tuple(appearance_collection.parts(collection))
@@ -99,7 +107,7 @@ def attach_to_joint(
 
 
 def bake_clip(
-    player: Player | bpy.types.Collection,
+    player: "Player | Chathead | SpotEffect | bpy.types.Collection",
     folder: Path,
     sequence: int,
     *,
@@ -115,18 +123,35 @@ def bake_clip(
 
     The frame rate and the frame range of the scene stay as they are, unless `set_scene_timing` is set. Then the bake
     sets them as the Bake Clip button does. One Blender frame of a clip is one client tick of 20 ms, so a clip plays
-    at its game speed only at 50 frames in a second."""
-    collection = player.collection if isinstance(player, Player) else player
-    appearance_clip.bake_clip_to_rig(
-        collection,
-        CacheClip(Js5Store(folder), sequence),
-        action=action,
-        start=start,
-        smooth=smooth,
-        cache_folder=str(folder),
-        set_scene_timing=set_scene_timing,
-        repeat_until=repeat_until,
-    )
+    at its game speed only at 50 frames in a second.
+
+    A chathead, a spot effect or another NPC collection is baked with `appearance_clip.bake_npc_clip`, which poses a
+    chathead with the chat frames of the clip (ADR 0038)."""
+    if isinstance(player, SpotEffect) and player.rig is None:
+        raise ValueError(f"{player.collection.name} has no sequence, so it has no rig to bake a clip on")
+    collection = player if isinstance(player, bpy.types.Collection) else player.collection
+    clip = CacheClip(Js5Store(folder), sequence)
+    if npc_collection.NPC_KEY in collection:
+        appearance_clip.bake_npc_clip(
+            collection,
+            clip,
+            action=action,
+            start=start,
+            smooth=smooth,
+            set_scene_timing=set_scene_timing,
+            repeat_until=repeat_until,
+        )
+    else:
+        appearance_clip.bake_clip_to_rig(
+            collection,
+            clip,
+            action=action,
+            start=start,
+            smooth=smooth,
+            cache_folder=str(folder),
+            set_scene_timing=set_scene_timing,
+            repeat_until=repeat_until,
+        )
     animation = appearance_collection.armature_of(collection).animation_data
     assert animation is not None
     return next(s for s in animation.nla_tracks[appearance_clip.CLIP_TRACK].strips if round(s.frame_start) == start)
@@ -312,16 +337,19 @@ def import_item(
     object is in game units with the origin of the model, so it has its true size beside a player. `name` defaults to
     the name and id of the item, such as `Waterskin(4) 1823`.
 
-    It refuses an item that the cache lacks, an item with no inventory model, and a model with a textured face or a
-    face alpha of 254 or 255 (`lighting.light_hsl`). Everything that can fail runs before any Blender data exists."""
+    A textured face shows its texture times its light value, and a face that the client never draws is left out (ADR
+    0036). It refuses an item that the cache lacks, an item with no inventory model, and a texture that the cache
+    lacks. Everything that can fail runs before any Blender data exists."""
     profile = shared_profile(folder)
     definition = profile.item_definitions.get(item_id)
     if definition is None:
         raise ValueError(f"The cache at {folder} has no item {item_id}")
     model = inventory_model(definition, profile.load_model)
-    shading = light_hsl(model, item_lighting(definition))
+    shading = light(model, item_lighting(definition))
+    textures = appearance_preview.texture_pixels(folder, model, brightness)
     name = f"{definition.worn.name} {item_id}" if name is None else name
-    obj = bpy.data.objects.new(name, appearance_preview.build_mesh(model, shading, name, brightness, loose=False))
+    mesh = appearance_preview.build_mesh(model, shading, name, brightness, loose=False, textures=textures)
+    obj = bpy.data.objects.new(name, mesh)
     (_scene_collection() if collection is None else collection).objects.link(obj)
     return obj
 
@@ -330,3 +358,206 @@ def _scene_collection() -> bpy.types.Collection:
     scene = bpy.context.scene
     assert scene is not None
     return scene.collection
+
+
+@dataclass(frozen=True)
+class SpotEffect:
+    """A spot effect of `create_spot_effect` (ADR 0037)."""
+
+    collection: bpy.types.Collection
+    rig: bpy.types.Object | None
+    """The rig, which holds the scale, the turn and the place. None for a spot effect with no sequence."""
+    mesh: bpy.types.Object
+    start: int
+    """The first frame that shows it."""
+    end: int
+    """The first frame that no longer shows it: the frame after its sequence, or the frame after `start` for a spot
+    effect with no sequence, as `ap.fb` ends it."""
+
+
+def create_spot_effect(
+    folder: Path,
+    spot_effect_id: int,
+    *,
+    brightness: float,
+    start: int = 0,
+    location: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    height: float = 0.0,
+    joint: tuple[bpy.types.Object, str] | None = None,
+    offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    name: str | None = None,
+) -> SpotEffect:
+    """A new spot effect of the cache, lit as the client lights it, that plays its sequence once from frame `start`
+    and is hidden from the frame after its last tick (ADR 0037, docs/research/spot-effects.md).
+
+    It is an NPC collection, rigged for the frame map of its sequence. The rig holds the scale and the turn of the
+    spot effect. With no `joint`, the rig is at `location` and `height` game units higher, as the client lifts a spot
+    effect on an actor by its height. With `joint=(rig, name)`, it is on that joint of the rig with `attach_to_joint`
+    and `offset`. A spot effect with no sequence is one mesh object with the scale and the turn at its place, shown on
+    the frame `start` only, as `ap.fb` ends it on the next tick. `name` defaults to `Spot effect <id>`.
+
+    It refuses a spot effect that the cache lacks, a `location` or `height` with a `joint`, a joint that the rig
+    lacks, and a model with no vertex skins for a spot effect with a sequence, before any Blender data exists."""
+    if joint is not None and (tuple(location) != (0.0, 0.0, 0.0) or height != 0.0):
+        raise ValueError("A spot effect on a joint takes its place from the joint, so it takes no location or height")
+    if joint is not None:
+        target, joint_name = joint
+        joints = [] if target.pose is None else [b.name for b in target.pose.bones if not _is_label_bone(b.name)]
+        if joint_name not in joints:
+            raise ValueError(f"{target.name} has no joint {joint_name!r}. Its joints are {', '.join(joints)}")
+    store = Js5Store(folder)
+    effect = read_spot_effect(store, spot_effect_id)
+    model = spot_effect_model(effect, shared_profile(folder).load_model)
+    shading = light(model, spot_effect_lighting(effect))
+    textures = appearance_preview.texture_pixels(folder, model, brightness)
+    name = f"Spot effect {spot_effect_id}" if name is None else name
+    place = (location[0], location[1], location[2] + height)
+    # ej.c turns (x, z) to (z, -x), which is a quarter turn clockwise seen from above (spot-effects.md).
+    turn = -math.radians(effect.rotation)
+    width, height_scale, _ = spot_effect_scale(effect)
+    if effect.sequence == -1:
+        mesh = appearance_preview.build_mesh(model, shading, name, brightness, loose=False, textures=textures)
+        collection = bpy.data.collections.new(name)
+        _scene_collection().children.link(collection)
+        obj = bpy.data.objects.new(name, mesh)
+        collection.objects.link(obj)
+        # Game (x, y, z) is Blender (x, z, -y), so the width scale goes on Blender x and y and the height on z.
+        obj.scale = (width, width, height_scale)
+        if joint is None:
+            obj.location = place
+            obj.rotation_euler.z = turn
+        else:
+            attach_to_joint(obj, joint[0], joint[1], offset=offset, rotation=(0.0, 0.0, turn))
+        # ap.fb ends a graphic with no sequence on the tick after it starts (offset 2238, spot-effects.md).
+        _key_shown(obj, start, start + 1)
+        return SpotEffect(collection, None, obj, start, start + 1)
+    if model.vertex_skins is None:
+        raise ValueError(
+            f"The model {effect.model} of spot effect {spot_effect_id} has no vertex skins for its sequence"
+        )
+    map_id, frame_map = npc_collection.sequence_frame_map(
+        store, effect.sequence, f"The sequence {effect.sequence} of spot effect {spot_effect_id}"
+    )
+    clip = CacheClip(store, effect.sequence)
+    # ap.fb ends the graphic when its frame passes the last one, so it plays one cycle with no loop (spot-effects.md).
+    ticks = sum(count for _, count in frame_schedule(read_sequence(clip), action=False))
+    record = {"npc": None, "name": name, "frame_map": map_id, "sequences": {}, "spot_effect": spot_effect_id}
+    collection = npc_collection.build(
+        model, shading, map_id, frame_map, spot_effect_scale(effect), name, record, brightness, textures
+    )
+    try:
+        rig = appearance_collection.armature_of(collection)
+        if joint is None:
+            rig.location = place
+            rig.rotation_euler.z = turn
+        else:
+            attach_to_joint(rig, joint[0], joint[1], offset=offset, rotation=(0.0, 0.0, turn))
+        appearance_clip.bake_npc_clip(collection, clip, start=start, set_scene_timing=False)
+        mesh_obj = appearance_collection.mesh_of(collection)
+        _key_shown(mesh_obj, start, start + ticks)
+    except Exception:
+        appearance_collection.remove_collection(collection)
+        raise
+    return SpotEffect(collection, rig, mesh_obj, start, start + ticks)
+
+
+def _key_shown(obj: bpy.types.Object, start: int, end: int | None) -> None:
+    """Key the object hidden on the frame before `start`, shown on `start` and hidden again on `end`, in the viewport
+    and in renders. Blender holds a key of a property that is true or false until the next key."""
+    for frame, hidden in ((start - 1, True), (start, False), *(() if end is None else ((end, True),))):
+        obj.hide_viewport = obj.hide_render = hidden
+        obj.keyframe_insert("hide_viewport", frame=frame)
+        obj.keyframe_insert("hide_render", frame=frame)
+    obj.hide_viewport = obj.hide_render = False
+
+
+@dataclass(frozen=True)
+class Chathead:
+    """A chathead of `create_player_chathead` or `create_npc_chathead` (ADR 0038)."""
+
+    collection: bpy.types.Collection
+    rig: bpy.types.Object
+    mesh: bpy.types.Object
+
+
+CHATNEU1 = 588
+"""chatneu1, whose frame map 82 the human chat clips share (docs/research/chatheads.md)."""
+
+
+def create_player_chathead(
+    folder: Path,
+    look: Look,
+    *,
+    brightness: float,
+    location: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    name: str = "Chathead",
+    rig_sequence: int = CHATNEU1,
+) -> Chathead:
+    """A new chathead of the look: the chathead models of its kits and the head models of its worn items, recoloured
+    with its colour choices, lit with the widget light and rigged for the frame map of `rig_sequence`, with its rig at
+    `location` (ADR 0038). It refuses what `look_preset` refuses, a look with no chathead model and a sequence that
+    the cache lacks, before any Blender data exists."""
+    profile = shared_profile(folder)
+    preset = look_preset(look, profile.kits, _item_wear())
+    model = player_head_model(
+        preset.equipment,
+        profile.kits,
+        profile.items,
+        profile.load_model,
+        preset.colours,
+        profile.palette,
+        female=preset.female,
+    )
+    return _chathead(folder, model, name, brightness, location, rig_sequence, {"look": True})
+
+
+def create_npc_chathead(
+    folder: Path,
+    npc_id: int,
+    *,
+    brightness: float,
+    location: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    name: str | None = None,
+    rig_sequence: int = CHATNEU1,
+) -> Chathead:
+    """A new chathead of the NPC: its chathead models, recoloured and retextured as the NPC says, lit with the widget
+    light and rigged for the frame map of `rig_sequence`, with its rig at `location` (ADR 0038). `name` defaults to
+    the NPC's name and `chathead`, such as `Man chathead`. It refuses an NPC that the cache lacks, an NPC with no
+    chathead models and a sequence that the cache lacks, before any Blender data exists."""
+    npc = read_npc(Js5Store(folder), npc_id)
+    model = npc_head_model(npc, shared_profile(folder).load_model)
+    name = f"{npc.name} chathead" if name is None else name
+    return _chathead(folder, model, name, brightness, location, rig_sequence, {"npc": npc_id})
+
+
+def _chathead(
+    folder: Path,
+    model: Model,
+    name: str,
+    brightness: float,
+    location: tuple[float, float, float],
+    rig_sequence: int,
+    source: dict[str, object],
+) -> Chathead:
+    if model.vertex_skins is None:
+        raise ValueError(f"The chathead {name} has no vertex skins, so it cannot have a rig")
+    shading = light(model, WIDGET_LIGHTING)
+    textures = appearance_preview.texture_pixels(folder, model, brightness)
+    map_id, frame_map = npc_collection.sequence_frame_map(Js5Store(folder), rig_sequence, f"Sequence {rig_sequence}")
+    # The NPC id stays null, so the NPC panel gives a chathead no Combat row (ADR 0038).
+    record = {"npc": None, "name": name, "frame_map": map_id, "sequences": {}, "chathead": source}
+    collection = npc_collection.build(
+        model, shading, map_id, frame_map, (1.0, 1.0, 1.0), name, record, brightness, textures
+    )
+    rig = appearance_collection.armature_of(collection)
+    rig.location = location
+    return Chathead(collection, rig, appearance_collection.mesh_of(collection))
+
+
+def chat_clip(name: str) -> int:
+    """The sequence id of a chat clip by its name, such as `chathap1` (567), from `data/animation_names.json`. It refuses
+    a name that is not a chat clip."""
+    ids = {clip_name: sequence_id for sequence_id, clip_name in load_chat_clip_names().items()}
+    if name not in ids:
+        raise ValueError(f"{name!r} is not a chat clip. The chat clips include chathap1, chatneu1 and chatang1")
+    return ids[name]

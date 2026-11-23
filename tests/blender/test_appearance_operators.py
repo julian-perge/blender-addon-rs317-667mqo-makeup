@@ -144,18 +144,7 @@ def alpha_on_first_face(alpha):
     return lambda model: dataclasses.replace(model, face_alphas=[alpha, *model.face_alphas[1:]])
 
 
-@pytest.mark.parametrize(
-    ("change", "message"),
-    [
-        (textured_first_face, "Lighting of textured faces is not verified against the client"),
-        (alpha_on_first_face(254), "Lighting of faces with alpha 254 or 255 is not verified against the client"),
-        (alpha_on_first_face(255), "Lighting of faces with alpha 254 or 255 is not verified against the client"),
-    ],
-    ids=["textured face", "alpha 254", "alpha 255"],
-)
-def test_create_player_refuses_a_face_it_cannot_draw_and_creates_nothing(cache, monkeypatch, change, message):
-    # The owner's decision of 2026-11-17 on issue 105: Create Player keeps refusing these faces until issue 103. No
-    # player item of the test cache has such a face, so the test gives the assembled body one.
+def changed_body(monkeypatch, change):
     assemble_slots = cache_profile.CacheProfile.assemble_slots
 
     def changed(profile, preset, equipment=None):
@@ -163,10 +152,29 @@ def test_create_player_refuses_a_face_it_cannot_draw_and_creates_nothing(cache, 
         return change(body), slots
 
     monkeypatch.setattr(cache_profile.CacheProfile, "assemble_slots", changed)
+
+
+def test_create_player_refuses_a_texture_that_the_cache_lacks_and_creates_nothing(cache, monkeypatch):
+    # Issue 103: a textured face builds, but the test cache has no textures, so its texture 5 is refused as a region
+    # import refuses it (issue 47). No player item of the test cache has a textured face, so the test gives one.
+    changed_body(monkeypatch, textured_first_face)
     show(case(None, False, [0, 0, 0, 0, 0]))
-    with pytest.raises(RuntimeError, match=message):
+    with pytest.raises(RuntimeError, match="texture 5"):
         create(cache_folder=str(cache))
     assert not bpy.data.objects
+
+
+@pytest.mark.parametrize(("alpha", "drawn"), [(254, True), (255, False)])
+def test_create_player_builds_a_face_of_alpha_254_and_leaves_out_a_face_of_alpha_255(cache, monkeypatch, alpha, drawn):
+    # Issue 103: dv.ae gives an untextured face of alpha 254 the colour 128 and hides a face of alpha 255, which ej.ae
+    # never draws (docs/research/textured-light.md, sections 1 and 2).
+    changed_body(monkeypatch, alpha_on_first_face(alpha))
+    show(case(None, False, [0, 0, 0, 0, 0]))
+    assert create(cache_folder=str(cache)) == {"FINISHED"}
+    body = next(obj for obj in bpy.data.objects if obj.type == "MESH")
+    faces = appearance_preview.face_indices(body.data)  # pyrefly: ignore[bad-argument-type]
+    assert faces is not None
+    assert (0 in faces) == drawn
 
 
 def test_no_cache_folder_is_an_error(cache):

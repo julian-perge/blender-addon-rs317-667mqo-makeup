@@ -1,0 +1,36 @@
+[
+ {
+  "id": 260,
+  "name": "Green dragon",
+  "chatheadModels": null
+ },
+ {
+  "id": 2477,
+  "name": "Giant spider",
+  "chatheadModels": null
+ },
+ {
+  "id": 2805,
+  "name": "Cow",
+  "chatheadModels": null
+ },
+ {
+  "id": 3078,
+  "name": "Man",
+  "chatheadModels": [
+   53
+  ]
+ },
+ {
+  "id": 4233,
+  "name": "Gnome",
+  "chatheadModels": [
+   21
+  ]
+ },
+ {
+  "id": 6594,
+  "name": "Ent",
+  "chatheadModels": null
+ }
+]

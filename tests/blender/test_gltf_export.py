@@ -24,7 +24,7 @@ from rsps_toolkit.blender import (
 )
 from rsps_toolkit.blender.face_materials import DEFAULT_BRIGHTNESS
 from rsps_toolkit.formats.appearance_preset import AppearancePreset
-from rsps_toolkit.formats.lighting import light_hsl
+from rsps_toolkit.formats.lighting import light
 from rsps_toolkit.formats.model import Model
 from rsps_toolkit.formats.texture import SIZE as TEXTURE_SIZE
 
@@ -597,7 +597,7 @@ def model_mesh(name: str, alphas: list[int]) -> bpy.types.Object:
         face_texture_triangles=[None, None],
         flat_shaded=[True, True],
     )
-    obj = bpy.data.objects.new(name, appearance_preview.build_mesh(model, light_hsl(model), name))
+    obj = bpy.data.objects.new(name, appearance_preview.build_mesh(model, light(model), name))
     scene = bpy.context.scene
     assert scene is not None
     scene.collection.objects.link(obj)
@@ -712,7 +712,7 @@ def test_each_primitive_of_a_split_mesh_has_its_faces_in_mesh_order(tmp_path: Pa
         face_texture_triangles=[None] * 4,
         flat_shaded=[True] * 4,
     )
-    obj = bpy.data.objects.new("Fire", appearance_preview.build_mesh(model, light_hsl(model), "Fire"))
+    obj = bpy.data.objects.new("Fire", appearance_preview.build_mesh(model, light(model), "Fire"))
     scene = bpy.context.scene
     assert scene is not None
     scene.collection.objects.link(obj)
@@ -1338,3 +1338,24 @@ def test_a_face_past_the_last_material_slot_draws_with_the_last_slot(tmp_path: P
     export(path)
     gltf, _ = read_glb(path)
     assert [m["name"] for m in gltf["materials"]] == ["rs_lit_100"]
+
+
+def test_the_export_refuses_a_player_mesh_with_textured_faces():
+    # Spec 183 leaves the glTF export of textured faces out, so a textured face is a problem, not a colour -1.
+    from rsps_toolkit.blender import export_gltf
+
+    model = Model(
+        vertices=[(0, 0, 0), (100, 0, 0), (0, -100, 0), (100, -100, 0)],
+        faces=[(0, 1, 2), (1, 3, 2)],
+        face_colours=[8741, None],
+        face_textures=[None, 16],
+        render_priorities=[0, 0],
+        face_alphas=[0, 0],
+        face_texture_triangles=[None, None],
+        flat_shaded=[False, False],
+    )
+    obj = bpy.data.objects.new("Cape", appearance_preview.build_mesh(model, light(model), "Cape"))
+
+    assert export_gltf.face_value_problems([obj]) == [
+        "Cape has textured faces, which the glTF export does not write yet."
+    ]
