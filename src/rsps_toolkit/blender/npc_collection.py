@@ -62,8 +62,9 @@ def sequence_frame_map(store: Js5Store, sequence_id: int, described: str) -> tup
     return map_id, decode_frame_map(clip.frame_map_bytes(map_id))
 
 
-def create_npc(npc_id: int, folder: Path, brightness: float) -> bpy.types.Collection:
-    """Build the NPC collection of the NPC with this id beside the players and NPCs of the file.
+def create_npc(npc_id: int, folder: Path, brightness: float, name: str | None = None) -> bpy.types.Collection:
+    """Build the NPC collection of the NPC with this id beside the players and NPCs of the file. `name` defaults to the
+    NPC's name.
 
     Everything that can fail runs before any Blender data exists: the NPC is read, its model built and lit, and its
     frame map read.
@@ -76,7 +77,8 @@ def create_npc(npc_id: int, folder: Path, brightness: float) -> bpy.types.Collec
     map_id, frame_map = stand_frame_map(store, npc)
     sequences = {field: getattr(npc, field) for field in SEQUENCE_FIELDS if getattr(npc, field) != -1}
     record = {"npc": npc_id, "name": npc.name, "frame_map": map_id, "sequences": sequences}
-    return build(model, shading, map_id, frame_map, npc_scale(npc), npc.name, record, brightness, textures)
+    name = npc.name if name is None else name
+    return build(model, shading, map_id, frame_map, npc_scale(npc), name, record, brightness, textures)
 
 
 def make_rig(obj: bpy.types.Object | None, sequence_id: int, folder: Path, brightness: float) -> bpy.types.Collection:

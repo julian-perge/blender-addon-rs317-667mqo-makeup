@@ -16,6 +16,7 @@ from rsps_toolkit.blender import (
     appearance_collection,
     appearance_held,
     appearance_preview,
+    npc_collection,
     region_files,
     region_import,
     scripting,
@@ -28,8 +29,9 @@ from rsps_toolkit.formats.appearance_preset import loads_preset
 from rsps_toolkit.formats.cache_profile import shared_profile
 from rsps_toolkit.formats.chathead import player_head_model
 from rsps_toolkit.formats.item_wear import load_item_wear
-from rsps_toolkit.formats.js5 import Js5Store
+from rsps_toolkit.formats.js5 import Js5Store, NotInCacheError
 from rsps_toolkit.formats.lighting import PLAYER_LIGHTING, light
+from rsps_toolkit.formats.npc_definition import read_npc
 from rsps_toolkit.formats.region import ground_height, load_terrain
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -904,3 +906,58 @@ def test_removing_a_player_with_a_textured_item_leaves_no_texture_material_or_im
 
     assert not [m for m in bpy.data.materials if appearance_preview.TEXTURE_KEY in m]
     assert not bpy.data.images
+
+
+# Issue 193: the NPCs of two topics of osrs-shorts, Zombie 30 and Chronozon 4987.
+TOPIC_NPCS = [(30, "Zombie"), (4987, "Chronozon")]
+
+
+@SNAPSHOT
+@pytest.mark.parametrize(("npc_id", "name"), TOPIC_NPCS)
+def test_create_npc_builds_the_npc_body_with_its_rig_at_the_given_place(npc_id, name):
+    npc = scripting.create_npc(snapshot(), npc_id, brightness=BRIGHTNESS, location=(256.0, 128.0, 10.0))
+
+    assert npc.collection.name == name
+    assert xyz(npc.rig.location) == (256.0, 128.0, 10.0)
+    assert {npc.rig, npc.mesh} == set(npc.collection.objects)
+    assert npc.collection[npc_collection.NPC_KEY]
+
+
+@SNAPSHOT
+def test_create_npc_takes_a_name_and_two_npcs_at_one_place_stand_on_the_same_place():
+    first = scripting.create_npc(snapshot(), 30, brightness=BRIGHTNESS, name="Zombie one")
+    second = scripting.create_npc(snapshot(), 30, brightness=BRIGHTNESS)
+
+    assert first.collection.name == "Zombie one"
+    assert xyz(first.rig.location) == xyz(second.rig.location) == (0.0, 0.0, 0.0)
+
+
+@SNAPSHOT
+@pytest.mark.parametrize(("npc_id", "name"), TOPIC_NPCS)
+def test_bake_clip_bakes_the_stand_clip_of_an_npc(npc_id, name):
+    npc = scripting.create_npc(snapshot(), npc_id, brightness=BRIGHTNESS)
+    stand = read_npc(Js5Store(snapshot()), npc_id).stand
+
+    scripting.bake_clip(npc, snapshot(), stand, start=0, repeat_until=60)
+
+    strips = npc.rig.animation_data.nla_tracks[appearance_clip.CLIP_TRACK].strips  # pyrefly: ignore
+    assert [(round(s.frame_start), round(s.frame_end)) for s in strips] == [(0, 60)]
+
+
+@SNAPSHOT
+def test_create_npc_refuses_an_npc_that_the_cache_lacks_before_any_blender_data_exists():
+    with pytest.raises(NotInCacheError, match="no NPC 99999"):
+        scripting.create_npc(snapshot(), 99999, brightness=BRIGHTNESS)
+    assert not bpy.data.objects and not bpy.data.collections
+
+
+# Issue 193: the regions of the four topics of osrs-shorts. 50_154 and 48_155 are underground map squares.
+@SNAPSHOT
+@pytest.mark.parametrize(("x", "y"), [(48, 52), (38, 54), (50, 154), (48, 155)])
+def test_each_region_of_a_topic_imports_with_its_terrain_and_its_scenery(x, y):
+    regions = scripting.import_region(snapshot(), x, y, brightness=0.8)
+
+    (report,) = regions.reports
+    assert regions.collections[0].name == f"Region {x}_{y}"
+    assert terrain_of(regions).name == f"Terrain {x}_{y}"
+    assert report is not None and report.tiles > 0 and report.has_key

@@ -70,6 +70,38 @@ def create_player(
     )
 
 
+@dataclass(frozen=True)
+class Npc:
+    """An NPC of `create_npc`."""
+
+    collection: bpy.types.Collection
+    """The NPC collection, which the bakes take."""
+    rig: bpy.types.Object
+    """The rig, which holds the scale of the NPC and its place."""
+    mesh: bpy.types.Object
+
+
+def create_npc(
+    folder: Path,
+    npc_id: int,
+    *,
+    brightness: float,
+    location: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    name: str | None = None,
+) -> Npc:
+    """A new NPC body of the cache, with its rig at `location`, linked to the scene: its models recoloured and
+    retextured as the NPC says, lit with its own light, scaled and rigged for the frame map of its stand sequence (ADR
+    0025). `name` defaults to the NPC's name, such as `Zombie`. Blender adds `.001` to a name that is taken. Two
+    calls with one location put two NPCs on the same place.
+
+    It refuses an NPC that the cache lacks, an NPC with no models or with a model that has no vertex skins, and a
+    stand sequence that the cache lacks, before any Blender data exists."""
+    collection = npc_collection.create_npc(npc_id, folder, brightness, name)
+    rig = appearance_collection.armature_of(collection)
+    rig.location = location
+    return Npc(collection, rig, appearance_collection.mesh_of(collection))
+
+
 def attach_to_joint(
     obj: bpy.types.Object,
     rig: bpy.types.Object,
@@ -107,7 +139,7 @@ def attach_to_joint(
 
 
 def bake_clip(
-    player: "Player | Chathead | SpotEffect | bpy.types.Collection",
+    player: "Player | Npc | Chathead | SpotEffect | bpy.types.Collection",
     folder: Path,
     sequence: int,
     *,
@@ -125,7 +157,7 @@ def bake_clip(
     sets them as the Bake Clip button does. One Blender frame of a clip is one client tick of 20 ms, so a clip plays
     at its game speed only at 50 frames in a second.
 
-    A chathead, a spot effect or another NPC collection is baked with `appearance_clip.bake_npc_clip`, which poses a
+    An NPC, a chathead, a spot effect or another NPC collection is baked with `appearance_clip.bake_npc_clip`, which poses a
     chathead with the chat frames of the clip (ADR 0038)."""
     if isinstance(player, SpotEffect) and player.rig is None:
         raise ValueError(f"{player.collection.name} has no sequence, so it has no rig to bake a clip on")

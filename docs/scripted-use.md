@@ -64,6 +64,18 @@ player.collection, player.rig, player.parts
 
 A look starts from the default look of the body type. An item goes to the slot that `data/item_wear.json` gives it, and it empties the slots that it hides, as the panel's Search does.
 
+## NPCs
+
+```python
+zombie = scripting.create_npc(CACHE, 30, brightness=BRIGHTNESS, location=tuple(regions.tile_point(3245, 9883)))
+zombie.collection, zombie.rig, zombie.mesh
+scripting.bake_clip(zombie, CACHE, 5565, start=0, repeat_until=90)  # stand 5565 of the Zombie 30
+```
+
+- The NPC body is lit with the light of its NPC definition, scaled as the definition says and rigged for the frame map of its stand sequence ([ADR 0025](adr/0025-an-npc-is-created-and-baked-only.md)). The scale is on the rig.
+- `name` defaults to the NPC's name, such as `Zombie`.
+- A clip on another frame map is refused. The stand and walk sequences of the definition, and the NPC clips of `data/npc_clips.json`, fit the rig.
+
 ## Clips
 
 ```python
